@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from main import Token, tokenize
+from main import CodeGenerator, Node, Token, expr, tokenize
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -22,62 +22,88 @@ def compile_expression(*arguments):
 
 class ExpressionCompilerTests(unittest.TestCase):
     def test_tokenization(self):
-        expected = [
-            Token("NUM", "12", 1, 12), Token("PUNCT", "+", 4),
-            Token("NUM", "34", 6, 34), Token("PUNCT", "-", 9),
-            Token("NUM", "5", 11, 5), Token("EOF", "", 13),
-        ]
-        self.assertEqual(tokenize(" 12 + 34 - 5 "), expected)
-        self.assertEqual(tokenize("12+34-5"), [
-            Token("NUM", "12", 0, 12), Token("PUNCT", "+", 2),
-            Token("NUM", "34", 3, 34), Token("PUNCT", "-", 5),
-            Token("NUM", "5", 6, 5), Token("EOF", "", 7),
+        self.assertEqual(tokenize(" 12 * (3 / 2) "), [
+            Token("NUM", "12", 1, 12), Token("PUNCT", "*", 4),
+            Token("PUNCT", "(", 6), Token("NUM", "3", 7, 3),
+            Token("PUNCT", "/", 9), Token("NUM", "2", 11, 2),
+            Token("PUNCT", ")", 12), Token("EOF", "", 14),
         ])
         self.assertEqual(tokenize(" \t\n"), [Token("EOF", "", 3)])
         self.assertEqual(tokenize("-001"), [
             Token("PUNCT", "-", 0), Token("NUM", "001", 1, 1), Token("EOF", "", 4),
         ])
+        # Like C ispunct, tokenization recognizes even unsupported punctuation.
+        self.assertEqual(tokenize("@"), [Token("PUNCT", "@", 0), Token("EOF", "", 1)])
 
-    def test_assembly_and_exit_status(self):
-        # Include all four original tests through this commit.
-        # Expected instruction sequences are explicit: no expression evaluator.
+    def test_tree_structure(self):
+        five = Node("NUM", value=5)
+        six = Node("NUM", value=6)
+        seven = Node("NUM", value=7)
         cases = [
-            ("0", "  mov $0, %rax\n", 0),
-            ("42", "  mov $42, %rax\n", 42),
-            ("255", "  mov $255, %rax\n", 255),
-            ("256", "  mov $256, %rax\n", 0),
-            (" 0042 ", "  mov $42, %rax\n", 42),
-            ("2147483647", "  mov $2147483647, %rax\n", 255),
-            ("5+20-4", "  mov $5, %rax\n  add $20, %rax\n  sub $4, %rax\n", 21),
-            ("10-3-2", "  mov $10, %rax\n  sub $3, %rax\n  sub $2, %rax\n", 5),
-            ("0-1", "  mov $0, %rax\n  sub $1, %rax\n", 255),
-            ("255+2", "  mov $255, %rax\n  add $2, %rax\n", 1),
-            ("5+ 20-4", "  mov $5, %rax\n  add $20, %rax\n  sub $4, %rax\n", 21),
-            ("5 +20-4", "  mov $5, %rax\n  add $20, %rax\n  sub $4, %rax\n", 21),
-            (" 12 + 34 - 5 ", "  mov $12, %rax\n  add $34, %rax\n  sub $5, %rax\n", 41),
-            ("\t12\n+\r34\v-\f5 ", "  mov $12, %rax\n  add $34, %rax\n  sub $5, %rax\n", 41),
-            ("1\u2003+\u20032", "  mov $1, %rax\n  add $2, %rax\n", 3),
-            ("1+2147483647", "  mov $1, %rax\n  add $2147483647, %rax\n", 0),
-            ("0-2147483647-1", "  mov $0, %rax\n  sub $2147483647, %rax\n  sub $1, %rax\n", 0),
+            ("5+6*7", Node("+", five, Node("*", six, seven))),
+            ("(5+6)*7", Node("*", Node("+", five, six), seven)),
+            ("5-6-7", Node("-", Node("-", five, six), seven)),
+            ("5/6/7", Node("/", Node("/", five, six), seven)),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                tokens = tokenize(source)
+                node, position = expr(tokens, 0)
+                self.assertEqual(node, expected)
+                self.assertEqual(tokens[position].kind, "EOF")
+                generator = CodeGenerator()
+                generator.generate(node)
+                self.assertEqual(generator.depth, 0)
+
+    def test_exact_assembly(self):
+        cases = [
+            ("42", "  mov $42, %rax\n"),
+            ("5+6*7", "  mov $7, %rax\n  push %rax\n  mov $6, %rax\n"
+             "  pop %rdi\n  imul %rdi, %rax\n  push %rax\n  mov $5, %rax\n"
+             "  pop %rdi\n  add %rdi, %rax\n"),
+            ("(3+5)/2", "  mov $2, %rax\n  push %rax\n  mov $5, %rax\n"
+             "  push %rax\n  mov $3, %rax\n  pop %rdi\n  add %rdi, %rax\n"
+             "  pop %rdi\n  cqo\n  idiv %rdi\n"),
+            ("10-3", "  mov $3, %rax\n  push %rax\n  mov $10, %rax\n"
+             "  pop %rdi\n  sub %rdi, %rax\n"),
+        ]
+        for source, instructions in cases:
+            with self.subTest(source=source):
+                result = compile_expression(source)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(result.stdout, f"  .globl main\nmain:\n{instructions}  ret\n")
+
+    def test_executable_exit_status(self):
+        # All seven original tests, previous valid cases, and precedence,
+        # grouping, operand-order, and signed-division checks. No Python eval.
+        cases = [
+            ("0", 0), ("42", 42), ("5+20-4", 21), (" 12 + 34 - 5 ", 41),
+            ("5+6*7", 47), ("5*(9-6)", 15), ("(3+5)/2", 4),
+            ("255", 255), ("256", 0), (" 0042 ", 42), ("2147483647", 255),
+            ("10-3-2", 5), ("0-1", 255), ("255+2", 1), ("5+ 20-4", 21),
+            ("5 +20-4", 21), ("\t12\n+\r34\v-\f5 ", 41),
+            ("1\u2003+\u20032", 3), ("1+2147483647", 0), ("0-2147483647-1", 0),
+            ("(5+6)*7", 77), ("20/3", 6), ("20/2/2", 5), ("20/(2/2)", 20),
+            ("24/3*2", 16), ("24/(3*2)", 4), ("20-3*4+8/2", 12),
+            ("((2+3)*(4+(8/2)))", 40), ("((42))", 42),
+            ("(0-7)/2", 253), ("7/(0-2)", 253), ("(0-7)/(0-2)", 3),
+            ("(0-3)*4", 244), ("100/(2+3*(4-2))", 12),
+            ("65536*65536/65536/65536", 1),
         ]
         with tempfile.TemporaryDirectory() as directory:
             assembly = Path(directory) / "program.s"
             executable = Path(directory) / "program"
-            for source, instructions, expected_status in cases:
+            for source, expected_status in cases:
                 with self.subTest(source=source):
                     result = compile_expression(source)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stderr, "")
-                    self.assertEqual(
-                        result.stdout,
-                        f"  .globl main\nmain:\n{instructions}  ret\n",
-                    )
                     assembly.write_text(result.stdout)
                     linked = subprocess.run(
                         ["gcc", "-static", "-Wl,-z,noexecstack", "-o",
                          str(executable), str(assembly)],
-                        capture_output=True,
-                        text=True,
+                        capture_output=True, text=True,
                     )
                     self.assertEqual(linked.returncode, 0, linked.stderr)
                     executed = subprocess.run([str(executable)])
@@ -86,11 +112,11 @@ class ExpressionCompilerTests(unittest.TestCase):
     def test_invalid_arguments(self):
         cases = [(), ("1", "2"), ("",), ("abc",), ("42abc",),
                  ("1_000",), ("2147483648",), ("-2147483649",),
-                 ("1+",), ("1-",), ("1+abc",), ("1+2junk",),
-                 ("1*2",), ("1/2",), ("(1)",), ("1 2",),
+                 ("1+",), ("1-",), ("1+abc",), ("1+2junk",), ("1 2",),
                  ("1+2147483648",), ("1-2147483649",), (" \t\n",),
                  ("-1",), ("+42",), ("1+-2",), ("1--2",), ("1++2",),
-                 ("1 + ",), ("１２",)]
+                 ("1 + ",), ("１２",), ("()",), ("(1",), ("1)",),
+                 ("2(3)",), ("1**2",), ("1//2",), ("1/",), ("1%2",)]
         for arguments in cases:
             with self.subTest(arguments=arguments):
                 result = compile_expression(*arguments)
@@ -100,18 +126,23 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_error_messages(self):
         cases = [
-            ("1@2", "1@2\n ^ invalid token\n"),
+            ("1@2", "1@2\n ^ extra token\n"),
             ("1+foo", "1+foo\n  ^ invalid token\n"),
-            ("1+", "1+\n  ^ expected a number\n"),
-            (" 12 +   ", " 12 +   \n        ^ expected a number\n"),
-            ("", "\n^ expected a number\n"),
-            ("   ", "   \n   ^ expected a number\n"),
-            ("1 2", "1 2\n  ^ expected '-'\n"),
-            ("-1", "-1\n^ expected a number\n"),
-            ("1 + +2", "1 + +2\n    ^ expected a number\n"),
+            ("1+", "1+\n  ^ expected an expression\n"),
+            (" 12 +   ", " 12 +   \n        ^ expected an expression\n"),
+            ("", "\n^ expected an expression\n"),
+            ("   ", "   \n   ^ expected an expression\n"),
+            ("18 11", "18 11\n   ^ extra token\n"),
+            ("-1", "-1\n^ expected an expression\n"),
+            ("1 + +2", "1 + +2\n    ^ expected an expression\n"),
             (" 12 + foo", " 12 + foo\n      ^ invalid token\n"),
             ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
-            ("1\u2003+@", "1\u2003+@\n   ^ invalid token\n"),
+            ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),
+            ("(1+2", "(1+2\n    ^ expected ')'\n"),
+            ("1)", "1)\n ^ extra token\n"),
+            ("()", "()\n ^ expected an expression\n"),
+            ("1/", "1/\n  ^ expected an expression\n"),
+            ("(1 2)", "(1 2)\n   ^ expected ')'\n"),
         ]
         for source, expected in cases:
             with self.subTest(source=source):
@@ -126,9 +157,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                 result = compile_expression(*arguments)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(
-                    result.stderr, f"{COMPILER}: invalid number of arguments\n"
-                )
+                self.assertEqual(result.stderr, f"{COMPILER}: invalid number of arguments\n")
 
 
 if __name__ == "__main__":

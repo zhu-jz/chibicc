@@ -1,11 +1,13 @@
-"""Lesson 4: report errors with their source locations.
+"""Lesson 5: parse expression trees and compile *, /, and parentheses.
 
-Based on chibicc commit cc5a6d978144bda90220bd10866c4fd908d07546.
+Based on chibicc commit 84cfcaf98f3d19c8f0f316e22a61725ad201f0f6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from dataclasses import dataclass
+import string
 import sys
+from typing import Optional
 
 
 @dataclass
@@ -47,7 +49,7 @@ def tokenize(source):
             tokens.append(Token("NUM", text, start, value))
             continue
 
-        if character in "+-":
+        if character in string.punctuation:
             tokens.append(Token("PUNCT", character, position))
             position += 1
             continue
@@ -58,10 +60,91 @@ def tokenize(source):
     return tokens
 
 
-def get_number(token):
-    if token.kind != "NUM":
-        raise CompileError(token.position, "expected a number")
-    return token.value
+@dataclass
+class Node:
+    kind: str
+    lhs: Optional["Node"] = None
+    rhs: Optional["Node"] = None
+    value: int = 0
+
+
+# Each parser function returns (node, next unconsumed token index).
+# expr = mul (("+" | "-") mul)*
+def expr(tokens, position):
+    node, position = mul(tokens, position)
+    while tokens[position].text in ("+", "-"):
+        operator = tokens[position].text
+        rhs, position = mul(tokens, position + 1)
+        node = Node(operator, node, rhs)
+    return node, position
+
+
+# mul = primary (("*" | "/") primary)*
+def mul(tokens, position):
+    node, position = primary(tokens, position)
+    while tokens[position].text in ("*", "/"):
+        operator = tokens[position].text
+        rhs, position = primary(tokens, position + 1)
+        node = Node(operator, node, rhs)
+    return node, position
+
+
+# primary = "(" expr ")" | number
+def primary(tokens, position):
+    token = tokens[position]
+    if token.text == "(":
+        node, position = expr(tokens, position + 1)
+        if tokens[position].text != ")":
+            raise CompileError(tokens[position].position, "expected ')'")
+        return node, position + 1
+
+    if token.kind == "NUM":
+        return Node("NUM", value=token.value), position + 1
+
+    raise CompileError(token.position, "expected an expression")
+
+
+class CodeGenerator:
+    def __init__(self):
+        self.assembly = ["  .globl main", "main:"]
+        self.depth = 0
+
+    def push(self):
+        self.assembly.append("  push %rax")
+        self.depth += 1
+
+    def pop(self, register):
+        self.assembly.append(f"  pop {register}")
+        self.depth -= 1
+
+    def gen_expr(self, node):
+        if node.kind == "NUM":
+            self.assembly.append(f"  mov ${node.value}, %rax")
+            return
+
+        # Save the right result, compute the left, then restore the right.
+        self.gen_expr(node.rhs)
+        self.push()
+        self.gen_expr(node.lhs)
+        self.pop("%rdi")
+
+        if node.kind == "+":
+            self.assembly.append("  add %rdi, %rax")
+        elif node.kind == "-":
+            self.assembly.append("  sub %rdi, %rax")
+        elif node.kind == "*":
+            self.assembly.append("  imul %rdi, %rax")
+        elif node.kind == "/":
+            self.assembly.append("  cqo")
+            self.assembly.append("  idiv %rdi")
+        else:
+            raise AssertionError("invalid expression")
+
+    def generate(self, node):
+        self.gen_expr(node)
+        self.assembly.append("  ret")
+        assert self.depth == 0
+        return "\n".join(self.assembly)
 
 
 def main():
@@ -72,30 +155,16 @@ def main():
     source = sys.argv[1]
     try:
         tokens = tokenize(source)
-        value = get_number(tokens[0])
-        assembly = ["  .globl main", "main:", f"  mov ${value}, %rax"]
-        position = 1
-
-        while tokens[position].kind != "EOF":
-            operator = tokens[position].text
-            if operator == "+":
-                instruction = "add"
-            elif operator == "-":
-                instruction = "sub"
-            else:
-                raise CompileError(tokens[position].position, "expected '-'")
-
-            value = get_number(tokens[position + 1])
-            assembly.append(f"  {instruction} ${value}, %rax")
-            position += 2
-
-        assembly.append("  ret")
+        node, position = expr(tokens, 0)
+        if tokens[position].kind != "EOF":
+            raise CompileError(tokens[position].position, "extra token")
+        assembly = CodeGenerator().generate(node)
     except CompileError as error:
         print(source, file=sys.stderr)
         print(" " * error.position + "^ " + str(error), file=sys.stderr)
         return 1
 
-    print("\n".join(assembly))
+    print(assembly)
     return 0
 
 

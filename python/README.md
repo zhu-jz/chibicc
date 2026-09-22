@@ -1,65 +1,117 @@
-# Lesson 3: a tokenizer handles whitespace
+# Lesson 4: errors point to the source
 
 This educational Python port follows Rui Ueyama's
 [chibicc](https://github.com/rui314/chibicc), one original commit at a time.
 This lesson implements original commit
-[`a1ab0ff26f23c82f15180051204eeb6279747c9a`](https://github.com/rui314/chibicc/commit/a1ab0ff26f23c82f15180051204eeb6279747c9a),
-“Add a tokenizer to allow space characters between tokens.”
+[`cc5a6d978144bda90220bd10866c4fd908d07546`](https://github.com/rui314/chibicc/commit/cc5a6d978144bda90220bd10866c4fd908d07546),
+“Improve error message.”
 
-The `python-lessons` branch retains the original C files unchanged.
-Earlier lessons and explanations remain in Git history:
+The `python-lessons` branch keeps the original C files intact. Previous
+lessons and their explanations remain available in Git history:
 
 | Lesson | Original commit | Python commit |
 | --- | --- | --- |
 | 1: one integer | `0522e2d` | `77c10f9` |
 | 2: addition and subtraction | `bf7081f` | `d74a628` |
+| 3: tokenization | `a1ab0ff` | `b92e285` |
 
-## Why tokenize?
+## What changed
 
-Previously, the compiler read raw characters while generating instructions.
-Number conversion skipped leading spaces, but operator reading did not:
-`5+ 20-4` worked while `5 +20-4` failed.
-
-Now `tokenize()` scans the entire input first. It skips whitespace wherever
-it appears between tokens and produces a list of meaningful pieces:
+Previously, an error said only `invalid token` or `expected a number`.
+Now it prints the original input and a caret at the relevant position:
 
 ```text
-Input:   " 12 + 34 - 5 "
-Tokens:  NUM(12), PUNCT(+), NUM(34), PUNCT(-), NUM(5), EOF
+$ python3 python/main.py ' 12 + foo'
+ 12 + foo
+      ^ invalid token
+
+$ python3 python/main.py '1+'
+1+
+  ^ expected a number
+
+$ python3 python/main.py '1 2'
+1 2
+  ^ expected '-'
 ```
 
-A token has a `kind`, its original `text`, and a numeric `value` used only
-for number tokens. `NUM` represents consecutive ASCII digits; `PUNCT`
-represents `+` or `-`. `EOF` marks the end of input, even though the input
-is a command-line string rather than a file.
+The last message follows the original parser: after checking for `+`, it
+requires `-`. These examples produce status 1 and write diagnostics to
+standard error. They produce no assembly on standard output.
 
-The scanner advances a character index. For digits, it consumes the whole
-number; for punctuation, one character. Whitespace produces no token.
-Anything else raises `invalid token`.
+The original commit message shows `1+foo` with `expected a number`, but its
+actual code tokenizes the entire input first and fails at `f` with
+`invalid token`. This port follows the code.
 
-Whitespace separates tokens; it does not join numbers. Thus `1 2` becomes
-two number tokens and is rejected, rather than becoming the number 12.
+## How source positions work
 
-## Read the parser and assembly
+Each token now stores `position`, a zero-based character index in the
+original input. Whitespace is still skipped, but its characters count
+when recording a position. We do not strip the input.
 
-After tokenization, `main()` works only with tokens. Its `position` is now
-an index into the token list, not into the source string:
+For ` 12 + 34 `, the number 12 starts at position 1, the plus at 4, and
+34 at 6. EOF is at position 9, after the trailing space. This allows a
+missing-number diagnostic to point just past the input, even after spaces.
 
-1. Require a number using `get_number()` and emit `mov`.
-2. Until EOF, read `+` or `-`, then require another number.
-3. Emit `add` or `sub` and advance by two tokens.
-4. Emit `ret`.
+C already stored a pointer to the token's source text. The new C error
+function subtracts the start-of-input pointer from the error pointer to
+obtain the position. Python stores that position directly as an integer.
 
-The accepted grammar is:
+Read `main.py` in this order:
+
+1. `Token.position` records where each token starts.
+2. `CompileError` carries a position and an error message.
+3. `tokenize()` raises it at an invalid character or an out-of-range literal.
+4. `get_number()` and the operator check raise it at an unexpected token,
+   including EOF.
+5. `main()` catches it, prints the input, then prints `position` spaces
+   followed by `^` and the message.
+
+The source string stays local to `main()`. The original uses a global
+`current_input`; using an exception to carry the position avoids needing
+that global in this small Python version. Invalid argument counts still
+produce a simple message because there is no single source input to mark.
+
+Like the original, this is a basic character-offset display, not a
+line-and-column renderer. Tabs, embedded newlines, and wide Unicode
+characters can make the caret appear visually misaligned. Python counts
+Unicode characters rather than C's byte offsets. We do not add terminal
+width calculations or multiline formatting in this lesson.
+
+## What the compiler accepts
+
+The grammar and generated assembly are unchanged:
 
 ```text
 number (('+' | '-') number)*
 ```
 
-Here `*` means the parenthesized part may repeat zero or more times; it
-is grammar notation, not an operator supported by our compiler.
+The `*` here means repetition in the grammar. The compiler accepts decimal
+numbers and binary addition/subtraction, with whitespace between tokens.
+It does not yet accept multiplication, division, parentheses, or unary
+signs. For example, `-1` is rejected, while `0-1` produces a negative result.
 
-For ` 12 + 34 - 5 `, generated assembly is:
+The port retains its earlier intentional differences: a Python list of
+tokens instead of a linked list, Unicode whitespace support, and explicit
+literal limits of 0 through 2147483647. C stores `strtoul` results in an
+`int` without checking that limit. The Python limit also keeps operands
+suitable for signed 32-bit immediates in `add` and `sub`; intermediate
+results use the 64-bit register. Assembly is buffered until parsing
+succeeds, whereas C can emit partial assembly before a parser error.
+
+## Run it in WSL
+
+On x86-64 Linux with Python 3 and GCC installed (`python3` and
+`build-essential` on Ubuntu), run from the repository root:
+
+```sh
+python3 python/main.py ' 12 + 34 - 5 ' > /tmp/chibicc-python-lesson4.s
+cat /tmp/chibicc-python-lesson4.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson4 /tmp/chibicc-python-lesson4.s
+/tmp/chibicc-python-lesson4
+echo $?
+```
+
+The assembly is:
 
 ```asm
   .globl main
@@ -70,93 +122,36 @@ main:
   ret
 ```
 
-`.globl main` exposes the function to the linker and `main:` labels its
-entry. AT&T assembly syntax puts the source first: `$12` is an immediate
-constant and `%rax` is a register. When the executable runs, `%rax` holds
-12, then 46, then 41. `ret` returns to the C runtime, which uses `main`'s
-return value as the process exit status. Python emits instructions; it
-does not evaluate the arithmetic or wrap the C compiler.
+`.globl main` exposes the function to the linker; `main:` labels its entry.
+AT&T syntax puts the source first: `$12` is a constant and `%rax` is a
+register. Executing these instructions makes `%rax` hold 12, then 46,
+then 41. `ret` returns to the C runtime. The executable does not print;
+`echo $?` immediately afterward displays its exit status, **41**.
 
-This remains a left-to-right compiler for addition and subtraction. There
-is no syntax tree, multiplication, division, or parenthesized expression.
-Errors are simple messages, without source locations or caret displays.
+An `int` result uses `%eax`, the low 32 bits of `%rax`, and Linux exposes
+the low eight bits as the exit status. Thus `0-1` exits with 255. Use an
+ordinary interactive shell for the example; `set -e` stops scripts on
+nonzero statuses. The compiler's successful status is independently 0.
 
-## A behavior change in the original commit
+Python emits the assembly without `eval()` or wrapping the C compiler.
+GCC assembles and links it with the C runtime. `-static` follows the original
+tests; `-Wl,-z,noexecstack` marks the stack non-executable.
 
-Previously, `strtol` happened to accept a sign as part of reading a number.
-The new tokenizer always makes `+` and `-` separate punctuation tokens.
-This commit's parser requires a number first and after each operator.
-Consequently, `-1`, `+42`, `1+-2`, and `1--2` are now rejected. This follows
-the original commit; it is not a Python-specific restriction.
-
-You can still produce a negative result with `0-1`. Linux exposes only the
-low eight bits of a normal exit status, so that program exits with 255.
-Likewise, `255+2` exits with 1. An `int` function result uses `%eax`, the
-low 32 bits of `%rax`.
-
-## Python/C differences
-
-- C stores tokens in a linked list. Python uses a standard list of simple
-  dataclass objects and advances an index instead of following `next`.
-- Python stores the token's text directly instead of a C pointer and length.
-  Operator comparisons use normal string equality. The operator check is
-  inline; `get_number()` performs the same kind check as the original helper.
-- Python's `isspace()` also accepts Unicode whitespace. Numbers deliberately
-  use ASCII digits, matching this lesson's decimal source syntax.
-- We explicitly reject literals greater than 2147483647. This retains the
-  previous lesson's range check, with signs now handled as punctuation.
-  The original stores `strtoul`'s result in an `int` without a range check;
-  out-of-range conversions are not portable. The bound also keeps literals
-  suitable for the signed 32-bit immediate forms of `add` and `sub`.
-  Intermediate results are computed in the 64-bit register.
-- We buffer assembly until parsing succeeds. Errors go to standard error
-  and leave standard output empty; C can print partial assembly on parser
-  errors. Python integer conversion failures are also reported as errors.
-
-## Run it in WSL
-
-Use x86-64 Linux with Python 3 and GCC (`python3` and `build-essential` on
-Ubuntu). From the repository root, run these commands individually:
-
-```sh
-python3 python/main.py ' 12 + 34 - 5 ' > /tmp/chibicc-python-lesson3.s
-cat /tmp/chibicc-python-lesson3.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson3 /tmp/chibicc-python-lesson3.s
-/tmp/chibicc-python-lesson3
-echo $?
-```
-
-The shell's `echo` prints **41**. The executable prints nothing itself.
-Run `echo $?` immediately after the executable to see its exit status.
-Use an ordinary interactive shell: `set -e` would stop a script on the
-nonzero status. The compiler's own successful exit status is 0.
-
-GCC assembles and links our assembly with the C runtime. `-static` follows
-the original tests. `-Wl,-z,noexecstack` marks the stack non-executable
-without adding assembly directives to this lesson.
-
-## Tests
+## Tests and stopping point
 
 ```sh
 python3 python/test.py
 ```
 
-Tests inspect token boundaries and EOF, check exact generated assembly,
-assemble and link it with GCC, and run each valid program to check its
-exit status. They include all four original tests through this commit:
-`0`, `42`, `5+20-4`, and ` 12 + 34 - 5 `.
+Tests verify exact diagnostic text and caret placement for tokenizer and
+parser errors, missing operands at EOF, leading/trailing whitespace, empty
+input, and out-of-range literals. They also check token positions and retain
+all 17 valid assembly/executable cases from lesson 3, including all four
+original upstream tests. Build artifacts use temporary directories.
 
-Additional cases cover spaces before operators, tabs and newlines, Unicode
-whitespace, leading zeroes, negative results, exit-status truncation,
-literal limits, missing operands, adjacent numbers, and unsupported syntax.
-Signed-literal cases from the previous lesson now correctly expect errors.
-Temporary executable and assembly files are automatically cleaned up.
+Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT licensed. The complete
+notice remains in `LICENSE` here and in the repository root; this port
+uses the same license.
 
-## Attribution and stopping point
-
-Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT licensed. The full
-original notice remains in `LICENSE` here and at the repository root.
-This port uses the same MIT license.
-
-Stop after this lesson. Implement the next original commit only after an
-explicit confirmation that this lesson is understood and you are ready.
+Stop here until you explicitly confirm understanding and readiness for the
+next original commit.

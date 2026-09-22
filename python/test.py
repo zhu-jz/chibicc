@@ -23,15 +23,19 @@ def compile_expression(*arguments):
 class ExpressionCompilerTests(unittest.TestCase):
     def test_tokenization(self):
         expected = [
-            Token("NUM", "12", 12), Token("PUNCT", "+"),
-            Token("NUM", "34", 34), Token("PUNCT", "-"),
-            Token("NUM", "5", 5), Token("EOF", ""),
+            Token("NUM", "12", 1, 12), Token("PUNCT", "+", 4),
+            Token("NUM", "34", 6, 34), Token("PUNCT", "-", 9),
+            Token("NUM", "5", 11, 5), Token("EOF", "", 13),
         ]
         self.assertEqual(tokenize(" 12 + 34 - 5 "), expected)
-        self.assertEqual(tokenize("12+34-5"), expected)
-        self.assertEqual(tokenize(" \t\n"), [Token("EOF", "")])
+        self.assertEqual(tokenize("12+34-5"), [
+            Token("NUM", "12", 0, 12), Token("PUNCT", "+", 2),
+            Token("NUM", "34", 3, 34), Token("PUNCT", "-", 5),
+            Token("NUM", "5", 6, 5), Token("EOF", "", 7),
+        ])
+        self.assertEqual(tokenize(" \t\n"), [Token("EOF", "", 3)])
         self.assertEqual(tokenize("-001"), [
-            Token("PUNCT", "-"), Token("NUM", "001", 1), Token("EOF", ""),
+            Token("PUNCT", "-", 0), Token("NUM", "001", 1, 1), Token("EOF", "", 4),
         ])
 
     def test_assembly_and_exit_status(self):
@@ -95,15 +99,36 @@ class ExpressionCompilerTests(unittest.TestCase):
                 self.assertTrue(result.stderr)
 
     def test_error_messages(self):
-        cases = [("1@2", "invalid token"), ("1+", "expected a number"),
-                 ("", "expected a number"), ("1 2", "expected '-'"),
-                 ("-1", "expected a number")]
-        for source, message in cases:
+        cases = [
+            ("1@2", "1@2\n ^ invalid token\n"),
+            ("1+foo", "1+foo\n  ^ invalid token\n"),
+            ("1+", "1+\n  ^ expected a number\n"),
+            (" 12 +   ", " 12 +   \n        ^ expected a number\n"),
+            ("", "\n^ expected a number\n"),
+            ("   ", "   \n   ^ expected a number\n"),
+            ("1 2", "1 2\n  ^ expected '-'\n"),
+            ("-1", "-1\n^ expected a number\n"),
+            ("1 + +2", "1 + +2\n    ^ expected a number\n"),
+            (" 12 + foo", " 12 + foo\n      ^ invalid token\n"),
+            ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
+            ("1\u2003+@", "1\u2003+@\n   ^ invalid token\n"),
+        ]
+        for source, expected in cases:
             with self.subTest(source=source):
                 result = compile_expression(source)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, message + "\n")
+                self.assertEqual(result.stderr, expected)
+
+    def test_argument_error_has_no_source_location(self):
+        for arguments in [(), ("1", "2")]:
+            with self.subTest(arguments=arguments):
+                result = compile_expression(*arguments)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(
+                    result.stderr, f"{COMPILER}: invalid number of arguments\n"
+                )
 
 
 if __name__ == "__main__":

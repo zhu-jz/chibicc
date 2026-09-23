@@ -1,6 +1,6 @@
-"""Lesson 6: compile unary plus and minus.
+"""Lesson 7: compile equality and relational comparisons.
 
-Based on chibicc commit bf9ab52860c1cbbeeca40df515468f42300ff429.
+Based on chibicc commit 25b4b85b887c643e337a9fbcd1b0220b413952bf.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -49,6 +49,11 @@ def tokenize(source):
             tokens.append(Token("NUM", text, start, value))
             continue
 
+        if source.startswith(("==", "!=", "<=", ">="), position):
+            tokens.append(Token("PUNCT", source[position:position + 2], position))
+            position += 2
+            continue
+
         if character in string.punctuation:
             tokens.append(Token("PUNCT", character, position))
             position += 1
@@ -69,8 +74,38 @@ class Node:
 
 
 # Each parser function returns (node, next unconsumed token index).
-# expr = mul (("+" | "-") mul)*
+# expr = equality
 def expr(tokens, position):
+    return equality(tokens, position)
+
+
+# equality = relational (("==" | "!=") relational)*
+def equality(tokens, position):
+    node, position = relational(tokens, position)
+    while tokens[position].text in ("==", "!="):
+        operator = tokens[position].text
+        rhs, position = relational(tokens, position + 1)
+        node = Node(operator, node, rhs)
+    return node, position
+
+
+# relational = add (("<" | "<=" | ">" | ">=") add)*
+def relational(tokens, position):
+    node, position = add(tokens, position)
+    while tokens[position].text in ("<", "<=", ">", ">="):
+        operator = tokens[position].text
+        rhs, position = add(tokens, position + 1)
+        if operator == ">":
+            node = Node("<", rhs, node)
+        elif operator == ">=":
+            node = Node("<=", rhs, node)
+        else:
+            node = Node(operator, node, rhs)
+    return node, position
+
+
+# add = mul (("+" | "-") mul)*
+def add(tokens, position):
     node, position = mul(tokens, position)
     while tokens[position].text in ("+", "-"):
         operator = tokens[position].text
@@ -152,6 +187,13 @@ class CodeGenerator:
         elif node.kind == "/":
             self.assembly.append("  cqo")
             self.assembly.append("  idiv %rdi")
+        elif node.kind in ("==", "!=", "<", "<="):
+            instructions = {
+                "==": "sete", "!=": "setne", "<": "setl", "<=": "setle",
+            }
+            self.assembly.append("  cmp %rdi, %rax")
+            self.assembly.append(f"  {instructions[node.kind]} %al")
+            self.assembly.append("  movzb %al, %rax")
         else:
             raise AssertionError("invalid expression")
 

@@ -1,82 +1,99 @@
-# Lesson 6: unary plus and minus
+# Lesson 7: equality and relational comparisons
 
 This educational Python port follows Rui Ueyama's
 [chibicc](https://github.com/rui314/chibicc), one original commit at a time.
 This lesson implements original commit
-[`bf9ab52860c1cbbeeca40df515468f42300ff429`](https://github.com/rui314/chibicc/commit/bf9ab52860c1cbbeeca40df515468f42300ff429),
-“Add unary plus and minus.” The `python-lessons` branch retains the
-original C files unchanged. Earlier Python lessons and explanations remain
-in Git history, ending with lesson 5 at Python commit `23d90e1`.
+[`25b4b85b887c643e337a9fbcd1b0220b413952bf`](https://github.com/rui314/chibicc/commit/25b4b85b887c643e337a9fbcd1b0220b413952bf),
+“Add ==, !=, <= and >= operators.” The commit also implements `<` and `>`.
+The `python-lessons` branch retains the original C files unchanged. Earlier
+Python lessons and their explanations remain in Git history, ending with
+lesson 6 at Python commit `1bb6952`.
 
 ## What changed
 
-The previous parser recognized `+` and `-` only between expressions. Now it
-also accepts them before an expression:
+The compiler now accepts six comparisons. Each returns **1** when true or
+**0** when false:
+
+| Operator | Meaning | Example and result |
+| --- | --- | --- |
+| `==` | equal | `42==42` → 1 |
+| `!=` | not equal | `42!=42` → 0 |
+| `<` | less than | `0<1` → 1 |
+| `<=` | less than or equal | `1<=1` → 1 |
+| `>` | greater than | `1>2` → 0 |
+| `>=` | greater than or equal | `1>=1` → 1 |
+
+The shell uses `<` and `>` for redirection, so quote comparison expressions
+when passing them as command-line arguments.
+
+## How the tokenizer and parser work
+
+The tokenizer checks `==`, `!=`, `<=`, and `>=` before trying a single
+punctuation character. For `1<=2`, it produces `NUM(1), PUNCT(<=), NUM(2),
+EOF`. Each token retains its source position for caret diagnostics. Other
+punctuation still forms one-character tokens; the parser rejects syntax it
+does not support.
+
+The parser now has two more precedence levels:
 
 ```text
--10+20      → 10
-- -10       → 10
-- - +10     → 10
-1--2        → 3
-2*-(3+4)    → -14
+expr       = equality
+equality   = relational (("==" | "!=") relational)*
+relational = add (("<" | "<=" | ">" | ">=") add)*
+add        = mul (("+" | "-") mul)*
+mul        = unary (("*" | "/") unary)*
+unary      = ("+" | "-") unary | primary
+primary    = "(" expr ")" | number
 ```
 
-The source still becomes tokens, then a tree, then x86-64 Linux assembly.
-No arithmetic expression is evaluated using Python `eval()` or a wrapped
-C compiler.
+Outside quotes, `*` means repetition and `|` means a choice. A parser
+function returns a tree node and the next unconsumed token index. Lower
+lines bind more tightly: `5+6*7==47` groups as `(5+(6*7))==47`. Relational
+operators bind more tightly than equality: `3<4==1` means `(3<4)==1`.
+The loops group repeated operators from left to right, so `1<2<3` means
+`(1<2)<3`; the first comparison produces 1, then `1<3` produces 1.
 
-## Read the parser
+The tree has equality nodes `==` and `!=`, and relational nodes `<` and
+`<=`. For `a>b`, the parser constructs `b<a`; for `a>=b`, it constructs
+`b<=a`. This follows the original C code and lets code generation reuse
+two relational operations. These programs have no side effects, so swapping
+tree operands does not change their result. For `1>2`, the tree is `<` with
+2 on the left and 1 on the right.
 
-The grammar now has a `unary` level between `mul` and `primary`:
+## How the assembly decides true or false
 
-```text
-expr    = mul (("+" | "-") mul)*
-mul     = unary (("*" | "/") unary)*
-unary   = ("+" | "-") unary | primary
-primary = "(" expr ")" | number
-```
-
-Outside quotes, `*` means repetition and `|` means a choice. Each function
-returns a tree node and the index of the next unconsumed token. Because
-`mul()` calls `unary()`, `-3*4` groups as `(-3)*4`. Parentheses still call
-`expr()` so `-(3+4)` negates the entire sum.
-
-For unary plus, `unary()` simply returns the next unary expression: `+10`
-has the same tree as `10`. For unary minus, it wraps the next unary
-expression in a `NEG` node. Recursive calls allow signs to chain:
-`- - +10` becomes `NEG(NEG(NUM(10)))`. For `1--2`, the first minus is
-binary subtraction in `expr()` and the second is unary negation in `unary()`.
-
-The C commit adds a unary node constructor. This Python port uses the
-existing `Node` dataclass with `kind="NEG"` and the operand in `lhs`.
-The `rhs` field remains unused for that node. This keeps the tree shapes
-close to the original C code without extra class types.
-
-## Read the generated assembly
-
-A number still emits `mov` into `%rax`. A `NEG` node first emits its
-operand, then `neg %rax`. For `- - +10`, the compiler emits:
+The existing generator computes the right tree child, saves it with
+`push %rax`, computes the left child, then restores the right value with
+`pop %rdi`. For `1<2`, it emits:
 
 ```asm
   .globl main
 main:
-  mov $10, %rax
-  neg %rax
-  neg %rax
+  mov $2, %rax
+  push %rax
+  mov $1, %rax
+  pop %rdi
+  cmp %rdi, %rax
+  setl %al
+  movzb %al, %rax
   ret
 ```
 
-The first `neg` changes 10 to -10. The second changes -10 back to 10.
-Unary plus adds no machine instruction. Existing binary operators still
-compute their right side first, save it with `push %rax`, compute the left
-side, restore the right with `pop %rdi`, and perform the operation. Every
-push is balanced by a pop before `ret`.
+`.globl main` exposes the function to the linker, and `main:` marks its
+entry. AT&T syntax puts the source first. Immediately before `cmp`, `%rax`
+contains the left value (1) and `%rdi` the right value (2). The comparison
+sets processor flags as though it computed `1-2`; it does not store that
+subtraction. `setl %al` uses the signed less-than condition to put 1 in
+the low byte of `%rax`. `movzb %al, %rax` then clears the remaining bytes,
+so `%rax` is exactly 0 or 1. Without that step, old bits in `%rax` could
+remain in the returned value.
 
-`.globl main` exposes `main` to the linker, and `main:` marks its entry.
-`%rax` holds the result. GNU assembler AT&T syntax puts the source before
-the destination; `$10` is an immediate constant. `ret` returns to the C
-runtime. The program prints nothing. Linux exposes the low eight bits of
-the return value as its exit status, so a result of -14 is reported as 242.
+The other cases use `sete` for equality, `setne` for inequality, and
+`setle` for signed less-than-or-equal. For `>` and `>=`, the parser's
+operand swap makes `setl` and `setle` sufficient. All comparisons are
+signed, so `-1<0` returns 1. Addition, subtraction, multiplication,
+division, and unary negation still produce values for comparisons; Python
+does not evaluate those expressions itself.
 
 ## Run it in WSL
 
@@ -84,37 +101,35 @@ On x86-64 Linux with Python 3 and GCC (`python3` and `build-essential` on
 Ubuntu), run from the repository root:
 
 ```sh
-python3 python/main.py '- - +10' > /tmp/chibicc-python-lesson6.s
-cat /tmp/chibicc-python-lesson6.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson6 /tmp/chibicc-python-lesson6.s
-/tmp/chibicc-python-lesson6
+python3 python/main.py '5+6*7==47' > /tmp/chibicc-python-lesson7.s
+cat /tmp/chibicc-python-lesson7.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson7 /tmp/chibicc-python-lesson7.s
+/tmp/chibicc-python-lesson7
 echo $?
 ```
 
-The last command prints **10**. Run `echo $?` immediately after the
-executable: it shows the preceding program's exit status. In a shell script,
-`set -e` would stop on a nonzero exit status. The compiler's own successful
-status is independently 0. GCC assembles and links our generated code with
-the C runtime; `-static` follows the original tests and
-`-Wl,-z,noexecstack` marks the stack non-executable.
+The last command prints **1**. The executable itself prints nothing;
+`echo $?` displays its exit status. Run that command immediately after the
+executable. The compiler's own successful exit status is 0. GCC assembles
+and links the emitted assembly with the C runtime. `-static` follows the
+original tests; `-Wl,-z,noexecstack` marks the stack non-executable.
 
 ## Scope and Python/C differences
 
-The port retains the existing 0 through 2147483647 limit on each numeric
-token. Thus `-2147483647` works: the parser negates a valid positive
-literal. `-2147483648` still fails because its unsigned digit token is
-2147483648, outside that limit. The original C compiler stores an unchecked
-`strtoul` result in an `int`, so behavior beyond that type's range is not
-portable. The port reports the error explicitly, with a caret.
+The port still accepts numeric tokens only from 0 through 2147483647.
+A leading `-` is a unary operator, so `-2147483647` works but
+`-2147483648` is rejected because its positive numeric token exceeds the
+limit. The original stores an unchecked `strtoul` result in an `int`, with
+nonportable behavior beyond that range. Our explicit check produces a
+caret diagnostic. Arithmetic intermediates and comparisons use 64-bit
+registers, matching the assembly generated at this stage.
 
-Python uses a token list and dataclass tree nodes instead of C linked lists
-and structs. It uses an integer token index instead of C pointer output
-parameters. Source positions count Python characters instead of C bytes;
-Unicode whitespace is accepted, and tabs or wide characters may make the
-basic caret display look misaligned. The port buffers assembly until
-compilation succeeds. Extremely long chains of unary signs can reach
-Python's recursion limit; this lesson follows the original recursive
-parser structure.
+Python uses lists and dataclass nodes instead of C linked lists and structs.
+The `>` and `>=` tree rewrites follow C exactly. Python stores token source
+positions as character indices instead of C byte offsets, accepts Unicode
+whitespace, and buffers assembly until compilation succeeds. Tabs and wide
+characters can still make the basic caret display appear misaligned.
+Division by zero in the executable remains unchecked, as in the original.
 
 ## Tests and stopping point
 
@@ -122,11 +137,11 @@ parser structure.
 python3 python/test.py
 ```
 
-The tests include all ten upstream assertions through this commit. They
-check tree shape, exact `neg` assembly, and the executable's exit status for
-single signs, chained signs, signed operands, grouping, and division.
-They also retain the prior precedence, stack, tokenizer, and error-location
-checks. Build artifacts use automatically cleaned temporary directories.
+The tests retain all earlier valid expressions and all 26 upstream
+assertions through this commit. They check two-character token boundaries,
+parser precedence, the operand swap for `>` and `>=`, exact assembly for
+all six operators, signed comparisons, executable exit statuses, and caret
+diagnostics. Build artifacts use automatically cleaned temporary folders.
 
 Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT licensed. The full
 notice remains in `LICENSE` here and in the repository root; this port

@@ -1,6 +1,6 @@
-"""Lesson 5: parse expression trees and compile *, /, and parentheses.
+"""Lesson 6: compile unary plus and minus.
 
-Based on chibicc commit 84cfcaf98f3d19c8f0f316e22a61725ad201f0f6.
+Based on chibicc commit bf9ab52860c1cbbeeca40df515468f42300ff429.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -79,14 +79,25 @@ def expr(tokens, position):
     return node, position
 
 
-# mul = primary (("*" | "/") primary)*
+# mul = unary (("*" | "/") unary)*
 def mul(tokens, position):
-    node, position = primary(tokens, position)
+    node, position = unary(tokens, position)
     while tokens[position].text in ("*", "/"):
         operator = tokens[position].text
-        rhs, position = primary(tokens, position + 1)
+        rhs, position = unary(tokens, position + 1)
         node = Node(operator, node, rhs)
     return node, position
+
+
+# unary = ("+" | "-") unary | primary
+def unary(tokens, position):
+    operator = tokens[position].text
+    if operator == "+":
+        return unary(tokens, position + 1)
+    if operator == "-":
+        operand, position = unary(tokens, position + 1)
+        return Node("NEG", lhs=operand), position
+    return primary(tokens, position)
 
 
 # primary = "(" expr ")" | number
@@ -120,6 +131,10 @@ class CodeGenerator:
     def gen_expr(self, node):
         if node.kind == "NUM":
             self.assembly.append(f"  mov ${node.value}, %rax")
+            return
+        if node.kind == "NEG":
+            self.gen_expr(node.lhs)
+            self.assembly.append("  neg %rax")
             return
 
         # Save the right result, compute the left, then restore the right.

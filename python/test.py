@@ -44,6 +44,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("(5+6)*7", Node("*", Node("+", five, six), seven)),
             ("5-6-7", Node("-", Node("-", five, six), seven)),
             ("5/6/7", Node("/", Node("/", five, six), seven)),
+            ("-5*6", Node("*", Node("NEG", lhs=five), six)),
+            ("-(5+6)", Node("NEG", lhs=Node("+", five, six))),
+            ("--5", Node("NEG", lhs=Node("NEG", lhs=five))),
+            ("+-5", Node("NEG", lhs=five)),
         ]
         for source, expected in cases:
             with self.subTest(source=source):
@@ -66,6 +70,12 @@ class ExpressionCompilerTests(unittest.TestCase):
              "  pop %rdi\n  cqo\n  idiv %rdi\n"),
             ("10-3", "  mov $3, %rax\n  push %rax\n  mov $10, %rax\n"
              "  pop %rdi\n  sub %rdi, %rax\n"),
+            ("-10", "  mov $10, %rax\n  neg %rax\n"),
+            ("+10", "  mov $10, %rax\n"),
+            ("- - +10", "  mov $10, %rax\n  neg %rax\n  neg %rax\n"),
+            ("2*-(3+4)", "  mov $4, %rax\n  push %rax\n  mov $3, %rax\n"
+             "  pop %rdi\n  add %rdi, %rax\n  neg %rax\n  push %rax\n"
+             "  mov $2, %rax\n  pop %rdi\n  imul %rdi, %rax\n"),
         ]
         for source, instructions in cases:
             with self.subTest(source=source):
@@ -75,7 +85,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                 self.assertEqual(result.stdout, f"  .globl main\nmain:\n{instructions}  ret\n")
 
     def test_executable_exit_status(self):
-        # All seven original tests, previous valid cases, and precedence,
+        # All ten original tests, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
             ("0", 0), ("42", 42), ("5+20-4", 21), (" 12 + 34 - 5 ", 41),
@@ -90,6 +100,13 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("(0-7)/2", 253), ("7/(0-2)", 253), ("(0-7)/(0-2)", 3),
             ("(0-3)*4", 244), ("100/(2+3*(4-2))", 12),
             ("65536*65536/65536/65536", 1),
+            ("-10+20", 10), ("- -10", 10), ("- - +10", 10),
+            ("-1", 255), ("+42", 42), ("1+-2", 255),
+            ("1--2", 3), ("1++2", 3), ("1 + +2", 3),
+            ("-(3+4)*2", 242), ("2*-(3+4)", 242),
+            ("-20/3", 250), ("20/-3", 250), ("-20/-3", 6),
+            ("3*-4+15", 3), ("-(-(-5))", 251),
+            ("-2147483647-1", 0),
         ]
         with tempfile.TemporaryDirectory() as directory:
             assembly = Path(directory) / "program.s"
@@ -114,9 +131,9 @@ class ExpressionCompilerTests(unittest.TestCase):
                  ("1_000",), ("2147483648",), ("-2147483649",),
                  ("1+",), ("1-",), ("1+abc",), ("1+2junk",), ("1 2",),
                  ("1+2147483648",), ("1-2147483649",), (" \t\n",),
-                 ("-1",), ("+42",), ("1+-2",), ("1--2",), ("1++2",),
                  ("1 + ",), ("１２",), ("()",), ("(1",), ("1)",),
-                 ("2(3)",), ("1**2",), ("1//2",), ("1/",), ("1%2",)]
+                 ("2(3)",), ("1**2",), ("1//2",), ("1/",), ("1%2",),
+                 ("+",), ("-",), ("--",), ("1*-")]
         for arguments in cases:
             with self.subTest(arguments=arguments):
                 result = compile_expression(*arguments)
@@ -133,8 +150,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("", "\n^ expected an expression\n"),
             ("   ", "   \n   ^ expected an expression\n"),
             ("18 11", "18 11\n   ^ extra token\n"),
-            ("-1", "-1\n^ expected an expression\n"),
-            ("1 + +2", "1 + +2\n    ^ expected an expression\n"),
+            ("--", "--\n  ^ expected an expression\n"),
+            ("1 + +", "1 + +\n     ^ expected an expression\n"),
             (" 12 + foo", " 12 + foo\n      ^ invalid token\n"),
             ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
             ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),

@@ -1,6 +1,6 @@
 """Build a list of expression statements from tokens.
 
-Based on chibicc commit 76cae0ad05b6ba3e3e927b2b749ccddda23f0c51.
+Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -8,9 +8,18 @@ from common import CompileError, Node
 
 
 # Each parser function returns (node, next unconsumed token index).
-# expr = equality
+# expr = assign
 def expr(tokens, position):
-    return equality(tokens, position)
+    return assign(tokens, position)
+
+
+# assign = equality ("=" assign)?
+def assign(tokens, position):
+    node, position = equality(tokens, position)
+    if tokens[position].text == "=":
+        rhs, position = assign(tokens, position + 1)
+        node = Node("ASSIGN", node, rhs)
+    return node, position
 
 
 # equality = relational (("==" | "!=") relational)*
@@ -69,7 +78,7 @@ def unary(tokens, position):
     return primary(tokens, position)
 
 
-# primary = "(" expr ")" | number
+# primary = "(" expr ")" | identifier | number
 def primary(tokens, position):
     token = tokens[position]
     if token.text == "(":
@@ -77,6 +86,9 @@ def primary(tokens, position):
         if tokens[position].text != ")":
             raise CompileError(tokens[position].position, "expected ')'")
         return node, position + 1
+
+    if token.kind == "IDENT":
+        return Node("VAR", name=token.text), position + 1
 
     if token.kind == "NUM":
         return Node("NUM", value=token.value), position + 1

@@ -1,6 +1,6 @@
-"""Lesson 9: compile expression statements separated by semicolons.
+"""Lesson 10: compile single-letter local variables and assignment.
 
-Based on chibicc commit 76cae0ad05b6ba3e3e927b2b749ccddda23f0c51.
+Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -23,8 +23,11 @@ def main():
         statements = parse(tokens)
         assembly = codegen(statements)
     except CompileError as error:
-        print(source, file=sys.stderr)
-        print(" " * error.position + "^ " + str(error), file=sys.stderr)
+        if error.position is None:
+            print(error, file=sys.stderr)
+        else:
+            print(source, file=sys.stderr)
+            print(" " * error.position + "^ " + str(error), file=sys.stderr)
         return 1
 
     print(assembly)

@@ -1,6 +1,6 @@
 """Turn source characters into tokens.
 
-Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
+Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -32,6 +32,11 @@ def tokenize(source):
             if value > 2**31 - 1:
                 raise CompileError(start, "integer must fit in a signed 32-bit immediate")
             tokens.append(Token("NUM", text, start, value))
+            continue
+
+        if "a" <= character <= "z":
+            tokens.append(Token("IDENT", character, position))
+            position += 1
             continue
 
         if source.startswith(("==", "!=", "<=", ">="), position):

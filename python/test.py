@@ -13,6 +13,8 @@ from tokenizer import tokenize
 
 
 COMPILER = Path(__file__).with_name("main.py")
+PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n  sub $208, %rsp\n"
+EPILOGUE = "  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
 def compile_program(*arguments):
@@ -43,9 +45,16 @@ class ExpressionCompilerTests(unittest.TestCase):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(result.stdout, "  .globl main\nmain:\n  ret\n")
+                self.assertEqual(result.stdout, PROLOGUE + EPILOGUE)
 
     def test_tokenization(self):
+        self.assertEqual(tokenize("a=z;"), [
+            Token("IDENT", "a", 0), Token("PUNCT", "=", 1),
+            Token("IDENT", "z", 2), Token("PUNCT", ";", 3), Token("EOF", "", 4),
+        ])
+        self.assertEqual(tokenize("ab"), [
+            Token("IDENT", "a", 0), Token("IDENT", "b", 1), Token("EOF", "", 2),
+        ])
         self.assertEqual(tokenize(" 1<=2 != 3>=4 == 5 < 6 > 7 "), [
             Token("NUM", "1", 1, 1), Token("PUNCT", "<=", 2),
             Token("NUM", "2", 4, 2), Token("PUNCT", "!=", 6),
@@ -73,6 +82,9 @@ class ExpressionCompilerTests(unittest.TestCase):
         six = Node("NUM", value=6)
         seven = Node("NUM", value=7)
         cases = [
+            ("a=b=3;", Node("ASSIGN", Node("VAR", name="a"),
+                           Node("ASSIGN", Node("VAR", name="b"), Node("NUM", value=3)))),
+            ("a=5==6;", Node("ASSIGN", Node("VAR", name="a"), Node("==", five, six))),
             ('5+6*7;', Node("+", five, Node("*", six, seven))),
             ('(5+6)*7;', Node("*", Node("+", five, six), seven)),
             ('5-6-7;', Node("-", Node("-", five, six), seven)),
@@ -99,6 +111,10 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_exact_assembly(self):
         cases = [
+            ("a=3; a;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
+             "  pop %rdi\n  mov %rax, (%rdi)\n  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"),
+            ("z=5;", "  lea -208(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
+             "  pop %rdi\n  mov %rax, (%rdi)\n"),
             ("1; 2; 3;", "  mov $1, %rax\n  mov $2, %rax\n  mov $3, %rax\n"),
             ('42;', "  mov $42, %rax\n"),
             ('5+6*7;', "  mov $7, %rax\n  push %rax\n  mov $6, %rax\n"
@@ -133,12 +149,20 @@ class ExpressionCompilerTests(unittest.TestCase):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(result.stdout, f"  .globl main\nmain:\n{instructions}  ret\n")
+                self.assertEqual(result.stdout, PROLOGUE + instructions + EPILOGUE)
 
     def test_executable_exit_status(self):
-        # All 27 original tests, previous valid cases, and precedence,
+        # All 30 original tests, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            ("a=3; a;", 3), ("a=3; z=5; a+z;", 8), ("a=b=3; a+b;", 6),
+            ("a=1; a=a+2; a;", 3), ("a=4; b=7; a=9; b;", 7),
+            ("a=5==5; a;", 1), ("a=3; (a=7)+2;", 9),
+            ("a=-(3+4); b=2; a/b;", 253), ("(a)=6; a;", 6),
+            ("a=65536*65536; a/65536/65536;", 1),
+            ("a=2; z=8; (a+z)*(z-a); a+z;", 10),
+            ("".join(f"{chr(97+i)}={i+1};" for i in range(26))
+             + "+".join(chr(97+i) for i in range(26)) + ";", 95),
             ("1; 2; 3;", 3),
             ("42; 0;", 0),
             ("1+2; 3*(4+5); (10-3)/2;", 3),
@@ -220,13 +244,13 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("1; 2+;", "1; 2+;\n     ^ expected an expression\n"),
             ("1; (2;", "1; (2;\n     ^ expected ')'\n"),
             ("1@2", "1@2\n ^ expected ';'\n"),
-            ("1+foo", "1+foo\n  ^ invalid token\n"),
+            ("1+foo", "1+foo\n   ^ expected ';'\n"),
             ("1+", "1+\n  ^ expected an expression\n"),
             (" 12 +   ", " 12 +   \n        ^ expected an expression\n"),
             ("18 11", "18 11\n   ^ expected ';'\n"),
             ("--", "--\n  ^ expected an expression\n"),
             ("1 + +", "1 + +\n     ^ expected an expression\n"),
-            (" 12 + foo", " 12 + foo\n      ^ invalid token\n"),
+            (" 12 + foo", " 12 + foo\n       ^ expected ';'\n"),
             ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
             ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),
             ("(1+2", "(1+2\n    ^ expected ')'\n"),
@@ -234,7 +258,11 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("()", "()\n ^ expected an expression\n"),
             ("1/", "1/\n  ^ expected an expression\n"),
             ("(1 2)", "(1 2)\n   ^ expected ')'\n"),
-            ("1=1", "1=1\n ^ expected ';'\n"),
+            ("1=1;", "not an lvalue\n"),
+            ("(a+1)=3;", "not an lvalue\n"),
+            ("-a=3;", "not an lvalue\n"),
+            ("a=;", "a=;\n  ^ expected an expression\n"),
+            ("A=3;", "A=3;\n^ invalid token\n"),
             ("1<", "1<\n  ^ expected an expression\n"),
             ("1>=", "1>=\n   ^ expected an expression\n"),
             ("1===1", "1===1\n   ^ expected an expression\n"),

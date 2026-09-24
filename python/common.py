@@ -1,6 +1,6 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
+Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -28,3 +28,4 @@ class Node:
     lhs: Optional["Node"] = None
     rhs: Optional["Node"] = None
     value: int = 0
+    name: str = ""  # Used only for variable nodes.

@@ -1,6 +1,6 @@
-"""Lesson 8: compose the compiler from separate modules.
+"""Lesson 9: compile expression statements separated by semicolons.
 
-Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
+Based on chibicc commit 76cae0ad05b6ba3e3e927b2b749ccddda23f0c51.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -20,8 +20,8 @@ def main():
     source = sys.argv[1]
     try:
         tokens = tokenize(source)
-        node = parse(tokens)
-        assembly = codegen(node)
+        statements = parse(tokens)
+        assembly = codegen(statements)
     except CompileError as error:
         print(source, file=sys.stderr)
         print(" " * error.position + "^ " + str(error), file=sys.stderr)

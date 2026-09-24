@@ -1,6 +1,6 @@
-"""Generate x86-64 Linux assembly from an expression tree.
+"""Generate x86-64 Linux assembly from a list of statements.
 
-Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
+Based on chibicc commit 76cae0ad05b6ba3e3e927b2b749ccddda23f0c51.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -52,12 +52,19 @@ class CodeGenerator:
         else:
             raise AssertionError("invalid expression")
 
-    def generate(self, node):
-        self.gen_expr(node)
+    def gen_stmt(self, node):
+        if node.kind == "EXPR_STMT":
+            self.gen_expr(node.lhs)
+            return
+        raise AssertionError("invalid statement")
+
+    def generate(self, statements):
+        for node in statements:
+            self.gen_stmt(node)
+            assert self.depth == 0
         self.assembly.append("  ret")
-        assert self.depth == 0
         return "\n".join(self.assembly)
 
 
-def codegen(node):
-    return CodeGenerator().generate(node)
+def codegen(statements):
+    return CodeGenerator().generate(statements)

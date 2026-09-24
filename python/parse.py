@@ -1,6 +1,6 @@
-"""Build an expression tree from tokens.
+"""Build a list of expression statements from tokens.
 
-Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
+Based on chibicc commit 76cae0ad05b6ba3e3e927b2b749ccddda23f0c51.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -84,8 +84,24 @@ def primary(tokens, position):
     raise CompileError(token.position, "expected an expression")
 
 
+# stmt = expr-stmt
+def stmt(tokens, position):
+    return expr_stmt(tokens, position)
+
+
+# expr-stmt = expr ";"
+def expr_stmt(tokens, position):
+    node, position = expr(tokens, position)
+    if tokens[position].text != ";":
+        raise CompileError(tokens[position].position, "expected ';'")
+    return Node("EXPR_STMT", lhs=node), position + 1
+
+
+# program = stmt*
 def parse(tokens):
-    node, position = expr(tokens, 0)
-    if tokens[position].kind != "EOF":
-        raise CompileError(tokens[position].position, "extra token")
-    return node
+    statements = []
+    position = 0
+    while tokens[position].kind != "EOF":
+        node, position = stmt(tokens, position)
+        statements.append(node)
+    return statements

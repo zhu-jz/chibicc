@@ -1,207 +1,15 @@
-"""Lesson 7: compile equality and relational comparisons.
+"""Lesson 8: compose the compiler from separate modules.
 
-Based on chibicc commit 25b4b85b887c643e337a9fbcd1b0220b413952bf.
+Based on chibicc commit 725badfb494544b7c7f1d4c4690b9bc033c6d051.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from dataclasses import dataclass
-import string
 import sys
-from typing import Optional
 
-
-@dataclass
-class Token:
-    kind: str
-    text: str
-    position: int  # Character index in the original input, including whitespace.
-    value: int = 0  # Used only for number tokens.
-
-
-class CompileError(Exception):
-    def __init__(self, position, message):
-        super().__init__(message)
-        self.position = position
-
-
-def tokenize(source):
-    tokens = []
-    position = 0
-
-    while position < len(source):
-        character = source[position]
-
-        if character.isspace():
-            position += 1
-            continue
-
-        if "0" <= character <= "9":
-            start = position
-            while position < len(source) and "0" <= source[position] <= "9":
-                position += 1
-            text = source[start:position]
-            try:
-                value = int(text, 10)
-            except ValueError:
-                raise CompileError(start, "integer is too large to convert") from None
-            if value > 2**31 - 1:
-                raise CompileError(start, "integer must fit in a signed 32-bit immediate")
-            tokens.append(Token("NUM", text, start, value))
-            continue
-
-        if source.startswith(("==", "!=", "<=", ">="), position):
-            tokens.append(Token("PUNCT", source[position:position + 2], position))
-            position += 2
-            continue
-
-        if character in string.punctuation:
-            tokens.append(Token("PUNCT", character, position))
-            position += 1
-            continue
-
-        raise CompileError(position, "invalid token")
-
-    tokens.append(Token("EOF", "", position))
-    return tokens
-
-
-@dataclass
-class Node:
-    kind: str
-    lhs: Optional["Node"] = None
-    rhs: Optional["Node"] = None
-    value: int = 0
-
-
-# Each parser function returns (node, next unconsumed token index).
-# expr = equality
-def expr(tokens, position):
-    return equality(tokens, position)
-
-
-# equality = relational (("==" | "!=") relational)*
-def equality(tokens, position):
-    node, position = relational(tokens, position)
-    while tokens[position].text in ("==", "!="):
-        operator = tokens[position].text
-        rhs, position = relational(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# relational = add (("<" | "<=" | ">" | ">=") add)*
-def relational(tokens, position):
-    node, position = add(tokens, position)
-    while tokens[position].text in ("<", "<=", ">", ">="):
-        operator = tokens[position].text
-        rhs, position = add(tokens, position + 1)
-        if operator == ">":
-            node = Node("<", rhs, node)
-        elif operator == ">=":
-            node = Node("<=", rhs, node)
-        else:
-            node = Node(operator, node, rhs)
-    return node, position
-
-
-# add = mul (("+" | "-") mul)*
-def add(tokens, position):
-    node, position = mul(tokens, position)
-    while tokens[position].text in ("+", "-"):
-        operator = tokens[position].text
-        rhs, position = mul(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# mul = unary (("*" | "/") unary)*
-def mul(tokens, position):
-    node, position = unary(tokens, position)
-    while tokens[position].text in ("*", "/"):
-        operator = tokens[position].text
-        rhs, position = unary(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# unary = ("+" | "-") unary | primary
-def unary(tokens, position):
-    operator = tokens[position].text
-    if operator == "+":
-        return unary(tokens, position + 1)
-    if operator == "-":
-        operand, position = unary(tokens, position + 1)
-        return Node("NEG", lhs=operand), position
-    return primary(tokens, position)
-
-
-# primary = "(" expr ")" | number
-def primary(tokens, position):
-    token = tokens[position]
-    if token.text == "(":
-        node, position = expr(tokens, position + 1)
-        if tokens[position].text != ")":
-            raise CompileError(tokens[position].position, "expected ')'")
-        return node, position + 1
-
-    if token.kind == "NUM":
-        return Node("NUM", value=token.value), position + 1
-
-    raise CompileError(token.position, "expected an expression")
-
-
-class CodeGenerator:
-    def __init__(self):
-        self.assembly = ["  .globl main", "main:"]
-        self.depth = 0
-
-    def push(self):
-        self.assembly.append("  push %rax")
-        self.depth += 1
-
-    def pop(self, register):
-        self.assembly.append(f"  pop {register}")
-        self.depth -= 1
-
-    def gen_expr(self, node):
-        if node.kind == "NUM":
-            self.assembly.append(f"  mov ${node.value}, %rax")
-            return
-        if node.kind == "NEG":
-            self.gen_expr(node.lhs)
-            self.assembly.append("  neg %rax")
-            return
-
-        # Save the right result, compute the left, then restore the right.
-        self.gen_expr(node.rhs)
-        self.push()
-        self.gen_expr(node.lhs)
-        self.pop("%rdi")
-
-        if node.kind == "+":
-            self.assembly.append("  add %rdi, %rax")
-        elif node.kind == "-":
-            self.assembly.append("  sub %rdi, %rax")
-        elif node.kind == "*":
-            self.assembly.append("  imul %rdi, %rax")
-        elif node.kind == "/":
-            self.assembly.append("  cqo")
-            self.assembly.append("  idiv %rdi")
-        elif node.kind in ("==", "!=", "<", "<="):
-            instructions = {
-                "==": "sete", "!=": "setne", "<": "setl", "<=": "setle",
-            }
-            self.assembly.append("  cmp %rdi, %rax")
-            self.assembly.append(f"  {instructions[node.kind]} %al")
-            self.assembly.append("  movzb %al, %rax")
-        else:
-            raise AssertionError("invalid expression")
-
-    def generate(self, node):
-        self.gen_expr(node)
-        self.assembly.append("  ret")
-        assert self.depth == 0
-        return "\n".join(self.assembly)
+from codegen import codegen
+from common import CompileError
+from parse import parse
+from tokenizer import tokenize
 
 
 def main():
@@ -212,10 +20,8 @@ def main():
     source = sys.argv[1]
     try:
         tokens = tokenize(source)
-        node, position = expr(tokens, 0)
-        if tokens[position].kind != "EOF":
-            raise CompileError(tokens[position].position, "extra token")
-        assembly = CodeGenerator().generate(node)
+        node = parse(tokens)
+        assembly = codegen(node)
     except CompileError as error:
         print(source, file=sys.stderr)
         print(" " * error.position + "^ " + str(error), file=sys.stderr)

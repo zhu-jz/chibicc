@@ -6,7 +6,10 @@ import sys
 import tempfile
 import unittest
 
-from main import CodeGenerator, Node, Token, expr, tokenize
+from codegen import CodeGenerator
+from common import Node, Token
+from parse import parse
+from tokenizer import tokenize
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -67,9 +70,8 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, expected in cases:
             with self.subTest(source=source):
                 tokens = tokenize(source)
-                node, position = expr(tokens, 0)
+                node = parse(tokens)
                 self.assertEqual(node, expected)
-                self.assertEqual(tokens[position].kind, "EOF")
                 generator = CodeGenerator()
                 generator.generate(node)
                 self.assertEqual(generator.depth, 0)

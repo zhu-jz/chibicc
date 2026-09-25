@@ -1,167 +1,143 @@
-# Lesson 11: names and allocated local-variable slots
+# Lesson 12: return statements
 
 This educational Python port implements original chibicc commit
-[`482c26b536f8e5c998af6210470cd3d97a47ee9a`](https://github.com/rui314/chibicc/commit/482c26b536f8e5c998af6210470cd3d97a47ee9a),
-“Support multi-letter local variables.” Earlier lessons remain in Git
-history; lesson 10 is Python commit `b542a70`.
+[`6cc1c1f0643ce0f1af0857e024a0a438ddb45853`](https://github.com/rui314/chibicc/commit/6cc1c1f0643ce0f1af0857e024a0a438ddb45853),
+“Add \"return\" statement.” Earlier lessons remain in Git history;
+lesson 11 is Python commit `7760b36`.
 
 ## What changed
 
-Names can now contain more than one letter:
+You can explicitly finish the function and select its result:
 
 ```text
-foo=3; foo;                      → 3
-foo123=3; bar=5; foo123+bar;      → 8
-Total=3; total=7; Total+total;    → 10
-_value1=5; _value1;              → 5
+return 1; 2; 3;    → 1
+1; return 2; 3;    → 2
+1; 2; return 3;    → 3
 ```
 
-The first character must be an ASCII letter or underscore. Later characters
-can also be digits. Names are case-sensitive; `foo` and `foo123` are distinct,
-as are `Total` and `total`. Declarations are still unnecessary. A name is
-registered the first time it appears, whether read or assigned. Reading
-before assignment still gives an unspecified value from its stack slot.
+The returned expression is evaluated before leaving the function. For
+`foo=7; return (foo+5)*(foo-2); foo=99;`, the result is 60 and the last
+assignment never executes.
 
-Previously the compiler reserved 208 bytes for `a` through `z`. It now
-reserves space for the names actually encountered, rounded up to a multiple
-of 16 bytes. It is no longer limited to 26 variables.
+The statement grammar gains one alternative:
 
-## Tokenization and shared objects
-
-`is_ident1()` in `tokenizer.py` checks the first character and `is_ident2()`
-checks later characters. The scanner consumes the complete name into one
-`IDENT` token. `abc` now forms one token; the previous lesson produced three.
-
-`common.py` adds two dataclasses:
-
-- `Obj` stores a local variable's name and stack offset.
-- `Function` stores the statement list, the local-variable list, and the
-  stack size. It describes the single generated `main` function; this
-  lesson does not introduce function-definition syntax.
-
-A variable tree node now refers to an `Obj` through its `var` field.
-For `foo=3; foo+foo;`, all three occurrences point to the same object.
-Code generation can assign that object's offset once, and every reference
-will use it.
-
-`parse.py` groups its parsing functions in a `Parser` class. The instance
-holds the tokens and local-variable list for one compilation. `find_var()`
-searches for an exact name. If none exists, `primary()` creates an `Obj`
-and inserts it at the front of the list, matching C's linked-list order.
-The grammar and precedence rules are unchanged.
-
-The public `parse(tokens)` function now returns a `Function` instead of a
-statement list. `main.py` passes this object to `codegen()`.
-
-## Stack allocation
-
-Code generation first walks the local-variable list, assigning successive
-eight-byte slots at offsets -8, -16, -24, and so on from `%rbp`. Because
-new names are added at the front, allocation order is the reverse of first
-appearance in the source. For `foo=3; bar=5; foo+bar;`:
-
-| Variable | Offset from `%rbp` |
-| --- | --- |
-| `bar` | -8 |
-| `foo` | -16 |
-
-The total slot size is rounded up using integer arithmetic:
-
-```python
-program.stack_size = (offset + 15) // 16 * 16
+```text
+stmt = "return" expr ";" | expr-stmt
 ```
 
-Zero variables need 0 bytes; one or two need 16; three or four need 32.
-This follows the original commit's 16-byte alignment policy. The generated
-function still saves `%rbp` before reserving local storage, and restores
-the caller's frame pointer at the end.
+An expression and terminating semicolon are required. `return;` and
+`return 1` are errors. All existing expression operators and variables
+can be used inside the returned expression.
 
-`gen_addr()` now reads the saved offset rather than calculating it from a
-letter. To get `foo`'s address in the two-variable example, it emits:
+## Keyword, tree node, and jump
+
+After scanning tokens, `tokenizer.py` converts the exact word `return`
+from an identifier to a `KEYWORD`. Complete names are recognized before
+this conversion, so `returnx`, `return_`, and `Return` are still ordinary
+variable names. `return` itself can no longer be a variable.
+
+`Parser.stmt()` in `parse.py` recognizes that keyword, parses its expression,
+requires `;`, and constructs `Node("RETURN", lhs=expression)`. The program
+still stores statements in source order, including those after a return.
+
+`CodeGenerator.gen_stmt()` emits the expression into `%rax`, followed by:
 
 ```asm
-  lea -16(%rbp), %rax
+  jmp .L.return
 ```
 
-`lea` computes an address. `mov (%rax), %rax` reads the eight-byte value
-there. Assignments still save the destination address, compute the right
-side, and store using `mov %rax, (%rdi)`.
+The shared `.L.return` label is placed immediately before the existing
+function epilogue. That epilogue frees local-variable storage, restores
+the caller's `%rbp`, and returns. Jumping there ensures every return uses
+the same cleanup code. A direct `ret` at the statement would encounter
+the function's current stack frame instead of the caller's return address.
 
-## Run it in WSL
+## Read the assembly
 
-Use Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
-Ubuntu). From the repository root:
-
-```sh
-python3 python/main.py 'foo=3; bar=5; foo+bar;' > /tmp/chibicc-python-lesson11.s
-cat /tmp/chibicc-python-lesson11.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson11 /tmp/chibicc-python-lesson11.s
-/tmp/chibicc-python-lesson11
-echo $?
-```
-
-The last command prints **8**. Quote the source so the shell does not
-interpret its semicolons. The executable prints nothing; `echo $?`
-immediately afterward displays its exit status. Use an ordinary interactive
-shell: `set -e` would stop a script on status 8.
-
-The prologue now reserves only 16 bytes for this example:
+For `return 3; 42;`, the exact output is:
 
 ```asm
   .globl main
 main:
   push %rbp
   mov %rsp, %rbp
-  sub $16, %rsp
-```
-
-The body stores 3 in `foo` and 5 in `bar`, then loads and adds them. The
-result remains in `%rax`. The epilogue restores the stack:
-
-```asm
+  sub $0, %rsp
+  mov $3, %rax
+  jmp .L.return
+  mov $42, %rax
+.L.return:
   mov %rbp, %rsp
   pop %rbp
   ret
 ```
 
-GCC assembles and links the emitted code with the C runtime. `-static`
-follows upstream tests and `-Wl,-z,noexecstack` marks the stack
-non-executable. Python performs compilation without `eval()` or invoking
-the original C compiler. The compiler's own successful exit status is 0.
+`.globl main` exposes the entry point to the linker. The prologue saves
+`%rbp` and establishes the stack frame; this example uses zero local bytes.
+`mov $3, %rax` sets the result. `jmp` transfers execution directly to the
+label, skipping `mov $42, %rax`. The epilogue preserves `%rax`, so the
+runtime receives 3.
 
-## Intentional differences and tests
+The compiler still generates the skipped instruction. This commit does
+not remove unreachable code. It also parses and checks all later statements:
+`return 1; 1=3;` remains a compilation error because 1 is not assignable.
 
-Python uses lists and shared dataclass objects instead of C linked lists
-and pointers. The new `Parser` instance keeps locals separate for repeated
-calls to `parse()`; the C implementation accumulates locals in a global
-list during its single command-line compilation. We preserve its order
-and exact-name lookup. Python's `//` is needed for the alignment calculation
-because `/` would produce a floating-point value; positive integer division
-in the C expression produces an integer.
+## Run it in WSL
 
-Existing differences remain: explicit numeric-token bounds of 0 through
-2147483647, Unicode whitespace support, character-based diagnostic offsets,
-and assembly buffered until compilation succeeds. Identifiers deliberately
-use ASCII rules, matching upstream. Variables and arithmetic intermediates
-use 64 bits; normal exit statuses expose only eight bits. Uninitialized
-variables and empty-program results remain unspecified, deep expression
-trees can reach Python's recursion limit, and runtime division by zero
-remains unchecked.
+With Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
+Ubuntu), run from the repository root:
+
+```sh
+python3 python/main.py 'return 3; 42;' > /tmp/chibicc-python-lesson12.s
+cat /tmp/chibicc-python-lesson12.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson12 /tmp/chibicc-python-lesson12.s
+/tmp/chibicc-python-lesson12
+echo $?
+```
+
+The last command prints **3**. The executable prints nothing itself;
+`echo $?` immediately afterward displays its exit status. Quote the input
+so the shell does not interpret its semicolons. Use an ordinary interactive
+shell: `set -e` would stop a script on status 3. The compiler's own successful
+status is 0.
+
+GCC assembles and links our output with the C runtime. `-static` follows
+the original tests and `-Wl,-z,noexecstack` marks the stack non-executable.
+The Python compiler neither evaluates the source using `eval()` nor invokes
+the original C compiler.
+
+## Existing behavior and Python/C differences
+
+Programs without an explicit return remain accepted. Reaching the end
+still returns the final expression's value at this stage. Empty programs
+leave the result unspecified. Variables remain uninitialized until assigned.
+A normal Linux exit status retains eight bits, so `return -7;` gives 249.
+
+The new keyword conversion, return node, jump, and label follow the original
+commit. Python continues to use dataclasses, statement lists, a parser
+instance with its own locals, and assembly buffered until compilation
+succeeds. Numeric tokens have an explicit range of 0 through 2147483647;
+the original's unchecked conversion differs outside that range. Python
+accepts Unicode whitespace and counts character positions for diagnostics,
+while identifier characters remain ASCII. Deep expression trees can reach
+Python's recursion limit; runtime division by zero remains unchecked.
+
+## Tests and attribution
 
 ```sh
 python3 python/test.py
 ```
 
-Tests retain earlier cases and cover every upstream test case through this
-commit. They check complete identifier tokens, exact names and case,
-shared object identity, independent parser instances, reverse allocation
-order, 0/16/32-byte stack sizes, exact assembly, and executable results for
-more than 26 locals. Temporary build artifacts are cleaned up automatically.
+Tests include the upstream return examples and retain all prior executable
+cases. They check keyword boundaries, return tree structure, exact jump and
+label assembly, early exit before later statements, multiple returns,
+returns using locals and assignment, and missing-expression/semicolon
+errors. Invalid code after a return must still be rejected. Temporary
+assembly and executable artifacts are cleaned up automatically.
 
-The implementation remains in `python/` on `python-lessons`; the original C
-files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
-licensed. The full notice remains in `LICENSE` here and in the repository
-root; this port uses the same license.
+All implementation files remain in `python/` on `python-lessons`, with the
+original C files intact. Original chibicc: Copyright (c) 2019 Rui Ueyama,
+MIT licensed. The complete notice remains in `LICENSE` here and at the
+repository root; this port uses the same license.
 
 Stop here until you explicitly confirm understanding and readiness for the
 next original commit.

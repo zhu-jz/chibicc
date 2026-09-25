@@ -1,6 +1,6 @@
-"""Lesson 11: compile named local variables with allocated stack slots.
+"""Lesson 12: compile return statements with a shared epilogue.
 
-Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
+Based on chibicc commit 6cc1c1f0643ce0f1af0857e024a0a438ddb45853.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

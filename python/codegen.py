@@ -1,6 +1,6 @@
 """Allocate local stack slots and generate x86-64 Linux assembly.
 
-Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
+Based on chibicc commit 6cc1c1f0643ce0f1af0857e024a0a438ddb45853.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -72,6 +72,10 @@ class CodeGenerator:
             raise AssertionError("invalid expression")
 
     def gen_stmt(self, node):
+        if node.kind == "RETURN":
+            self.gen_expr(node.lhs)
+            self.assembly.append("  jmp .L.return")
+            return
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
             return
@@ -89,7 +93,7 @@ class CodeGenerator:
         for node in program.body:
             self.gen_stmt(node)
             assert self.depth == 0
-        self.assembly.extend(["  mov %rbp, %rsp", "  pop %rbp", "  ret"])
+        self.assembly.extend([".L.return:", "  mov %rbp, %rsp", "  pop %rbp", "  ret"])
         return "\n".join(self.assembly)
 
 

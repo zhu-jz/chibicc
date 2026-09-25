@@ -14,7 +14,7 @@ from tokenizer import tokenize
 
 COMPILER = Path(__file__).with_name("main.py")
 PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
-EPILOGUE = "  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
+EPILOGUE = ".L.return:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
 def compile_program(*arguments):
@@ -26,6 +26,13 @@ def compile_program(*arguments):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_return_tree(self):
+        program = parse(tokenize("return 1+2; 3;"))
+        self.assertEqual(program.body, [
+            Node("RETURN", lhs=Node("+", Node("NUM", value=1), Node("NUM", value=2))),
+            Node("EXPR_STMT", lhs=Node("NUM", value=3)),
+        ])
+
     def test_local_objects_and_stack_layout(self):
         program = parse(tokenize("foo=3; bar=5; foo+bar;"))
         self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
@@ -75,6 +82,11 @@ class ExpressionCompilerTests(unittest.TestCase):
                 self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_tokenization(self):
+        self.assertEqual(tokenize("return returnx return_ Return"), [
+            Token("KEYWORD", "return", 0), Token("IDENT", "returnx", 7),
+            Token("IDENT", "return_", 15), Token("IDENT", "Return", 23),
+            Token("EOF", "", 29),
+        ])
         self.assertEqual(tokenize("Foo123=_bar;"), [
             Token("IDENT", "Foo123", 0), Token("PUNCT", "=", 6),
             Token("IDENT", "_bar", 7), Token("PUNCT", ";", 11), Token("EOF", "", 12),
@@ -142,6 +154,9 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_exact_assembly(self):
         cases = [
+            ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return\n  mov $42, %rax\n"),
+            ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return\n"
+             "  mov $2, %rax\n  jmp .L.return\n"),
             ("a=3; a;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
              "  pop %rdi\n  mov %rax, (%rdi)\n  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"),
             ("z=5;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
@@ -187,6 +202,25 @@ class ExpressionCompilerTests(unittest.TestCase):
         # All original test cases through this commit, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            ("return 0;", 0), ("return 42;", 42), ("return 5+20-4;", 21),
+            ("return  12 + 34 - 5 ;", 41), ("return 5+6*7;", 47),
+            ("return 5*(9-6);", 15), ("return (3+5)/2;", 4),
+            ("return -10+20;", 10), ("return - -10;", 10), ("return - - +10;", 10),
+            ("return 0==1;", 0), ("return 42==42;", 1),
+            ("return 0!=1;", 1), ("return 42!=42;", 0),
+            ("return 0<1;", 1), ("return 1<1;", 0), ("return 2<1;", 0),
+            ("return 0<=1;", 1), ("return 1<=1;", 1), ("return 2<=1;", 0),
+            ("return 1>0;", 1), ("return 1>1;", 0), ("return 1>2;", 0),
+            ("return 1>=0;", 1), ("return 1>=1;", 1), ("return 1>=2;", 0),
+            ("a=3; return a;", 3), ("a=3; z=5; return a+z;", 8),
+            ("a=b=3; return a+b;", 6), ("foo=3; return foo;", 3),
+            ("foo123=3; bar=5; return foo123+bar;", 8),
+            ("return 1; 2; 3;", 1), ("1; return 2; 3;", 2), ("1; 2; return 3;", 3),
+            ("return 1; return 2;", 1),
+            ("foo=7; return (foo+5)*(foo-2); foo=99;", 60),
+            ("return total=9; total=0;", 9),
+            ("returnx=3; return_=4; Return=5; return returnx+return_+Return;", 12),
+            ("return(3+4);", 7), ("return -7;", 249),
             ("foo=3; foo;", 3), ("foo123=3; bar=5; foo123+bar;", 8),
             ("foo=3; foo123=7; foo+foo123;", 10),
             ("Foo=3; foo=7; Foo+foo;", 10),
@@ -278,6 +312,12 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_error_messages(self):
         cases = [
+            ("return;", "return;\n      ^ expected an expression\n"),
+            ("return 1", "return 1\n        ^ expected ';'\n"),
+            ("return=1;", "return=1;\n      ^ expected an expression\n"),
+            ("a=return;", "a=return;\n  ^ expected an expression\n"),
+            ("return 1; 2", "return 1; 2\n           ^ expected ';'\n"),
+            ("return 1; 1=3;", "not an lvalue\n"),
             ("42", "42\n  ^ expected ';'\n"),
             ("1; 2", "1; 2\n    ^ expected ';'\n"),
             (";", ";\n^ expected an expression\n"),

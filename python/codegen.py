@@ -1,6 +1,6 @@
-"""Generate x86-64 Linux assembly from a list of statements.
+"""Allocate local stack slots and generate x86-64 Linux assembly.
 
-Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
+Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -10,8 +10,7 @@ from common import CompileError
 
 class CodeGenerator:
     def __init__(self):
-        self.assembly = ["  .globl main", "main:", "  push %rbp",
-                         "  mov %rsp, %rbp", "  sub $208, %rsp"]
+        self.assembly = []
         self.depth = 0
 
     def push(self):
@@ -25,8 +24,7 @@ class CodeGenerator:
     def gen_addr(self, node):
         if node.kind != "VAR":
             raise CompileError(None, "not an lvalue")
-        offset = (ord(node.name) - ord("a") + 1) * 8
-        self.assembly.append(f"  lea {-offset}(%rbp), %rax")
+        self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
 
     def gen_expr(self, node):
         if node.kind == "NUM":
@@ -79,13 +77,21 @@ class CodeGenerator:
             return
         raise AssertionError("invalid statement")
 
-    def generate(self, statements):
-        for node in statements:
+    def generate(self, program):
+        offset = 0
+        for var in program.locals:
+            offset += 8
+            var.offset = -offset
+        program.stack_size = (offset + 15) // 16 * 16
+
+        self.assembly = ["  .globl main", "main:", "  push %rbp",
+                         "  mov %rsp, %rbp", f"  sub ${program.stack_size}, %rsp"]
+        for node in program.body:
             self.gen_stmt(node)
             assert self.depth == 0
         self.assembly.extend(["  mov %rbp, %rsp", "  pop %rbp", "  ret"])
         return "\n".join(self.assembly)
 
 
-def codegen(statements):
-    return CodeGenerator().generate(statements)
+def codegen(program):
+    return CodeGenerator().generate(program)

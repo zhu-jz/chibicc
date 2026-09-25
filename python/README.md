@@ -1,102 +1,122 @@
-# Lesson 10: single-letter local variables
+# Lesson 11: names and allocated local-variable slots
 
 This educational Python port implements original chibicc commit
-[`1f9f3adf324af1432a380b41c7690834e649e346`](https://github.com/rui314/chibicc/commit/1f9f3adf324af1432a380b41c7690834e649e346),
-“Support single-letter local variables.” Earlier lessons remain in Git
-history; lesson 9 is Python commit `f2b5136`.
+[`482c26b536f8e5c998af6210470cd3d97a47ee9a`](https://github.com/rui314/chibicc/commit/482c26b536f8e5c998af6210470cd3d97a47ee9a),
+“Support multi-letter local variables.” Earlier lessons remain in Git
+history; lesson 10 is Python commit `b542a70`.
 
 ## What changed
 
-You can assign values to lowercase letters `a` through `z` and read them:
+Names can now contain more than one letter:
 
 ```text
-a=3; a;           → 3
-a=3; z=5; a+z;    → 8
-a=b=3; a+b;       → 6
+foo=3; foo;                      → 3
+foo123=3; bar=5; foo123+bar;      → 8
+Total=3; total=7; Total+total;    → 10
+_value1=5; _value1;              → 5
 ```
 
-Every statement still ends with `;`. No declarations are needed at this
-stage. Each letter has its own eight-byte stack slot. There are 26 slots,
-so the generated function reserves 26 × 8 = 208 bytes.
+The first character must be an ASCII letter or underscore. Later characters
+can also be digits. Names are case-sensitive; `foo` and `foo123` are distinct,
+as are `Total` and `total`. Declarations are still unnecessary. A name is
+registered the first time it appears, whether read or assigned. Reading
+before assignment still gives an unspecified value from its stack slot.
 
-## Tokenization and parsing
+Previously the compiler reserved 208 bytes for `a` through `z`. It now
+reserves space for the names actually encountered, rounded up to a multiple
+of 16 bytes. It is no longer limited to 26 variables.
 
-`tokenizer.py` recognizes each lowercase ASCII letter as an `IDENT` token.
-`abc` becomes three identifier tokens, not one name, and uppercase letters
-remain invalid. `primary()` in `parse.py` turns an identifier into a
-`Node("VAR", name=letter)`.
+## Tokenization and shared objects
 
-Assignment becomes the lowest-precedence expression operation:
+`is_ident1()` in `tokenizer.py` checks the first character and `is_ident2()`
+checks later characters. The scanner consumes the complete name into one
+`IDENT` token. `abc` now forms one token; the previous lesson produced three.
 
-```text
-expr   = assign
-assign = equality ("=" assign)?
+`common.py` adds two dataclasses:
+
+- `Obj` stores a local variable's name and stack offset.
+- `Function` stores the statement list, the local-variable list, and the
+  stack size. It describes the single generated `main` function; this
+  lesson does not introduce function-definition syntax.
+
+A variable tree node now refers to an `Obj` through its `var` field.
+For `foo=3; foo+foo;`, all three occurrences point to the same object.
+Code generation can assign that object's offset once, and every reference
+will use it.
+
+`parse.py` groups its parsing functions in a `Parser` class. The instance
+holds the tokens and local-variable list for one compilation. `find_var()`
+searches for an exact name. If none exists, `primary()` creates an `Obj`
+and inserts it at the front of the list, matching C's linked-list order.
+The grammar and precedence rules are unchanged.
+
+The public `parse(tokens)` function now returns a `Function` instead of a
+statement list. `main.py` passes this object to `codegen()`.
+
+## Stack allocation
+
+Code generation first walks the local-variable list, assigning successive
+eight-byte slots at offsets -8, -16, -24, and so on from `%rbp`. Because
+new names are added at the front, allocation order is the reverse of first
+appearance in the source. For `foo=3; bar=5; foo+bar;`:
+
+| Variable | Offset from `%rbp` |
+| --- | --- |
+| `bar` | -8 |
+| `foo` | -16 |
+
+The total slot size is rounded up using integer arithmetic:
+
+```python
+program.stack_size = (offset + 15) // 16 * 16
 ```
 
-The `?` means optional. The recursive call on the right makes `a=b=3`
-group as `a=(b=3)`: store 3 in `b`, then store the same result in `a`.
-The result of assignment is the value stored, so `(a=7)+2;` yields 9.
-Equality still uses `==`: `a=5==5;` assigns the comparison result 1 to `a`.
+Zero variables need 0 bytes; one or two need 16; three or four need 32.
+This follows the original commit's 16-byte alignment policy. The generated
+function still saves `%rbp` before reserving local storage, and restores
+the caller's frame pointer at the end.
 
-An assignment's left side must identify a storage location. Such an
-expression is called an *lvalue*. A variable, including a parenthesized
-variable such as `(a)`, works. `1=3;` and `(a+1)=3;` report `not an lvalue`.
-As in the original commit, that check occurs in code generation and the
-message has no source caret. The Python exception uses `position=None`
-for this plain diagnostic; ordinary source errors retain their carets.
-
-## Stack slots, addresses, and values
-
-The new function prologue is:
+`gen_addr()` now reads the saved offset rather than calculating it from a
+letter. To get `foo`'s address in the two-variable example, it emits:
 
 ```asm
+  lea -16(%rbp), %rax
+```
+
+`lea` computes an address. `mov (%rax), %rax` reads the eight-byte value
+there. Assignments still save the destination address, compute the right
+side, and store using `mov %rax, (%rdi)`.
+
+## Run it in WSL
+
+Use Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
+Ubuntu). From the repository root:
+
+```sh
+python3 python/main.py 'foo=3; bar=5; foo+bar;' > /tmp/chibicc-python-lesson11.s
+cat /tmp/chibicc-python-lesson11.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson11 /tmp/chibicc-python-lesson11.s
+/tmp/chibicc-python-lesson11
+echo $?
+```
+
+The last command prints **8**. Quote the source so the shell does not
+interpret its semicolons. The executable prints nothing; `echo $?`
+immediately afterward displays its exit status. Use an ordinary interactive
+shell: `set -e` would stop a script on status 8.
+
+The prologue now reserves only 16 bytes for this example:
+
+```asm
+  .globl main
+main:
   push %rbp
   mov %rsp, %rbp
-  sub $208, %rsp
+  sub $16, %rsp
 ```
 
-It saves the caller's frame pointer, establishes `%rbp` as a stable base,
-and moves `%rsp` down to reserve local-variable space. Variable addresses
-are calculated from `%rbp`:
-
-```text
-%rbp          saved caller frame pointer
-%rbp - 8      a
-%rbp - 16     b
-...
-%rbp - 208    z  ← %rsp after allocation
-below this    temporary expression pushes
-```
-
-`gen_addr()` computes a variable's address using
-`(ord(name) - ord('a') + 1) * 8`. For `a`, it emits:
-
-```asm
-  lea -8(%rbp), %rax
-```
-
-`lea` computes the address; it does not read the stored value. Reading `a`
-then emits `mov (%rax), %rax`, which loads eight bytes from that address.
-The parentheses mean access memory at the address in the register.
-
-To compile `a=3; a;`, the body is:
-
-```asm
-  lea -8(%rbp), %rax
-  push %rax
-  mov $3, %rax
-  pop %rdi
-  mov %rax, (%rdi)
-  lea -8(%rbp), %rax
-  mov (%rax), %rax
-```
-
-The assignment saves the destination address on the stack, evaluates the
-right side into `%rax`, restores the address into `%rdi`, and stores the
-value there. The store leaves `%rax` holding 3, which makes chained
-assignment work. The final two instructions read `a` back.
-
-The epilogue restores the stack and caller's frame pointer:
+The body stores 3 in `foo` and 5 in `bar`, then loads and adds them. The
+result remains in `%rax`. The epilogue restores the stack:
 
 ```asm
   mov %rbp, %rsp
@@ -104,75 +124,44 @@ The epilogue restores the stack and caller's frame pointer:
   ret
 ```
 
-The generator still checks that temporary pushes and pops balance after
-each statement. The prologue's saved `%rbp` and reserved local storage are
-separate from that temporary depth counter.
+GCC assembles and links the emitted code with the C runtime. `-static`
+follows upstream tests and `-Wl,-z,noexecstack` marks the stack
+non-executable. Python performs compilation without `eval()` or invoking
+the original C compiler. The compiler's own successful exit status is 0.
 
-## Run it in WSL
+## Intentional differences and tests
 
-With Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
-Ubuntu), run from the repository root:
+Python uses lists and shared dataclass objects instead of C linked lists
+and pointers. The new `Parser` instance keeps locals separate for repeated
+calls to `parse()`; the C implementation accumulates locals in a global
+list during its single command-line compilation. We preserve its order
+and exact-name lookup. Python's `//` is needed for the alignment calculation
+because `/` would produce a floating-point value; positive integer division
+in the C expression produces an integer.
 
-```sh
-python3 python/main.py 'a=3; z=5; a+z;' > /tmp/chibicc-python-lesson10.s
-cat /tmp/chibicc-python-lesson10.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson10 /tmp/chibicc-python-lesson10.s
-/tmp/chibicc-python-lesson10
-echo $?
-```
-
-The final command prints **8**. The generated program itself prints
-nothing; `echo $?` immediately afterward shows its exit status. Quote the
-source to protect semicolons and operators from the shell. Use an ordinary
-interactive shell; `set -e` would stop a script on status 8.
-
-Python emits assembly without `eval()` or invoking the original C compiler.
-GCC assembles and links it with the C runtime. `-static` follows the original
-tests; `-Wl,-z,noexecstack` marks the stack non-executable. A successful
-compiler invocation returns status 0 independently of the generated result.
-
-## Behavior and intentional Python/C differences
-
-Variables are not initialized automatically. Reading `a;` before assigning
-it reads whatever bytes occupy its stack slot; tests do not assume a value
-for that case. Empty programs likewise leave the result unspecified.
-The final statement still determines the returned value in this early
-compiler. The exit status retains only its low eight bits.
-
-The existing generator evaluates ordinary binary tree nodes right child
-first. Assignment computes the destination address before its right side.
-For `>` and `>=`, the parser still swaps tree children to use `<` and `<=`.
-With assignments nested inside expressions, that ordering can be observable;
-it follows this original compiler and is not a promise about general C
-expression evaluation order.
-
-Python uses dataclasses and lists instead of C structs and linked lists,
-and `ord()` instead of arithmetic on C character values. The stack layout
-and emitted load/store instructions follow the original commit. Numeric
-tokens remain limited to 0 through 2147483647; intermediate values and
-variable slots are 64-bit. This explicit literal check differs from C's
-unchecked conversion. Unicode whitespace, character-based error positions,
-and buffered assembly output remain intentional Python differences.
-Deep trees can hit Python's recursion limit; runtime division by zero
+Existing differences remain: explicit numeric-token bounds of 0 through
+2147483647, Unicode whitespace support, character-based diagnostic offsets,
+and assembly buffered until compilation succeeds. Identifiers deliberately
+use ASCII rules, matching upstream. Variables and arithmetic intermediates
+use 64 bits; normal exit statuses expose only eight bits. Uninitialized
+variables and empty-program results remain unspecified, deep expression
+trees can reach Python's recursion limit, and runtime division by zero
 remains unchecked.
-
-## Tests and attribution
 
 ```sh
 python3 python/test.py
 ```
 
-Tests retain the earlier expression cases and all 30 original assertions
-through this commit. They check identifier tokens, assignment tree shape,
-exact address/load/store assembly, the new prologue and epilogue, repeated
-assignment, chained assignment, signed values, and all 26 distinct stack
-slots. Invalid assignment targets and missing operands have diagnostic
-checks. Temporary assembly and executable files are cleaned up automatically.
+Tests retain earlier cases and cover every upstream test case through this
+commit. They check complete identifier tokens, exact names and case,
+shared object identity, independent parser instances, reverse allocation
+order, 0/16/32-byte stack sizes, exact assembly, and executable results for
+more than 26 locals. Temporary build artifacts are cleaned up automatically.
 
-The implementation lives under `python/` on the `python-lessons` branch;
-original C files remain intact. Original chibicc: Copyright (c) 2019 Rui
-Ueyama, MIT licensed. The full notice remains in `LICENSE` here and at the
-repository root, and this port uses the same license.
+The implementation remains in `python/` on `python-lessons`; the original C
+files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
+licensed. The full notice remains in `LICENSE` here and in the repository
+root; this port uses the same license.
 
 Stop here until you explicitly confirm understanding and readiness for the
 next original commit.

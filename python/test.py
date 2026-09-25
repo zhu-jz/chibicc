@@ -7,13 +7,13 @@ import tempfile
 import unittest
 
 from codegen import CodeGenerator
-from common import Node, Token
+from common import Function, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
 
 
 COMPILER = Path(__file__).with_name("main.py")
-PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n  sub $208, %rsp\n"
+PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
 EPILOGUE = "  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
@@ -26,9 +26,36 @@ def compile_program(*arguments):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_local_objects_and_stack_layout(self):
+        program = parse(tokenize("foo=3; bar=5; foo+bar;"))
+        self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
+        bar, foo = program.locals
+        self.assertIs(program.body[0].lhs.lhs.var, foo)
+        self.assertIs(program.body[2].lhs.lhs.var, foo)
+        self.assertIs(program.body[1].lhs.lhs.var, bar)
+        self.assertIs(program.body[2].lhs.rhs.var, bar)
+        CodeGenerator().generate(program)
+        self.assertEqual((bar.offset, foo.offset, program.stack_size), (-8, -16, 16))
+        # A second parse must have its own local-variable objects.
+        another = parse(tokenize("foo=1; foo;"))
+        self.assertEqual(len(another.locals), 1)
+        self.assertIsNot(another.locals[0], foo)
+        for source, expected_offsets, expected_size in [
+            ("1;", [], 0),
+            ("x=1; x=x+1;", [-8], 16),
+            ("a=1; b=2; c=3;", [-8, -16, -24], 32),
+            ("a=1; b=2; c=3; d=4;", [-8, -16, -24, -32], 32),
+        ]:
+            with self.subTest(source=source):
+                program = parse(tokenize(source))
+                assembly = CodeGenerator().generate(program)
+                self.assertEqual([var.offset for var in program.locals], expected_offsets)
+                self.assertEqual(program.stack_size, expected_size)
+                self.assertIn(f"  sub ${expected_size}, %rsp\n", assembly)
+
     def test_statement_list(self):
         statements = parse(tokenize("1; 2+3;"))
-        self.assertEqual(statements, [
+        self.assertEqual(statements.body, [
             Node("EXPR_STMT", lhs=Node("NUM", value=1)),
             Node("EXPR_STMT", lhs=Node("+", Node("NUM", value=2), Node("NUM", value=3))),
         ])
@@ -41,19 +68,23 @@ class ExpressionCompilerTests(unittest.TestCase):
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(parse(tokenize(source)), [])
+                self.assertEqual(parse(tokenize(source)), Function([], []))
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(result.stdout, PROLOGUE + EPILOGUE)
+                self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_tokenization(self):
+        self.assertEqual(tokenize("Foo123=_bar;"), [
+            Token("IDENT", "Foo123", 0), Token("PUNCT", "=", 6),
+            Token("IDENT", "_bar", 7), Token("PUNCT", ";", 11), Token("EOF", "", 12),
+        ])
         self.assertEqual(tokenize("a=z;"), [
             Token("IDENT", "a", 0), Token("PUNCT", "=", 1),
             Token("IDENT", "z", 2), Token("PUNCT", ";", 3), Token("EOF", "", 4),
         ])
         self.assertEqual(tokenize("ab"), [
-            Token("IDENT", "a", 0), Token("IDENT", "b", 1), Token("EOF", "", 2),
+            Token("IDENT", "ab", 0), Token("EOF", "", 2),
         ])
         self.assertEqual(tokenize(" 1<=2 != 3>=4 == 5 < 6 > 7 "), [
             Token("NUM", "1", 1, 1), Token("PUNCT", "<=", 2),
@@ -82,9 +113,9 @@ class ExpressionCompilerTests(unittest.TestCase):
         six = Node("NUM", value=6)
         seven = Node("NUM", value=7)
         cases = [
-            ("a=b=3;", Node("ASSIGN", Node("VAR", name="a"),
-                           Node("ASSIGN", Node("VAR", name="b"), Node("NUM", value=3)))),
-            ("a=5==6;", Node("ASSIGN", Node("VAR", name="a"), Node("==", five, six))),
+            ("a=b=3;", Node("ASSIGN", Node("VAR", var=Obj("a")),
+                           Node("ASSIGN", Node("VAR", var=Obj("b")), Node("NUM", value=3)))),
+            ("a=5==6;", Node("ASSIGN", Node("VAR", var=Obj("a")), Node("==", five, six))),
             ('5+6*7;', Node("+", five, Node("*", six, seven))),
             ('(5+6)*7;', Node("*", Node("+", five, six), seven)),
             ('5-6-7;', Node("-", Node("-", five, six), seven)),
@@ -104,7 +135,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             with self.subTest(source=source):
                 tokens = tokenize(source)
                 statements = parse(tokens)
-                self.assertEqual(statements, [Node("EXPR_STMT", lhs=expected)])
+                self.assertEqual(statements.body, [Node("EXPR_STMT", lhs=expected)])
                 generator = CodeGenerator()
                 generator.generate(statements)
                 self.assertEqual(generator.depth, 0)
@@ -113,7 +144,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         cases = [
             ("a=3; a;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
              "  pop %rdi\n  mov %rax, (%rdi)\n  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"),
-            ("z=5;", "  lea -208(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
+            ("z=5;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
              "  pop %rdi\n  mov %rax, (%rdi)\n"),
             ("1; 2; 3;", "  mov $1, %rax\n  mov $2, %rax\n  mov $3, %rax\n"),
             ('42;', "  mov $42, %rax\n"),
@@ -149,12 +180,22 @@ class ExpressionCompilerTests(unittest.TestCase):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(result.stdout, PROLOGUE + instructions + EPILOGUE)
+                stack_size = 16 if source in ("a=3; a;", "z=5;") else 0
+                self.assertEqual(result.stdout, PROLOGUE + f"  sub ${stack_size}, %rsp\n" + instructions + EPILOGUE)
 
     def test_executable_exit_status(self):
-        # All 30 original tests, previous valid cases, and precedence,
+        # All original test cases through this commit, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            ("foo=3; foo;", 3), ("foo123=3; bar=5; foo123+bar;", 8),
+            ("foo=3; foo123=7; foo+foo123;", 10),
+            ("Foo=3; foo=7; Foo+foo;", 10),
+            ("_=2; _value1=5; _+_value1;", 7),
+            ("total=left=right=4; total+left+right;", 12),
+            ("count=3; count=count+4; count;", 7),
+            ("alpha=1; beta=2; gamma=3; alpha+beta+gamma;", 6),
+            ("".join(f"var{i}={i};" for i in range(30))
+             + "+".join(f"var{i}" for i in range(30)) + ";", 179),
             ("a=3; a;", 3), ("a=3; z=5; a+z;", 8), ("a=b=3; a+b;", 6),
             ("a=1; a=a+2; a;", 3), ("a=4; b=7; a=9; b;", 7),
             ("a=5==5; a;", 1), ("a=3; (a=7)+2;", 9),
@@ -244,13 +285,13 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("1; 2+;", "1; 2+;\n     ^ expected an expression\n"),
             ("1; (2;", "1; (2;\n     ^ expected ')'\n"),
             ("1@2", "1@2\n ^ expected ';'\n"),
-            ("1+foo", "1+foo\n   ^ expected ';'\n"),
+            ("1+foo", "1+foo\n     ^ expected ';'\n"),
             ("1+", "1+\n  ^ expected an expression\n"),
             (" 12 +   ", " 12 +   \n        ^ expected an expression\n"),
             ("18 11", "18 11\n   ^ expected ';'\n"),
             ("--", "--\n  ^ expected an expression\n"),
             ("1 + +", "1 + +\n     ^ expected an expression\n"),
-            (" 12 + foo", " 12 + foo\n       ^ expected ';'\n"),
+            (" 12 + foo", " 12 + foo\n         ^ expected ';'\n"),
             ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
             ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),
             ("(1+2", "(1+2\n    ^ expected ')'\n"),
@@ -262,7 +303,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("(a+1)=3;", "not an lvalue\n"),
             ("-a=3;", "not an lvalue\n"),
             ("a=;", "a=;\n  ^ expected an expression\n"),
-            ("A=3;", "A=3;\n^ invalid token\n"),
+            ("é=3;", "é=3;\n^ invalid token\n"),
+            ("12abc=3;", "12abc=3;\n  ^ expected ';'\n"),
             ("1<", "1<\n  ^ expected an expression\n"),
             ("1>=", "1>=\n   ^ expected an expression\n"),
             ("1===1", "1===1\n   ^ expected an expression\n"),

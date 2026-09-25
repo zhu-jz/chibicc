@@ -1,6 +1,6 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
+Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -23,9 +23,22 @@ class CompileError(Exception):
 
 
 @dataclass
+class Obj:
+    name: str
+    offset: int = 0
+
+
+@dataclass
 class Node:
     kind: str
     lhs: Optional["Node"] = None
     rhs: Optional["Node"] = None
     value: int = 0
-    name: str = ""  # Used only for variable nodes.
+    var: Optional[Obj] = None  # Shared local-variable object for VAR nodes.
+
+
+@dataclass
+class Function:
+    body: list[Node]
+    locals: list[Obj]
+    stack_size: int = 0

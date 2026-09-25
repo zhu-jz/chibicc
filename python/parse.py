@@ -1,119 +1,128 @@
-"""Build a list of expression statements from tokens.
+"""Build a function containing statements and local variables.
 
-Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
+Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Node
+from common import CompileError, Function, Node, Obj
 
 
-# Each parser function returns (node, next unconsumed token index).
-# expr = assign
-def expr(tokens, position):
-    return assign(tokens, position)
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.locals = []
 
+    def find_var(self, name):
+        for var in self.locals:
+            if var.name == name:
+                return var
+        return None
 
-# assign = equality ("=" assign)?
-def assign(tokens, position):
-    node, position = equality(tokens, position)
-    if tokens[position].text == "=":
-        rhs, position = assign(tokens, position + 1)
-        node = Node("ASSIGN", node, rhs)
-    return node, position
+    # Each parser function returns (node, next unconsumed token index).
+    # expr = assign
+    def expr(self, position):
+        return self.assign(position)
 
+    # assign = equality ("=" assign)?
+    def assign(self, position):
+        node, position = self.equality(position)
+        if self.tokens[position].text == "=":
+            rhs, position = self.assign(position + 1)
+            node = Node("ASSIGN", node, rhs)
+        return node, position
 
-# equality = relational (("==" | "!=") relational)*
-def equality(tokens, position):
-    node, position = relational(tokens, position)
-    while tokens[position].text in ("==", "!="):
-        operator = tokens[position].text
-        rhs, position = relational(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# relational = add (("<" | "<=" | ">" | ">=") add)*
-def relational(tokens, position):
-    node, position = add(tokens, position)
-    while tokens[position].text in ("<", "<=", ">", ">="):
-        operator = tokens[position].text
-        rhs, position = add(tokens, position + 1)
-        if operator == ">":
-            node = Node("<", rhs, node)
-        elif operator == ">=":
-            node = Node("<=", rhs, node)
-        else:
+    # equality = relational (("==" | "!=") relational)*
+    def equality(self, position):
+        node, position = self.relational(position)
+        while self.tokens[position].text in ("==", "!="):
+            operator = self.tokens[position].text
+            rhs, position = self.relational(position + 1)
             node = Node(operator, node, rhs)
-    return node, position
+        return node, position
+
+    # relational = add (("<" | "<=" | ">" | ">=") add)*
+    def relational(self, position):
+        node, position = self.add(position)
+        while self.tokens[position].text in ("<", "<=", ">", ">="):
+            operator = self.tokens[position].text
+            rhs, position = self.add(position + 1)
+            if operator == ">":
+                node = Node("<", rhs, node)
+            elif operator == ">=":
+                node = Node("<=", rhs, node)
+            else:
+                node = Node(operator, node, rhs)
+        return node, position
+
+    # add = mul (("+" | "-") mul)*
+    def add(self, position):
+        node, position = self.mul(position)
+        while self.tokens[position].text in ("+", "-"):
+            operator = self.tokens[position].text
+            rhs, position = self.mul(position + 1)
+            node = Node(operator, node, rhs)
+        return node, position
+
+    # mul = unary (("*" | "/") unary)*
+    def mul(self, position):
+        node, position = self.unary(position)
+        while self.tokens[position].text in ("*", "/"):
+            operator = self.tokens[position].text
+            rhs, position = self.unary(position + 1)
+            node = Node(operator, node, rhs)
+        return node, position
+
+    # unary = ("+" | "-") unary | primary
+    def unary(self, position):
+        operator = self.tokens[position].text
+        if operator == "+":
+            return self.unary(position + 1)
+        if operator == "-":
+            operand, position = self.unary(position + 1)
+            return Node("NEG", lhs=operand), position
+        return self.primary(position)
+
+    # primary = "(" expr ")" | identifier | number
+    def primary(self, position):
+        token = self.tokens[position]
+        if token.text == "(":
+            node, position = self.expr(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position].position, "expected ')'")
+            return node, position + 1
+
+        if token.kind == "IDENT":
+            var = self.find_var(token.text)
+            if var is None:
+                var = Obj(token.text)
+                self.locals.insert(0, var)
+            return Node("VAR", var=var), position + 1
+
+        if token.kind == "NUM":
+            return Node("NUM", value=token.value), position + 1
+
+        raise CompileError(token.position, "expected an expression")
+
+    # stmt = expr-stmt
+    def stmt(self, position):
+        return self.expr_stmt(position)
+
+    # expr-stmt = expr ";"
+    def expr_stmt(self, position):
+        node, position = self.expr(position)
+        if self.tokens[position].text != ";":
+            raise CompileError(self.tokens[position].position, "expected ';'")
+        return Node("EXPR_STMT", lhs=node), position + 1
+
+    # program = stmt*
+    def parse(self):
+        statements = []
+        position = 0
+        while self.tokens[position].kind != "EOF":
+            node, position = self.stmt(position)
+            statements.append(node)
+        return Function(statements, self.locals)
 
 
-# add = mul (("+" | "-") mul)*
-def add(tokens, position):
-    node, position = mul(tokens, position)
-    while tokens[position].text in ("+", "-"):
-        operator = tokens[position].text
-        rhs, position = mul(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# mul = unary (("*" | "/") unary)*
-def mul(tokens, position):
-    node, position = unary(tokens, position)
-    while tokens[position].text in ("*", "/"):
-        operator = tokens[position].text
-        rhs, position = unary(tokens, position + 1)
-        node = Node(operator, node, rhs)
-    return node, position
-
-
-# unary = ("+" | "-") unary | primary
-def unary(tokens, position):
-    operator = tokens[position].text
-    if operator == "+":
-        return unary(tokens, position + 1)
-    if operator == "-":
-        operand, position = unary(tokens, position + 1)
-        return Node("NEG", lhs=operand), position
-    return primary(tokens, position)
-
-
-# primary = "(" expr ")" | identifier | number
-def primary(tokens, position):
-    token = tokens[position]
-    if token.text == "(":
-        node, position = expr(tokens, position + 1)
-        if tokens[position].text != ")":
-            raise CompileError(tokens[position].position, "expected ')'")
-        return node, position + 1
-
-    if token.kind == "IDENT":
-        return Node("VAR", name=token.text), position + 1
-
-    if token.kind == "NUM":
-        return Node("NUM", value=token.value), position + 1
-
-    raise CompileError(token.position, "expected an expression")
-
-
-# stmt = expr-stmt
-def stmt(tokens, position):
-    return expr_stmt(tokens, position)
-
-
-# expr-stmt = expr ";"
-def expr_stmt(tokens, position):
-    node, position = expr(tokens, position)
-    if tokens[position].text != ";":
-        raise CompileError(tokens[position].position, "expected ';'")
-    return Node("EXPR_STMT", lhs=node), position + 1
-
-
-# program = stmt*
 def parse(tokens):
-    statements = []
-    position = 0
-    while tokens[position].kind != "EOF":
-        node, position = stmt(tokens, position)
-        statements.append(node)
-    return statements
+    return Parser(tokens).parse()

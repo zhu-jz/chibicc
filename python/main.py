@@ -1,6 +1,6 @@
-"""Lesson 10: compile single-letter local variables and assignment.
+"""Lesson 11: compile named local variables with allocated stack slots.
 
-Based on chibicc commit 1f9f3adf324af1432a380b41c7690834e649e346.
+Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -20,8 +20,8 @@ def main():
     source = sys.argv[1]
     try:
         tokens = tokenize(source)
-        statements = parse(tokens)
-        assembly = codegen(statements)
+        program = parse(tokens)
+        assembly = codegen(program)
     except CompileError as error:
         if error.position is None:
             print(error, file=sys.stderr)

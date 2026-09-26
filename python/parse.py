@@ -1,6 +1,6 @@
 """Build a function containing statements and local variables.
 
-Based on chibicc commit 6cc1c1f0643ce0f1af0857e024a0a438ddb45853.
+Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -103,14 +103,24 @@ class Parser:
 
         raise CompileError(token.position, "expected an expression")
 
-    # stmt = "return" expr ";" | expr-stmt
+    # stmt = "return" expr ";" | "{" compound-stmt | expr-stmt
     def stmt(self, position):
         if self.tokens[position].text == "return":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position].position, "expected ';'")
             return Node("RETURN", lhs=node), position + 1
+        if self.tokens[position].text == "{":
+            return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
+
+    # compound-stmt = stmt* "}"
+    def compound_stmt(self, position):
+        statements = []
+        while self.tokens[position].text != "}":
+            node, position = self.stmt(position)
+            statements.append(node)
+        return Node("BLOCK", body=statements), position + 1
 
     # expr-stmt = expr ";"
     def expr_stmt(self, position):
@@ -119,14 +129,13 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected ';'")
         return Node("EXPR_STMT", lhs=node), position + 1
 
-    # program = stmt*
+    # program = "{" compound-stmt
     def parse(self):
-        statements = []
-        position = 0
-        while self.tokens[position].kind != "EOF":
-            node, position = self.stmt(position)
-            statements.append(node)
-        return Function(statements, self.locals)
+        if self.tokens[0].text != "{":
+            raise CompileError(self.tokens[0].position, "expected '{'")
+        body, position = self.compound_stmt(1)
+        # This original commit does not check for tokens after the outer block.
+        return Function(body, self.locals)
 
 
 def parse(tokens):

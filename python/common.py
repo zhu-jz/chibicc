@@ -1,10 +1,10 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit 482c26b536f8e5c998af6210470cd3d97a47ee9a.
+Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -35,10 +35,11 @@ class Node:
     rhs: Optional["Node"] = None
     value: int = 0
     var: Optional[Obj] = None  # Shared local-variable object for VAR nodes.
+    body: list["Node"] = field(default_factory=list)  # Statements in a BLOCK.
 
 
 @dataclass
 class Function:
-    body: list[Node]
+    body: Node
     locals: list[Obj]
     stack_size: int = 0

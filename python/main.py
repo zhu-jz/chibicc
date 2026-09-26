@@ -1,6 +1,6 @@
-"""Lesson 12: compile return statements with a shared epilogue.
+"""Lesson 13: compile braced programs and nested blocks.
 
-Based on chibicc commit 6cc1c1f0643ce0f1af0857e024a0a438ddb45853.
+Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

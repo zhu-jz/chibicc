@@ -25,26 +25,63 @@ def compile_program(*arguments):
     )
 
 
+def parse_body(source):
+    """Wrap earlier lesson fixtures in the now-required outer block."""
+    return parse(tokenize("{" + source + "}"))
+
+
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_nested_block_tree(self):
+        program = parse(tokenize("{ {1;} return 2; }"))
+        self.assertEqual(program.body, Node("BLOCK", body=[
+            Node("BLOCK", body=[Node("EXPR_STMT", lhs=Node("NUM", value=1))]),
+            Node("RETURN", lhs=Node("NUM", value=2)),
+        ]))
+        result = compile_program("{ {1;} return 2; }")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
+                         "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return\n" + EPILOGUE)
+
+    def test_block_errors_and_upstream_trailing_tokens(self):
+        cases = [
+            ("return 1;", "return 1;\n^ expected '{'\n"),
+            ("", "\n^ expected '{'\n"),
+            ("{", "{\n ^ expected an expression\n"),
+            ("{{}", "{{}\n   ^ expected an expression\n"),
+            ("{return 1}", "{return 1}\n         ^ expected ';'\n"),
+            ("{ {}; }", "{ {}; }\n    ^ expected an expression\n"),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                result = compile_program(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, expected)
+        # Upstream tokenizes everything, but parses only the first outer block.
+        normal = compile_program("{return 3;}")
+        trailing = compile_program("{return 3;} return 9;")
+        self.assertEqual(trailing.returncode, 0, trailing.stderr)
+        self.assertEqual(trailing.stdout, normal.stdout)
+
     def test_return_tree(self):
-        program = parse(tokenize("return 1+2; 3;"))
-        self.assertEqual(program.body, [
+        program = parse_body("return 1+2; 3;")
+        self.assertEqual(program.body.body, [
             Node("RETURN", lhs=Node("+", Node("NUM", value=1), Node("NUM", value=2))),
             Node("EXPR_STMT", lhs=Node("NUM", value=3)),
         ])
 
     def test_local_objects_and_stack_layout(self):
-        program = parse(tokenize("foo=3; bar=5; foo+bar;"))
+        program = parse_body("foo=3; bar=5; foo+bar;")
         self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
         bar, foo = program.locals
-        self.assertIs(program.body[0].lhs.lhs.var, foo)
-        self.assertIs(program.body[2].lhs.lhs.var, foo)
-        self.assertIs(program.body[1].lhs.lhs.var, bar)
-        self.assertIs(program.body[2].lhs.rhs.var, bar)
+        self.assertIs(program.body.body[0].lhs.lhs.var, foo)
+        self.assertIs(program.body.body[2].lhs.lhs.var, foo)
+        self.assertIs(program.body.body[1].lhs.lhs.var, bar)
+        self.assertIs(program.body.body[2].lhs.rhs.var, bar)
         CodeGenerator().generate(program)
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-8, -16, 16))
         # A second parse must have its own local-variable objects.
-        another = parse(tokenize("foo=1; foo;"))
+        another = parse_body("foo=1; foo;")
         self.assertEqual(len(another.locals), 1)
         self.assertIsNot(another.locals[0], foo)
         for source, expected_offsets, expected_size in [
@@ -54,15 +91,15 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("a=1; b=2; c=3; d=4;", [-8, -16, -24, -32], 32),
         ]:
             with self.subTest(source=source):
-                program = parse(tokenize(source))
+                program = parse_body(source)
                 assembly = CodeGenerator().generate(program)
                 self.assertEqual([var.offset for var in program.locals], expected_offsets)
                 self.assertEqual(program.stack_size, expected_size)
                 self.assertIn(f"  sub ${expected_size}, %rsp\n", assembly)
 
     def test_statement_list(self):
-        statements = parse(tokenize("1; 2+3;"))
-        self.assertEqual(statements.body, [
+        statements = parse_body("1; 2+3;")
+        self.assertEqual(statements.body.body, [
             Node("EXPR_STMT", lhs=Node("NUM", value=1)),
             Node("EXPR_STMT", lhs=Node("+", Node("NUM", value=2), Node("NUM", value=3))),
         ])
@@ -75,8 +112,8 @@ class ExpressionCompilerTests(unittest.TestCase):
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(parse(tokenize(source)), Function([], []))
-                result = compile_program(source)
+                self.assertEqual(parse_body(source), Function(Node("BLOCK"), []))
+                result = compile_program("{" + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
@@ -145,9 +182,8 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]
         for source, expected in cases:
             with self.subTest(source=source):
-                tokens = tokenize(source)
-                statements = parse(tokens)
-                self.assertEqual(statements.body, [Node("EXPR_STMT", lhs=expected)])
+                statements = parse_body(source)
+                self.assertEqual(statements.body.body, [Node("EXPR_STMT", lhs=expected)])
                 generator = CodeGenerator()
                 generator.generate(statements)
                 self.assertEqual(generator.depth, 0)
@@ -192,7 +228,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]
         for source, instructions in cases:
             with self.subTest(source=source):
-                result = compile_program(source)
+                result = compile_program("{" + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 stack_size = 16 if source in ("a=3; a;", "z=5;") else 0
@@ -202,6 +238,12 @@ class ExpressionCompilerTests(unittest.TestCase):
         # All original test cases through this commit, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            ("{1; {2;} return 3;}", 3),
+            ("{} return 7;", 7),
+            ("{{return 5;}} return 9;", 5),
+            ("a=1; {a=4; b=3;} return a+b;", 7),
+            ("a=2; {a=a*3; {a=a+4;}} return a;", 10),
+            ("{{{}}} return 8;", 8),
             ("return 0;", 0), ("return 42;", 42), ("return 5+20-4;", 21),
             ("return  12 + 34 - 5 ;", 41), ("return 5+6*7;", 47),
             ("return 5*(9-6);", 15), ("return (3+5)/2;", 4),
@@ -280,7 +322,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             executable = Path(directory) / "program"
             for source, expected_status in cases:
                 with self.subTest(source=source):
-                    result = compile_program(source)
+                    result = compile_program("{" + source + "}")
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stderr, "")
                     assembly.write_text(result.stdout)
@@ -305,6 +347,8 @@ class ExpressionCompilerTests(unittest.TestCase):
                  ("1===1",), ("1<>2",), ("1&&2",)]
         for arguments in cases:
             with self.subTest(arguments=arguments):
+                if len(arguments) == 1:
+                    arguments = ("{" + arguments[0] + "}",)
                 result = compile_program(*arguments)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
@@ -351,9 +395,11 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]
         for source, expected in cases:
             with self.subTest(source=source):
-                result = compile_program(source)
+                result = compile_program("{" + source + "}")
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
+                if expected.startswith(source + "\n"):
+                    expected = "{" + source + "}\n " + expected[len(source) + 1:]
                 self.assertEqual(result.stderr, expected)
 
     def test_argument_error_has_no_source_location(self):

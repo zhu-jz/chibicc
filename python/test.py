@@ -31,6 +31,23 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_null_statements(self):
+        program = parse(tokenize("{ ;;; return 5; }"))
+        self.assertEqual(program.body, Node("BLOCK", body=[
+            Node("BLOCK"), Node("BLOCK"), Node("BLOCK"),
+            Node("RETURN", lhs=Node("NUM", value=5)),
+        ]))
+        for source in ["{ ;;; return 5; }", "{ {}; return 5;; }", "{ return 5; ;;; }"]:
+            with self.subTest(source=source):
+                result = compile_program(source)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
+                                 "  mov $5, %rax\n  jmp .L.return\n" + EPILOGUE)
+        # A program containing only null statements does not set a return value.
+        result = compile_program("{;;;}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
+
     def test_nested_block_tree(self):
         program = parse(tokenize("{ {1;} return 2; }"))
         self.assertEqual(program.body, Node("BLOCK", body=[
@@ -49,7 +66,6 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("{", "{\n ^ expected an expression\n"),
             ("{{}", "{{}\n   ^ expected an expression\n"),
             ("{return 1}", "{return 1}\n         ^ expected ';'\n"),
-            ("{ {}; }", "{ {}; }\n    ^ expected an expression\n"),
         ]
         for source, expected in cases:
             with self.subTest(source=source):
@@ -238,6 +254,10 @@ class ExpressionCompilerTests(unittest.TestCase):
         # All original test cases through this commit, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            (";;; return 5;", 5),
+            ("1;;", 1),
+            ("a=3;; {;; a=a+2;;}; return a;;", 5),
+            ("return 7;;;;", 7),
             ("{1; {2;} return 3;}", 3),
             ("{} return 7;", 7),
             ("{{return 5;}} return 9;", 5),
@@ -364,8 +384,6 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("return 1; 1=3;", "not an lvalue\n"),
             ("42", "42\n  ^ expected ';'\n"),
             ("1; 2", "1; 2\n    ^ expected ';'\n"),
-            (";", ";\n^ expected an expression\n"),
-            ("1;;", "1;;\n  ^ expected an expression\n"),
             ("1; 2+;", "1; 2+;\n     ^ expected an expression\n"),
             ("1; (2;", "1; (2;\n     ^ expected ')'\n"),
             ("1@2", "1@2\n ^ expected ';'\n"),

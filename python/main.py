@@ -1,6 +1,6 @@
-"""Lesson 13: compile braced programs and nested blocks.
+"""Lesson 14: accept null statements.
 
-Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
+Based on chibicc commit ff8912c68e877744f8b15070e098af786e7bd296.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

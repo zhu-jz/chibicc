@@ -1,78 +1,67 @@
-# Lesson 13: blocks with braces
+# Lesson 14: null statements
 
 This educational Python port implements original chibicc commit
-[`18ac283a5d19c19f1e1a7020a50fe34c2160a0f8`](https://github.com/rui314/chibicc/commit/18ac283a5d19c19f1e1a7020a50fe34c2160a0f8),
-“Add { ... }.” Earlier lessons remain in Git history; lesson 12 is Python
-commit `645f8e6`.
+[`ff8912c68e877744f8b15070e098af786e7bd296`](https://github.com/rui314/chibicc/commit/ff8912c68e877744f8b15070e098af786e7bd296),
+“Add null statement.” Earlier lessons remain in Git history; lesson 13
+is Python commit `bd4eac4`.
 
 ## What changed
 
-The entire program must now be enclosed in `{` and `}`. Inside it, a block
-can appear wherever a statement can appear:
+A semicolon by itself is now a valid statement that does nothing:
 
-```text
-{ return 42; }
-{ {1; {2;} return 3;} }
-{ a=1; {a=4; b=3;} return a+b; }
+```c
+{ ;;; return 5; }
 ```
 
-These programs return 42, 3, and 7 respectively. Expression and return
-statements still require semicolons. A block needs no semicolon after its
-closing brace. Empty blocks `{}` are accepted; a lone `;` is still not a
-statement in this grammar.
+The three initial semicolons are three null statements. The program returns
+5. Extra semicolons also work after an expression or block:
 
-Blocks only group statements in this lesson. They do not introduce local
-variable scope or allocate a separate stack frame. The third example can
-read `b` after its inner block, and assignment to `a` updates the same
-variable object used outside. A `return` in any nested block exits the
-whole function, not just that block.
-
-## Parser and tree
-
-The new grammar rules are:
-
-```text
-program       = "{" compound-stmt
-stmt          = "return" expr ";" | "{" compound-stmt | expr-stmt
-compound-stmt = stmt* "}"
+```c
+{ a=3;; { a=a+2; }; return a;; }
 ```
 
-The opening brace has already been consumed when `compound_stmt()` starts.
-It repeatedly calls `stmt()` until it finds the closing brace. Since
-`stmt()` can call `compound_stmt()` again, this supports nested blocks.
+This returns 5. The semicolon after the closing inner brace is a separate
+null statement, rather than part of the block's syntax.
 
-`common.py` adds a `body` list to `Node`. A node with `kind="BLOCK"` holds
-its child statements there. `Function.body` now refers to the outer block
-node rather than directly to a list. For `{ {1;} return 2; }`:
+## Parser and assembly
+
+The expression-statement rule changes from `expr ";"` to:
 
 ```text
-BLOCK
-├── BLOCK
-│   └── EXPR_STMT(NUM(1))
-└── RETURN(NUM(2))
+expr-stmt = expr? ";"
 ```
 
-The original stores each block's children as a linked list. Python uses a
-list with `default_factory=list`, giving each block its own child list.
-This avoids accidentally sharing a mutable default between nodes.
+The `?` means the expression is optional. In `Parser.expr_stmt()`, if the
+current token is `;`, the parser consumes it and returns `Node("BLOCK")`
+with an empty child list. Otherwise, it parses an expression and requires
+a terminating semicolon as before.
 
-## Assembly generation
+The original C commit also represents a null statement as an empty block.
+Python's dataclass gives it its own empty list instead of C's null linked-list
+pointer. The existing block generator iterates over that list, so a null
+statement emits no instructions. No new assembly instruction or node kind
+is needed.
 
-`gen_stmt()` recognizes a block and recursively generates its children in
-order. Braces need no machine instruction: `{ {1;} return 2; }` produces
-the same body instructions as a flat sequence of those statements:
+For `{ ;;; return 5; }`, the assembly is:
 
 ```asm
-  mov $1, %rax
-  mov $2, %rax
+  .globl main
+main:
+  push %rbp
+  mov %rsp, %rbp
+  sub $0, %rsp
+  mov $5, %rax
   jmp .L.return
+.L.return:
+  mov %rbp, %rsp
+  pop %rbp
+  ret
 ```
 
-The first `mov` sets 1, the second sets 2, and the jump reaches the shared
-function epilogue. Nested blocks use the same local-variable offsets and
-the same `.L.return` label. Temporary expression pushes and pops must still
-balance; the original commit checks depth after generating the outer block,
-which this port also does.
+The prologue establishes the stack frame; this program has no locals.
+`mov $5, %rax` sets the result, the jump reaches the common epilogue, and
+`ret` returns after restoring the caller's stack. There are no instructions
+for the three null statements.
 
 ## Run it in WSL
 
@@ -80,70 +69,49 @@ With Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
 Ubuntu), run from the repository root:
 
 ```sh
-python3 python/main.py '{ {1; {2;} return 3;} }' > /tmp/chibicc-python-lesson13.s
-cat /tmp/chibicc-python-lesson13.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson13 /tmp/chibicc-python-lesson13.s
-/tmp/chibicc-python-lesson13
+python3 python/main.py '{ ;;; return 5; }' > /tmp/chibicc-python-lesson14.s
+cat /tmp/chibicc-python-lesson14.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson14 /tmp/chibicc-python-lesson14.s
+/tmp/chibicc-python-lesson14
 echo $?
 ```
 
-The last command prints **3**. Quote the input so the shell passes braces,
-semicolons, and operators literally. The executable prints nothing itself;
-`echo $?` immediately afterward displays its exit status. Use an ordinary
-interactive shell: `set -e` would stop a script on status 3.
+The last command prints **5**. The executable itself prints nothing;
+`echo $?` immediately afterward displays its exit status. Quote the input
+so the shell does not interpret its semicolons. Use an ordinary interactive
+shell; `set -e` would stop a script on status 5.
 
-The generated function still has a prologue that saves `%rbp` and reserves
-aligned local storage, followed by the statements and a shared epilogue:
+GCC assembles and links our emitted code with the C runtime. `-static`
+follows upstream tests and `-Wl,-z,noexecstack` marks the stack non-executable.
+The Python compiler does not use `eval()` or invoke the original C compiler.
 
-```asm
-.L.return:
-  mov %rbp, %rsp
-  pop %rbp
-  ret
-```
+## Limits and tests
 
-The epilogue restores the caller's stack while preserving the result in
-`%rax`. GCC assembles and links our output with the C runtime. `-static`
-follows the original tests and `-Wl,-z,noexecstack` marks the stack
-non-executable. Python does not use `eval()` or invoke the original C compiler.
+A return still requires an expression: `{ return; }` remains an error.
+A null statement cannot fill in a missing arithmetic operand, so
+`{ 1+; }` is also an error. A program containing only null statements sets
+no result; tests check its assembly without assuming an exit status.
 
-## Exact behavior of this original commit
-
-Bare input such as `return 1;` now reports `expected '{'`. Empty input is
-also rejected, while an empty outer block is valid but sets no result.
-Missing closing braces reach EOF while trying to parse a statement and
-report `expected an expression`; this follows the original diagnostic.
-
-The original parser does not check for leftover tokens after the outer
-closing brace. This port preserves that quirk: `{return 3;} return 9;`
-compiles just the first block. The tokenizer still scans all input, so an
-invalid character in the ignored suffix can still produce an error. This
-behavior is documented and tested rather than silently changing the lesson.
-
-The earlier Python/C differences remain: lists and dataclasses instead of
-linked structs, parser state per instance, explicit numeric-token bounds
-of 0 through 2147483647, Unicode whitespace, character-based diagnostic
-positions, and assembly buffered until compilation succeeds. Variables
-remain uninitialized until assigned, arithmetic uses 64-bit registers,
-and normal exit statuses retain eight bits. Deep nesting can reach Python's
-recursion limit; runtime division by zero remains unchecked.
-
-## Tests and attribution
+Outer braces are still required. Blocks still share function-wide locals,
+and the parser retains the original behavior of ignoring tokens after the
+first outer block. Earlier Python/C differences remain: lists and dataclasses,
+explicit numeric-token bounds of 0 through 2147483647, Unicode whitespace,
+character-based diagnostic positions, and buffered assembly output.
+Variables are uninitialized until assigned; arithmetic uses 64-bit registers
+and normal exit statuses expose eight bits.
 
 ```sh
 python3 python/test.py
 ```
 
-Earlier source fixtures are wrapped in the required outer braces. Tests
-retain all earlier executable cases and cover the original nested-block
-example, nested tree structure, exact assembly, empty blocks, shared
-variables across blocks, return from a nested block, missing braces, and
-the upstream trailing-token behavior. Temporary build artifacts are cleaned
-up automatically.
+Tests cover the original `{ ;;; return 5; }` example, null-statement tree
+shape, exact assembly showing no added instructions, extra semicolons after
+expressions and blocks, and the existing error cases. All earlier valid
+programs remain in the executable tests. Temporary artifacts are cleaned up.
 
 All implementation changes are in `python/` on `python-lessons`; original
 C files remain intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
-licensed. The complete notice remains in `LICENSE` here and in the repository
+licensed. The full notice remains in `LICENSE` here and in the repository
 root; this port uses the same license.
 
 Stop here until you explicitly confirm understanding and readiness for the

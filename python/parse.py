@@ -1,6 +1,6 @@
 """Build a function containing statements and local variables.
 
-Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
+Based on chibicc commit ff8912c68e877744f8b15070e098af786e7bd296.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -122,8 +122,10 @@ class Parser:
             statements.append(node)
         return Node("BLOCK", body=statements), position + 1
 
-    # expr-stmt = expr ";"
+    # expr-stmt = expr? ";"
     def expr_stmt(self, position):
+        if self.tokens[position].text == ";":
+            return Node("BLOCK"), position + 1
         node, position = self.expr(position)
         if self.tokens[position].text != ";":
             raise CompileError(self.tokens[position].position, "expected ';'")

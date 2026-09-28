@@ -31,6 +31,17 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_if_tree_and_labels(self):
+        program = parse_body("if(1) if(0) return 2; else return 3;")
+        outer = program.body.body[0]
+        self.assertEqual(outer.kind, "IF")
+        self.assertEqual(outer.cond, Node("NUM", value=1))
+        self.assertIsNone(outer.els)
+        self.assertEqual(outer.then.els, Node("RETURN", lhs=Node("NUM", value=3)))
+        assembly = CodeGenerator().generate(program)
+        for label in (".L.else.1:", ".L.end.1:", ".L.else.2:", ".L.end.2:"):
+            self.assertEqual(assembly.count(label), 1)
+
     def test_null_statements(self):
         program = parse(tokenize("{ ;;; return 5; }"))
         self.assertEqual(program.body, Node("BLOCK", body=[
@@ -135,6 +146,11 @@ class ExpressionCompilerTests(unittest.TestCase):
                 self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_tokenization(self):
+        self.assertEqual(tokenize("if else ifx elsewhere"), [
+            Token("KEYWORD", "if", 0), Token("KEYWORD", "else", 3),
+            Token("IDENT", "ifx", 8), Token("IDENT", "elsewhere", 12),
+            Token("EOF", "", 21),
+        ])
         self.assertEqual(tokenize("return returnx return_ Return"), [
             Token("KEYWORD", "return", 0), Token("IDENT", "returnx", 7),
             Token("IDENT", "return_", 15), Token("IDENT", "Return", 23),
@@ -206,6 +222,11 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_exact_assembly(self):
         cases = [
+            ("if(1) 2; else 3;", "  mov $1, %rax\n  cmp $0, %rax\n"
+             "  je  .L.else.1\n  mov $2, %rax\n  jmp .L.end.1\n"
+             ".L.else.1:\n  mov $3, %rax\n.L.end.1:\n"),
+            ("if(0) ;", "  mov $0, %rax\n  cmp $0, %rax\n"
+             "  je  .L.else.1\n  jmp .L.end.1\n.L.else.1:\n.L.end.1:\n"),
             ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return\n  mov $42, %rax\n"),
             ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return\n"
              "  mov $2, %rax\n  jmp .L.return\n"),
@@ -254,6 +275,23 @@ class ExpressionCompilerTests(unittest.TestCase):
         # All original test cases through this commit, previous valid cases, and precedence,
         # grouping, operand-order, and signed-division checks. No Python eval.
         cases = [
+            ("if (0) return 2; return 3;", 3),
+            ("if (1-1) return 2; return 3;", 3),
+            ("if (1) return 2; return 3;", 2),
+            ("if (2-1) return 2; return 3;", 2),
+            ("if (0) {1; 2; return 3;} else {return 4;}", 4),
+            ("if (1) {1; 2; return 3;} else {return 4;}", 3),
+            ("if(-3) return 7; else return 9;", 7),
+            ("if(256) return 7; return 9;", 7),
+            ("a=0; if(1) a=3; else a=8; return a;", 3),
+            ("a=0; if(0) a=3; else a=8; return a;", 8),
+            ("if(1) if(0) return 2; else return 3; return 4;", 3),
+            ("if(0) if(1) return 2; else return 3; return 4;", 4),
+            ("if(0) {if(1) return 2;} else return 3;", 3),
+            ("if(0) return 1; else if(0) return 2; else return 3;", 3),
+            ("a=0; if(a=5) a=a+2; if(a==7) a=a*2; return a;", 14),
+            ("if(1); else return 2; return 3;", 3),
+            ("ifx=3; elsewhere=4; if(ifx<elsewhere) return 8; return 9;", 8),
             (";;; return 5;", 5),
             ("1;;", 1),
             ("a=3;; {;; a=a+2;;}; return a;;", 5),
@@ -376,6 +414,12 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_error_messages(self):
         cases = [
+            ("if 1;", "if 1;\n   ^ expected '('\n"),
+            ("if(1 return 2;", "if(1 return 2;\n     ^ expected ')'\n"),
+            ("if() return 2;", "if() return 2;\n   ^ expected an expression\n"),
+            ("else return 1;", "else return 1;\n^ expected an expression\n"),
+            ("if(1)", "if(1)\n     ^ expected an expression\n"),
+            ("if(0) 1=2; return 3;", "not an lvalue\n"),
             ("return;", "return;\n      ^ expected an expression\n"),
             ("return 1", "return 1\n        ^ expected ';'\n"),
             ("return=1;", "return=1;\n      ^ expected an expression\n"),

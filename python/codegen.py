@@ -1,6 +1,6 @@
 """Allocate local stack slots and generate x86-64 Linux assembly.
 
-Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
+Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -12,6 +12,7 @@ class CodeGenerator:
     def __init__(self):
         self.assembly = []
         self.depth = 0
+        self.label_count = 0
 
     def push(self):
         self.assembly.append("  push %rax")
@@ -72,6 +73,19 @@ class CodeGenerator:
             raise AssertionError("invalid expression")
 
     def gen_stmt(self, node):
+        if node.kind == "IF":
+            self.label_count += 1
+            label = self.label_count
+            self.gen_expr(node.cond)
+            self.assembly.append("  cmp $0, %rax")
+            self.assembly.append(f"  je  .L.else.{label}")
+            self.gen_stmt(node.then)
+            self.assembly.append(f"  jmp .L.end.{label}")
+            self.assembly.append(f".L.else.{label}:")
+            if node.els is not None:
+                self.gen_stmt(node.els)
+            self.assembly.append(f".L.end.{label}:")
+            return
         if node.kind == "BLOCK":
             for statement in node.body:
                 self.gen_stmt(statement)

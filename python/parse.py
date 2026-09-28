@@ -1,6 +1,6 @@
 """Build a function containing statements and local variables.
 
-Based on chibicc commit ff8912c68e877744f8b15070e098af786e7bd296.
+Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -104,12 +104,25 @@ class Parser:
         raise CompileError(token.position, "expected an expression")
 
     # stmt = "return" expr ";" | "{" compound-stmt | expr-stmt
+    #      | "if" "(" expr ")" stmt ("else" stmt)?
     def stmt(self, position):
         if self.tokens[position].text == "return":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position].position, "expected ';'")
             return Node("RETURN", lhs=node), position + 1
+        if self.tokens[position].text == "if":
+            position += 1
+            if self.tokens[position].text != "(":
+                raise CompileError(self.tokens[position].position, "expected '('")
+            cond, position = self.expr(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position].position, "expected ')'")
+            then, position = self.stmt(position + 1)
+            els = None
+            if self.tokens[position].text == "else":
+                els, position = self.stmt(position + 1)
+            return Node("IF", cond=cond, then=then, els=els), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)

@@ -1,67 +1,86 @@
-# Lesson 14: null statements
+# Lesson 15: if and else
 
 This educational Python port implements original chibicc commit
-[`ff8912c68e877744f8b15070e098af786e7bd296`](https://github.com/rui314/chibicc/commit/ff8912c68e877744f8b15070e098af786e7bd296),
-“Add null statement.” Earlier lessons remain in Git history; lesson 13
-is Python commit `bd4eac4`.
+[`72b841508f562c65b427a502fe6b270c3717319b`](https://github.com/rui314/chibicc/commit/72b841508f562c65b427a502fe6b270c3717319b),
+“Add \"if\" statement.” Earlier lessons remain in Git history; lesson 14
+is Python commit `59ade10`.
 
 ## What changed
 
-A semicolon by itself is now a valid statement that does nothing:
+A program can now choose which statement to execute:
 
 ```c
-{ ;;; return 5; }
+{ if (0) return 2; return 3; }
+{ if (1) return 2; else return 3; }
 ```
 
-The three initial semicolons are three null statements. The program returns
-5. Extra semicolons also work after an expression or block:
+The first returns 3; the second returns 2. Zero means false and any nonzero
+value means true, including negative values and 256. The full 64-bit value
+is tested, not just its low byte.
+
+A branch can be a return, an expression statement, a block, a null statement,
+or another if statement. For example:
 
 ```c
-{ a=3;; { a=a+2; }; return a;; }
+{ a=0; if (1) { a=3; a=a+2; } else a=8; return a; }
 ```
 
-This returns 5. The semicolon after the closing inner brace is a separate
-null statement, rather than part of the block's syntax.
+This returns 5. Only the selected branch executes, but the compiler parses
+and generates both branches. Even an unselected branch must be valid code.
 
-## Parser and assembly
+## Parser and tree
 
-The expression-statement rule changes from `expr ";"` to:
+The tokenizer now recognizes the complete words `if` and `else` as keywords,
+along with `return`. Longer names such as `ifx` and `elsewhere` remain
+identifiers. The new statement rule is:
 
 ```text
-expr-stmt = expr? ";"
+stmt = "if" "(" expr ")" stmt ("else" stmt)?
 ```
 
-The `?` means the expression is optional. In `Parser.expr_stmt()`, if the
-current token is `;`, the parser consumes it and returns `Node("BLOCK")`
-with an empty child list. Otherwise, it parses an expression and requires
-a terminating semicolon as before.
+Parentheses around the condition are required. The `?` means the else
+part is optional. `Parser.stmt()` builds an `IF` node with three fields:
+`cond` for the condition, `then` for the true branch, and `els` for the
+optional false branch.
 
-The original C commit also represents a null statement as an empty block.
-Python's dataclass gives it its own empty list instead of C's null linked-list
-pointer. The existing block generator iterates over that list, so a null
-statement emits no instructions. No new assembly instruction or node kind
-is needed.
+The true branch is parsed by recursively calling `stmt()`. As a result,
+an `else` belongs to the nearest unmatched `if`:
 
-For `{ ;;; return 5; }`, the assembly is:
+```c
+{ if (1) if (0) return 2; else return 3; return 4; }
+```
+
+Here the else belongs to `if (0)`, and the program returns 3. To associate
+an else with an outer if, place the inner if inside braces. `else if` needs
+no special grammar: it is an else branch containing another if statement.
+
+## Read the assembly
+
+For `{ if(1) 2; else 3; }`, the body instructions are:
 
 ```asm
-  .globl main
-main:
-  push %rbp
-  mov %rsp, %rbp
-  sub $0, %rsp
-  mov $5, %rax
-  jmp .L.return
-.L.return:
-  mov %rbp, %rsp
-  pop %rbp
-  ret
+  mov $1, %rax
+  cmp $0, %rax
+  je  .L.else.1
+  mov $2, %rax
+  jmp .L.end.1
+.L.else.1:
+  mov $3, %rax
+.L.end.1:
 ```
 
-The prologue establishes the stack frame; this program has no locals.
-`mov $5, %rax` sets the result, the jump reaches the common epilogue, and
-`ret` returns after restoring the caller's stack. There are no instructions
-for the three null statements.
+The condition is evaluated into `%rax`. `cmp $0, %rax` sets processor flags
+according to whether that value is zero. `je` jumps to the else label when
+it is zero. Otherwise execution falls through into the true branch.
+The unconditional `jmp` skips the false branch after the true branch
+finishes. Both paths meet at the end label.
+
+Each if statement gets its own number, so nested or consecutive statements
+do not reuse labels. The generator saves the number in a local Python
+variable before recursively generating branches. Without an else branch,
+it still emits both labels, with no code between them, matching upstream.
+Return statements inside either branch still jump to `.L.return` for
+function cleanup.
 
 ## Run it in WSL
 
@@ -69,48 +88,53 @@ With Python 3 and GCC on x86-64 Linux (`python3` and `build-essential` on
 Ubuntu), run from the repository root:
 
 ```sh
-python3 python/main.py '{ ;;; return 5; }' > /tmp/chibicc-python-lesson14.s
-cat /tmp/chibicc-python-lesson14.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson14 /tmp/chibicc-python-lesson14.s
-/tmp/chibicc-python-lesson14
+python3 python/main.py '{ if (0) return 2; else return 3; }' > /tmp/chibicc-python-lesson15.s
+cat /tmp/chibicc-python-lesson15.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson15 /tmp/chibicc-python-lesson15.s
+/tmp/chibicc-python-lesson15
 echo $?
 ```
 
-The last command prints **5**. The executable itself prints nothing;
-`echo $?` immediately afterward displays its exit status. Quote the input
-so the shell does not interpret its semicolons. Use an ordinary interactive
-shell; `set -e` would stop a script on status 5.
+The last command prints **3**. The executable prints nothing; `echo $?`
+immediately afterward displays its exit status. Quote the source so the
+shell passes its braces, semicolons, and operators literally. Use an
+ordinary interactive shell: `set -e` would stop a script on status 3.
 
-GCC assembles and links our emitted code with the C runtime. `-static`
-follows upstream tests and `-Wl,-z,noexecstack` marks the stack non-executable.
-The Python compiler does not use `eval()` or invoke the original C compiler.
+The function still establishes a stack frame, reserves aligned local
+storage, and restores it at `.L.return` before `ret`. GCC assembles and
+links our emitted code with the C runtime. `-static` follows upstream tests;
+`-Wl,-z,noexecstack` marks the stack non-executable. Python does not use
+`eval()` or invoke the original C compiler.
 
-## Limits and tests
+## Python/C differences and tests
 
-A return still requires an expression: `{ return; }` remains an error.
-A null statement cannot fill in a missing arithmetic operand, so
-`{ 1+; }` is also an error. A program containing only null statements sets
-no result; tests check its assembly without assuming an exit status.
+The original C generator uses a static counter starting at 1. This port
+keeps the counter on each `CodeGenerator` instance, producing the same label
+numbers for a compilation while keeping separate compilations independent.
+The `IF` node fields and emitted branches follow upstream. Python lists
+and dataclasses continue to replace C linked lists and structs.
 
-Outer braces are still required. Blocks still share function-wide locals,
-and the parser retains the original behavior of ignoring tokens after the
-first outer block. Earlier Python/C differences remain: lists and dataclasses,
-explicit numeric-token bounds of 0 through 2147483647, Unicode whitespace,
-character-based diagnostic positions, and buffered assembly output.
-Variables are uninitialized until assigned; arithmetic uses 64-bit registers
-and normal exit statuses expose eight bits.
+Existing limits remain: numeric tokens range from 0 through 2147483647,
+variables are uninitialized before assignment, deep nesting may reach
+Python's recursion limit, and runtime division by zero is unchecked.
+Normal exit statuses retain eight bits even though conditions test the
+full register. Python accepts Unicode whitespace and uses character-based
+diagnostic positions. Assembly is printed only after successful compilation.
+The original parser's unchecked trailing tokens after the outer block are
+still preserved in this lesson.
 
 ```sh
 python3 python/test.py
 ```
 
-Tests cover the original `{ ;;; return 5; }` example, null-statement tree
-shape, exact assembly showing no added instructions, extra semicolons after
-expressions and blocks, and the existing error cases. All earlier valid
-programs remain in the executable tests. Temporary artifacts are cleaned up.
+Tests include all six new upstream examples and retain the previous
+executable cases. They check false and nonzero conditions, assignments in
+conditions, branch side effects, nested and consecutive if statements,
+nearest-if binding of else, empty branches, distinct labels, exact assembly,
+keyword boundaries, and invalid syntax. Temporary artifacts are cleaned up.
 
-All implementation changes are in `python/` on `python-lessons`; original
-C files remain intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
+The implementation remains in `python/` on `python-lessons`; original C
+files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
 licensed. The full notice remains in `LICENSE` here and in the repository
 root; this port uses the same license.
 

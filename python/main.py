@@ -1,6 +1,6 @@
-"""Lesson 14: accept null statements.
+"""Lesson 15: compile if and else statements.
 
-Based on chibicc commit ff8912c68e877744f8b15070e098af786e7bd296.
+Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

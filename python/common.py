@@ -1,6 +1,6 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit 18ac283a5d19c19f1e1a7020a50fe34c2160a0f8.
+Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -36,6 +36,9 @@ class Node:
     value: int = 0
     var: Optional[Obj] = None  # Shared local-variable object for VAR nodes.
     body: list["Node"] = field(default_factory=list)  # Statements in a BLOCK.
+    cond: Optional["Node"] = None
+    then: Optional["Node"] = None
+    els: Optional["Node"] = None
 
 
 @dataclass

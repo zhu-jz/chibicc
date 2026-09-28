@@ -1,6 +1,6 @@
 """Turn source characters into tokens.
 
-Based on chibicc commit 6cc1c1f0643ce0f1af0857e024a0a438ddb45853.
+Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -64,6 +64,6 @@ def tokenize(source):
 
     tokens.append(Token("EOF", "", position))
     for token in tokens:
-        if token.text == "return":
+        if token.text in ("return", "if", "else"):
             token.kind = "KEYWORD"
     return tokens

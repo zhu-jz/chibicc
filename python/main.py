@@ -1,6 +1,6 @@
-"""Lesson 42: Output files and command-line help.
+"""Lesson 43: Line and block comments.
 
-Based on chibicc commit a0388bada4016bc0c3be6154c159faf80ce18d01.
+Based on chibicc commit 6c0a42926a10ea5abc781c9db89b105e007512b1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

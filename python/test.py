@@ -36,6 +36,21 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_comments(self):
+        for source in ["int main(){/* return 1; */ return 2;}",
+                       "int main(){// return 1;\nreturn 2;}"]:
+            self.assert_program_returns(source, 2)
+        plain = compile_program("int main(){return 42;}")
+        commented = compile_program("/*before*/int/*type*/ main(){return/*value*/42;} //after")
+        self.assertEqual(commented.returncode, 0, commented.stderr)
+        self.assertEqual(commented.stdout, plain.stdout)
+        self.assertEqual(tokenize('"// /* */"')[0].str, b"// /* */\0")
+        self.assertEqual(tokenize("// eof")[0].kind, "EOF")
+        result = compile_program("int main(){\n/* unclosed")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("-:2: /* unclosed\n", result.stderr)
+        self.assertIn("^ unclosed block comment", result.stderr)
+
     def test_driver_options(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "input file.c"

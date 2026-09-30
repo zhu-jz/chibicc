@@ -1,67 +1,38 @@
-# Lesson 42: Output files and command-line help
+# Lesson 43: Line and block comments
 
-Original chibicc commit: [`a0388bada4016bc0c3be6154c159faf80ce18d01`](https://github.com/rui314/chibicc/commit/a0388bada4016bc0c3be6154c159faf80ce18d01).
+Original chibicc commit: [`6c0a42926a10ea5abc781c9db89b105e007512b1`](https://github.com/rui314/chibicc/commit/6c0a42926a10ea5abc781c9db89b105e007512b1).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The driver accepts `-o path`, joined `-opath`, and `--help`. Input is still a
-filename, with `-` selecting stdin. Output defaults to stdout; `-o -` also
-selects stdout. Help prints usage to stderr and exits successfully. A missing
-output path prints usage and fails; unknown options and missing input produce
-plain errors.
+The tokenizer skips `//` through the next newline and `/*` through the first
+`*/`. Comments act like whitespace, so `int/*note*/x` still gives two tokens.
+Their text stays in the source buffer: diagnostic line numbers and carets keep
+pointing at the original file. Strings are read as a unit, so comment markers
+inside a string do not start a comment. Block comments do not nest.
 
-The argument scanner follows upstream's small manual parser: options may appear
-before or after the input, and the last input/output argument wins. It does not
-combine multiple input files. The Python driver selects the output destination
-after generating its assembly string. C instead passes a FILE pointer into the
-generator. This deliberate difference retains buffered output: a compilation
-error neither emits partial assembly nor overwrites an existing output file.
+An unfinished block comment reports `unclosed block comment` at its opening.
+Python also safely accepts an EOF line comment in direct tokenizer calls; the
+C file reader normally supplies a final newline before tokenizing.
 
-## Run it in WSL
-
-With Python 3 and GCC (`build-essential` on Ubuntu), run from the repository root:
+## Assembly and WSL example
 
 ```sh
-printf 'int main(){return 42;}\n' > /tmp/lesson42.c
-python3 python/main.py -o /tmp/lesson42.s /tmp/lesson42.c
-cat /tmp/lesson42.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson42 /tmp/lesson42.s
-/tmp/lesson42
+printf 'int main(){ /* ignored */ return 42; }\n' > /tmp/lesson43.c
+python3 python/main.py -o /tmp/lesson43.s /tmp/lesson43.c
+cat /tmp/lesson43.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson43 /tmp/lesson43.s
+/tmp/lesson43
 echo $?
-python3 python/main.py --help
 ```
 
-The executable prints nothing; `echo $?` immediately afterward displays **42**.
-Use an interactive shell without `set -e` for nonzero statuses. `-o` writes
-assembly; GCC assembles and links it into an executable. The body contains
-`mov $42,%rax` and a jump to `.L.return.main`; cleanup restores `%rbp` and
-executes `ret`. No machine-code or assembly-generation change is needed for
-this original driver commit.
+The comment emits no instructions. `mov $42, %rax` sets the return value,
+then the shared function epilogue restores the stack and returns. The program
+prints nothing; `echo $?` immediately afterward displays 42.
 
-Stdin and joined output forms also work:
-
-```sh
-printf 'int main(){return 42;}\n' | python3 python/main.py -o/tmp/lesson42.s -
-python3 python/main.py -o - /tmp/lesson42.c
-```
-
-## Tests and current limits
-
-Driver tests cover both upstream checks (output creation for empty input and
-help), separated/joined options, paths with spaces, stdin/stdout destinations,
-empty output, invalid options, output errors, and preserving output on compile
-failure. The full suite retains assembly, diagnostic, and executable checks.
-
-The current compiler supports functions with up to six parameters/arguments,
-int/char variables, pointers, arrays, string literals and escapes, arithmetic,
-comparisons, assignments, returns, if/else, for/while, sizeof expressions, and
-GNU statement expressions. Ints and pointers still occupy eight bytes, chars
-one. Globals have no general initializer syntax. Function signatures and
-assignment conversions are incomplete, names still use function-wide scope,
-and calls do not yet adjust for temporary-stack alignment. Bounds and runtime
-memory accesses are unchecked. Decimal tokens are checked to fit 0 through
-2147483647. Input files use UTF-8 and diagnostics count characters.
+Tests run both upstream examples, compare assembly with/without comments,
+check markers inside strings and EOF, and check an unclosed comment diagnostic.
+All previous compiler features and limits remain at lesson 42's stage.
 
 ## Tests and attribution
 

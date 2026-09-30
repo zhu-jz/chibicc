@@ -96,6 +96,18 @@ def tokenize(source):
     while position < len(source):
         character = source[position]
 
+        if source.startswith("//", position):
+            end = source.find("\n", position + 2)
+            position = len(source) if end == -1 else end
+            continue
+
+        if source.startswith("/*", position):
+            end = source.find("*/", position + 2)
+            if end == -1:
+                raise CompileError(position, "unclosed block comment")
+            position = end + 2
+            continue
+
         if character.isspace():
             position += 1
             continue

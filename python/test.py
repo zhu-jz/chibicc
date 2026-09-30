@@ -32,6 +32,15 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_octal_string_escapes(self):
+        for spelling, expected in [(r"\0",0),(r"\20",16),(r"\101",65),
+                                   (r"\1500",104),(r"\777",255),(r"\8",56)]:
+            self.assert_program_returns('int main(){return "'+spelling+'"[0];}', expected)
+        self.assertEqual(tokenize(r'"\1500"')[0].str, b"h0\0")
+        self.assertEqual(tokenize(r'"a\0b"')[0].str, b"a\0b\0")
+        self.assert_program_returns(r'int main(){return sizeof("a\0b");}', 4)
+        self.assert_program_returns(r'int main(){return "\1500"[1];}', 48)
+
     def test_named_string_escapes(self):
         for escape, expected in [("a",7),("b",8),("t",9),("n",10),("v",11),
                                  ("f",12),("r",13),("e",27),("j",106),("k",107),("l",108)]:

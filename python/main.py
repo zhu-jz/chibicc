@@ -1,6 +1,6 @@
-"""Lesson 36: Named string escapes.
+"""Lesson 37: Octal string escapes.
 
-Based on chibicc commit ad7749f2fad87a4b1df644d4e1c345b3f87d386d.
+Based on chibicc commit 699d2b7e3f4ea4ba6ec2d5080f87e243989a5835.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -10,10 +10,19 @@ from common import CompileError, Token
 from type import array_of, ty_char
 
 
-def read_escaped_char(character):
+def read_escaped_char(source, position):
+    character = source[position]
+    if "0" <= character <= "7":
+        value = 0
+        count = 0
+        while position < len(source) and "0" <= source[position] <= "7" and count < 3:
+            value = value * 8 + int(source[position])
+            position += 1
+            count += 1
+        return bytes([value & 255]), position
     escapes = {"a": b"\a", "b": b"\b", "t": b"\t", "n": b"\n",
                "v": b"\v", "f": b"\f", "r": b"\r", "e": b"\x1b"}
-    return escapes.get(character, character.encode("utf-8"))
+    return escapes.get(character, character.encode("utf-8")), position + 1
 
 
 def string_literal_end(source, position):
@@ -35,8 +44,8 @@ def read_string_literal(source, start):
     position = start + 1
     while position < end:
         if source[position] == "\\":
-            data.extend(read_escaped_char(source[position + 1]))
-            position += 2
+            value, position = read_escaped_char(source, position + 1)
+            data.extend(value)
         else:
             data.extend(source[position].encode("utf-8"))
             position += 1

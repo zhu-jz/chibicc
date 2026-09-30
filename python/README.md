@@ -1,41 +1,37 @@
-# Lesson 36: Named string escapes
+# Lesson 37: Octal string escapes
 
-Original chibicc commit: [`ad7749f2fad87a4b1df644d4e1c345b3f87d386d`](https://github.com/rui314/chibicc/commit/ad7749f2fad87a4b1df644d4e1c345b3f87d386d).
+Original chibicc commit: [`699d2b7e3f4ea4ba6ec2d5080f87e243989a5835`](https://github.com/rui314/chibicc/commit/699d2b7e3f4ea4ba6ec2d5080f87e243989a5835).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer first finds the closing quote while skipping escaped characters,
-then decodes the contents. This separates source spelling from stored bytes.
-The recognized escapes are `\a`, `\b`, `\t`, `\n`, `\v`, `\f`, `\r`, and GNU
-`\e` (byte 27). Escaped quotes and backslashes work through the default rule:
-an unrecognized escape contributes its character without the backslash.
+A backslash followed by an octal digit reads up to three digits (0–7) and
+produces one byte. `\101` is 65. `\1500` reads only `150`, producing byte 104,
+then retains the last 0 as byte 48. Non-octal digits stop the sequence.
 
-`"\ax\ny"` becomes bytes 7, 120, 10, 121, 0. Its sizeof is 5 even though its
-source spelling is longer. Python uses bytearray while decoding, then stores
-immutable bytes including the terminating zero. Named codes come from Python's
-own byte escapes, paralleling upstream's use of its host C compiler's escapes.
+The escape helper now returns both decoded bytes and the next source position,
+replacing upstream's pointer output parameter with a Python tuple. Values are
+masked to eight bits to match storage into C's char buffer. Interior zero bytes
+remain in the data and count toward sizeof; the tokenizer also appends the
+separate terminating zero.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return "\n"[0];}' > /tmp/lesson36.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson36 /tmp/lesson36.s
-/tmp/lesson36
+python3 python/main.py 'int main(){return "\101"[0];}' > /tmp/lesson37.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson37 /tmp/lesson37.s
+/tmp/lesson37
 echo $?
 ```
 
-The executable prints nothing; the last command shows **10**. Use an interactive
-shell without `set -e` for nonzero statuses. Assembly emits `.byte 10` and
-`.byte 0`, then indexes and loads the byte. Escape handling is entirely in the
-tokenizer; no code-generator changes are needed.
+The executable prints nothing; the last command shows **65**. Use an interactive
+shell without `set -e` for nonzero statuses. Assembly contains `.byte 65` and
+`.byte 0`; the usual char load reads it. No runtime escape processing occurs.
 
-Tests cover every new upstream named/default escape and mixed-string position,
-escaped quotes/backslashes, decoded size, and an incomplete escape at EOF.
-The port reports incomplete strings cleanly rather than permitting a C read
-past the input buffer. Diagnostics for unclosed strings now point just after
-the opening quote, matching this original refactor. Numeric escape decoding
-is not part of this commit.
+Tests include all upstream octal cases, the three-digit boundary, byte wrapping,
+non-octal default escapes, and embedded zeros with correct size. Python's bytes
+storage explicitly performs the truncation implicit in upstream's char store.
+Hexadecimal escapes are not part of this original commit.
 
 ## Tests and attribution
 

@@ -64,6 +64,6 @@ def tokenize(source):
 
     tokens.append(Token("EOF", "", position))
     for token in tokens:
-        if token.text in ("return", "if", "else", "for"):
+        if token.text in ("return", "if", "else", "for", "while"):
             token.kind = "KEYWORD"
     return tokens

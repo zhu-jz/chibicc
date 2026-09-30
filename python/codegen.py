@@ -89,7 +89,8 @@ class CodeGenerator:
         if node.kind == "FOR":
             self.label_count += 1
             label = self.label_count
-            self.gen_stmt(node.init)
+            if node.init is not None:
+                self.gen_stmt(node.init)
             self.assembly.append(f".L.begin.{label}:")
             if node.cond is not None:
                 self.gen_expr(node.cond)

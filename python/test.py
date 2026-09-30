@@ -31,6 +31,27 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_while(self):
+        for source, expected in [
+            ("{i=0; while(i<10) {i=i+1;} return i;}", 10),
+            ("{while(0) return 9; return 3;}", 3),
+            ("{while(-2) return 7;}", 7),
+            ("{i=3; sum=0; while(i) {sum=sum+i; i=i-1;} return sum;}", 6),
+            ("{i=0; while(i<3) {for(j=0;j<2;j=j+1); i=i+1;} return i+j;}", 5),
+        ]:
+            with self.subTest(source=source):
+                self.assert_program_returns(source, expected)
+        program = parse_body("while(1) return 3;")
+        node = program.body.body[0]
+        self.assertEqual(node.kind, "FOR")
+        self.assertIsNone(node.init)
+        self.assertIsNone(node.inc)
+        expected = CodeGenerator().generate(parse_body("for(;1;) return 3;"))
+        self.assertEqual(CodeGenerator().generate(program), expected)
+        result = compile_program("{while() ;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected an expression", result.stderr)
+
     def assert_program_returns(self, source, expected):
         result = compile_program(source)
         self.assertEqual(result.returncode, 0, result.stderr)

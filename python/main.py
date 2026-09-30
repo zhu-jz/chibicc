@@ -1,6 +1,6 @@
-"""Lesson 19: attach source tokens to syntax-tree nodes.
+"""Lesson 20: compile address-of and dereference operators.
 
-Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
+Based on chibicc commit 863e2b8de25fdf43a4a63b93d0f57718e9edaa47.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

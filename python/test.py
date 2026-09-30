@@ -31,6 +31,42 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_address_and_dereference(self):
+        for source, expected in [
+            ("{ x=3; return *&x; }", 3),
+            ("{ x=3; y=&x; z=&y; return **z; }", 3),
+            ("{ x=3; y=5; return *(&x+8); }", 5),
+            ("{ x=3; y=5; return *(&y-8); }", 3),
+            ("{ x=3; y=&x; *y=5; return x; }", 5),
+            ("{ x=3; y=5; *(&x+8)=7; return y; }", 7),
+            ("{ x=3; y=5; *(&y-8)=7; return x; }", 7),
+            ("{ x=1; p=&x; q=&p; **q=9; return x; }", 9),
+            ("{ x=1; *&x=7; return x; }", 7),
+            ("{ x=3; p=&x; return &*p==p; }", 1),
+        ]:
+            with self.subTest(source=source):
+                self.assert_program_returns(source, expected)
+        program = parse_body("1**x;")
+        expression = program.body.body[0].lhs
+        self.assertEqual(expression.kind, "*")
+        self.assertEqual(expression.rhs.kind, "DEREF")
+        self.assertEqual(expression.rhs.tok.text, "*")
+        result = compile_program("{return &x;}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
+                         "  lea -8(%rbp), %rax\n  jmp .L.return\n" + EPILOGUE)
+        result = compile_program("{return *&x;}")
+        self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
+                         "  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"
+                         "  jmp .L.return\n" + EPILOGUE)
+        for source, position in [("{return &1;}", 9),
+                                 ("{return &(1+2);}", 11)]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, source + "\n" + " " * position
+                             + "^ not an lvalue\n")
+
     def test_representative_tokens(self):
         source = "{return -(1+2)*3>4;}"
         tokens = tokenize(source)
@@ -501,7 +537,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                  ("1+",), ("1-",), ("1+abc",), ("1+2junk",), ("1 2",),
                  ("1+2147483648",), ("1-2147483649",),
                  ("1 + ",), ("１２",), ("()",), ("(1",), ("1)",),
-                 ("2(3)",), ("1**2",), ("1//2",), ("1/",), ("1%2",),
+                 ("2(3)",), ("1//2",), ("1/",), ("1%2",),
                  ("+",), ("-",), ("--",), ("1*-",),
                  ("1=1",), ("1!2",), ("1<",), ("1>=",),
                  ("1===1",), ("1<>2",), ("1&&2",)]

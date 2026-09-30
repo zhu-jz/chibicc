@@ -1,6 +1,9 @@
-"""Build a function containing statements and local variables.
+"""Build a function using recursive descent.
 
-Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
+Each grammar function returns a node and the next token index. Python tuples
+replace C's returned node plus output pointer for the remaining tokens.
+
+Based on chibicc commit 863e2b8de25fdf43a4a63b93d0f57718e9edaa47.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -77,7 +80,7 @@ class Parser:
             node = Node(operator, node, rhs, tok=token)
         return node, position
 
-    # unary = ("+" | "-") unary | primary
+    # unary = ("+" | "-" | "*" | "&") unary | primary
     def unary(self, position):
         token = self.tokens[position]
         operator = self.tokens[position].text
@@ -86,6 +89,12 @@ class Parser:
         if operator == "-":
             operand, position = self.unary(position + 1)
             return Node("NEG", lhs=operand, tok=token), position
+        if operator == "&":
+            operand, position = self.unary(position + 1)
+            return Node("ADDR", lhs=operand, tok=token), position
+        if operator == "*":
+            operand, position = self.unary(position + 1)
+            return Node("DEREF", lhs=operand, tok=token), position
         return self.primary(position)
 
     # primary = "(" expr ")" | identifier | number

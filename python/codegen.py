@@ -1,6 +1,6 @@
 """Allocate local stack slots and generate x86-64 Linux assembly.
 
-Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
+Based on chibicc commit 863e2b8de25fdf43a4a63b93d0f57718e9edaa47.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -23,9 +23,13 @@ class CodeGenerator:
         self.depth -= 1
 
     def gen_addr(self, node):
-        if node.kind != "VAR":
-            raise CompileError(node.tok.position, "not an lvalue")
-        self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+        if node.kind == "VAR":
+            self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            return
+        if node.kind == "DEREF":
+            self.gen_expr(node.lhs)
+            return
+        raise CompileError(node.tok.position, "not an lvalue")
 
     def gen_expr(self, node):
         if node.kind == "NUM":
@@ -38,6 +42,13 @@ class CodeGenerator:
         if node.kind == "VAR":
             self.gen_addr(node)
             self.assembly.append("  mov (%rax), %rax")
+            return
+        if node.kind == "DEREF":
+            self.gen_expr(node.lhs)
+            self.assembly.append("  mov (%rax), %rax")
+            return
+        if node.kind == "ADDR":
+            self.gen_addr(node.lhs)
             return
         if node.kind == "ASSIGN":
             self.gen_addr(node.lhs)

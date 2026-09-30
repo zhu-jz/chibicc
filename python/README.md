@@ -1,94 +1,113 @@
-# Lesson 19: source locations on syntax-tree nodes
+# Lesson 20: address-of and dereference
 
 This educational Python port implements original chibicc commit
-[`3d8627719be00e39070eaca0ee5b599f2a877c5c`](https://github.com/rui314/chibicc/commit/3d8627719be00e39070eaca0ee5b599f2a877c5c),
-“Add a representative node to each Node to improve error messages.”
-Despite the title's wording, the added field is a representative **token**.
-Earlier lessons remain in Git history.
+[`863e2b8de25fdf43a4a63b93d0f57718e9edaa47`](https://github.com/rui314/chibicc/commit/863e2b8de25fdf43a4a63b93d0f57718e9edaa47),
+“Add unary & and *.” Earlier lessons remain in Git history.
 
 ## What changed
 
-Code generation can now point to the source of an invalid assignment:
+`&x` produces the address of variable `x`; `*p` reads the eight-byte value
+at the address stored in `p`. A dereference can also be an assignment target:
+
+```c
+{ x=3; p=&x; *p=5; return x; }
+```
+
+This returns 5 because `p` points at `x`'s stack slot. Chaining dereferences
+works too: `{x=3; p=&x; q=&p; return **q;}` returns 3.
+
+These are still untyped, eight-byte values. Address arithmetic counts bytes,
+so upstream uses `*(&x+8)` to access the next local slot. For
+`{x=3; y=5; return *(&x+8);}`, the local layout is:
 
 ```text
-{(a+1)=3;}
-   ^ not an lvalue
+%rbp -  8: y = 5
+%rbp - 16: x = 3
 ```
 
-An lvalue names a storage location. A variable is an lvalue, but the result
-of adding one to it is a value without its own storage location. Assignment
-cannot store into that result. The caret points at `+`, which represents
-the left-hand expression, rather than at the assignment's `=`.
+Variables are stored in reverse order of first encounter, as before. Adding
+8 to x's address therefore reaches y. This example relies on this compiler's
+specific stack layout; it is not a general guarantee of C.
 
-This also applies to unreachable code: `{return 1; 1=3;}` is rejected because
-the compiler generates every parsed statement, even after a return.
+## Parser and lvalues
 
-## Parser and error reporting
+The unary grammar becomes:
 
-Every node built by the parser now keeps `tok`, a reference to an existing
-`Token`. Numbers and variables keep their own tokens; binary operators keep
-their operator token, and negation keeps its minus token. Statements keep
-their starting token. A block keeps the first token after its opening brace,
-including the closing brace for an empty block, matching upstream.
+```text
+unary = ("+" | "-" | "*" | "&") unary | primary
+```
 
-Parentheses and unary plus do not create nodes, so the enclosed expression
-retains its representative token. Rewriting `a>b` as a less-than comparison
-with swapped operands also retains the original `>` token.
+Recursive parsing gives prefix operators higher precedence than multiplication
+and permits combinations such as `*&x` and `**q`. The surrounding grammar
+distinguishes multiplication from dereference: `1**p` means `1 * (*p)`.
 
-The generator raises `CompileError(node.tok.position, ...)` for invalid
-lvalues, expressions, and statements. The command-line driver prints the
-input followed by a caret at that position. Assembly is buffered and printed
-only after successful generation, so an error does not leave partial output.
+The parser builds `ADDR` and `DEREF` nodes. To evaluate `ADDR`, code generation
+asks for the operand's address. To evaluate `DEREF`, it evaluates the operand
+to obtain an address and then loads from it.
 
-## Assembly and running in WSL
+`gen_addr()` now accepts both variables and dereferences. For a variable,
+it calculates the address of its stack slot. For `*p`, it evaluates `p`
+without loading through that pointer again: that result is already the
+address where an assignment must store. Expressions such as `&1` and
+`&(x+1)` still report “not an lvalue.”
 
-Valid programs emit exactly the same assembly as in lesson 17. For example,
-the body of `{return 42;}` still contains:
+## Read the assembly
+
+With x at -16 and p at -8, `&x` emits:
 
 ```asm
-  mov $42, %rax
-  jmp .L.return
+  lea -16(%rbp), %rax
 ```
 
-The token metadata guides diagnostics; it creates no machine instructions.
-The existing prologue saves the frame pointer and reserves local storage;
-`.L.return` restores the frame and returns to the C runtime.
+`lea` calculates an address without reading memory. Reading `*p` emits:
+
+```asm
+  lea -8(%rbp), %rax
+  mov (%rax), %rax
+  mov (%rax), %rax
+```
+
+The first load reads p's stored address; the second reads x's value.
+For `*p=5`, the generator instead saves p's address value on the temporary
+stack, evaluates 5, restores the address into `%rdi`, and emits
+`mov %rax, (%rdi)`. The existing assignment generator already performs this
+store; only address calculation needed extending.
+
+## Run it in WSL
 
 With Python 3 and GCC (`build-essential` on Ubuntu), run from the repository
 root on x86-64 Linux:
 
 ```sh
-python3 python/main.py '{return 42;}' > /tmp/chibicc-python-lesson19.s
-cat /tmp/chibicc-python-lesson19.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson19 /tmp/chibicc-python-lesson19.s
-/tmp/chibicc-python-lesson19
+python3 python/main.py '{x=3; p=&x; *p=5; return x;}' > /tmp/chibicc-python-lesson20.s
+cat /tmp/chibicc-python-lesson20.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson20 /tmp/chibicc-python-lesson20.s
+/tmp/chibicc-python-lesson20
 echo $?
-python3 python/main.py '{(a+1)=3;}'
 ```
 
-The executable prints nothing; `echo $?` immediately afterward prints **42**.
-The final compiler command displays the diagnostic above and exits with 1.
+The executable prints nothing; `echo $?` immediately afterward prints **5**.
 Use an ordinary interactive shell: `set -e` stops on a nonzero status.
 
 ## Python/C differences and tests
 
-Python holds a reference to a `Token` object where C stores a token pointer.
-The optional field defaults to `None` for manually constructed trees; every
-node the parser creates has a token. Source metadata is excluded from
-dataclass equality, so structural tree comparisons remain useful; tests
-check token identity and positions separately.
+Python creates syntax-tree objects and assembly text. The emitted executable
+performs the actual memory accesses; Python does not simulate pointers.
+All locals and loads/stores remain eight bytes, matching upstream. Invalid
+addresses are unchecked. Existing Unicode whitespace, character positions,
+and checked decimal-token range differences remain unchanged.
 
-Python continues to accept Unicode whitespace and report positions in
-characters. Numeric tokens still range from 0 through 2147483647; variables
-are implicit and uninitialized before assignment. This step adds no syntax.
+Python parser functions return `(node, next_index)` tuples instead of using
+C output pointers for the remaining tokens. Source tokens stay on the new
+nodes for diagnostics.
 
 ```sh
 python3 python/test.py
 ```
 
-Tests check numeric, binary, unary, and rewritten comparison locations,
-invalid assignment carets, generator error locations, and the existing
-assembly and executable cases.
+Tests include all seven new upstream examples, pointer chains, stores through
+dereferences, `&*p`, multiplication next to dereference, exact address/load
+assembly, and invalid address-of operands. Earlier tests remain in place.
 
 The implementation remains in `python/` on `python-lessons`; original C
 files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT

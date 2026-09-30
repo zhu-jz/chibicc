@@ -1,6 +1,6 @@
-"""Lesson 77: Compound assignments.
+"""Lesson 78: Prefix increment and decrement.
 
-Based on chibicc commit 01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882.
+Based on chibicc commit 47f19371f75db9029ea1b8b3783624fb7838d2db.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

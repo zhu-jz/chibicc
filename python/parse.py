@@ -218,6 +218,11 @@ class Parser:
         if operator == "*":
             operand, position = self.cast(position + 1)
             return Node("DEREF", lhs=operand, tok=token), position
+        if operator in ("++", "--"):
+            operand, position = self.unary(position + 1)
+            one = Node("NUM", value=1, tok=token)
+            binary = new_add(operand, one, token) if operator == "++" else new_sub(operand, one, token)
+            return self.to_assign(binary), position
         return self.postfix(position)
 
     def struct_ref(self, lhs, token):

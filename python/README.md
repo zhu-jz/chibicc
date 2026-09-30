@@ -1,36 +1,34 @@
-# Lesson 77: Compound assignments
+# Lesson 78: Prefix increment and decrement
 
-Original chibicc commit: [`01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882`](https://github.com/rui314/chibicc/commit/01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882).
+Original chibicc commit: [`47f19371f75db9029ea1b8b3783624fb7838d2db`](https://github.com/rui314/chibicc/commit/47f19371f75db9029ea1b8b3783624fb7838d2db).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer recognizes +=, -=, *=, and /=. The parser lowers `A op= B` to
-`tmp=&A, *tmp=*tmp op B`, where tmp is a fresh anonymous local pointer. Saving
-the address ensures a side effect in A occurs only once. The resulting expression
-returns the assigned value. Pointer +=/-= reuse element-size scaling, and normal
-assignment conversion handles narrow destination types. No new code-generation
-node is required: comma, address, dereference, arithmetic, and assignment suffice.
+Prefix ++ and -- parse a unary operand and reuse compound-assignment lowering:
+++x becomes x+=1, --x becomes x-=1. They return the updated value, preserve the
+destination type, evaluate its address once, and scale pointer updates by the
+element size. sizeof parses and types these expressions without executing them.
+Postfix forms are not part of this commit.
 
-Python constructs separate VAR nodes referring to the same temporary Obj; C
-builds equivalent nodes with pointers. The anonymous slot participates in normal
-stack allocation. Evaluation order follows this lowering and the existing emitter.
+Python reuses the same helper and Node constructors as the prior lesson. The
+emitter remains unchanged; introducing a syntax feature does not always require
+new assembly operations.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=2;x+=5;return x;}\n' > /tmp/lesson77.c
-python3 python/main.py /tmp/lesson77.c > /tmp/lesson77.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson77 /tmp/lesson77.s
-/tmp/lesson77
+printf 'int main(){int x=41;return ++x;}\n' > /tmp/lesson78.c
+python3 python/main.py /tmp/lesson78.c > /tmp/lesson78.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson78 /tmp/lesson78.s
+/tmp/lesson78
 echo $?
 ```
 
-`lea` computes x's address, a 64-bit store saves it in tmp, and the second
-assignment loads/adds/stores x through that pointer. The program exits with 7.
-Tests cover returned values, all four operators, nested assignments, pointer
-scaling, narrow conversions, one address evaluation, invalid lvalues, and the
-updated original arithmetic programs.
+The saved address is dereferenced, `add %edi, %eax` adds one, and a store updates
+x before main returns 42. Tests cover both prefix forms, pointer movement,
+side-effecting targets, sizeof suppression, invalid lvalues, assembly, and the
+updated original arithmetic and sizeof fixtures.
 
 ## Tests and attribution
 

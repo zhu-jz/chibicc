@@ -58,6 +58,20 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_prefix_increment(self):
+        for source, expected in [
+            ("int main(){int x=2;return ++x;}", 3),
+            ("int main(){int x=2;return --x;}", 1),
+            ("int main(){int a[2];a[1]=42;int *p=a;return *++p;}", 42),
+            ("int main(){int a[2];a[1]=3;int i=0;++a[i+=1];return i+a[1];}", 5),
+            ("int main(){char x=1;int s=sizeof(++x);return x+s;}", 2),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){int x=2;return ++x;}").stdout
+        self.assertIn("  add %edi, %eax\n", assembly)
+        self.assertEqual([token.text for token in tokenize("++ --")[:-1]], ["++", "--"])
+        self.assertEqual(compile_program("int main(){return ++1;}").returncode, 1)
+
     def test_compound_assignments(self):
         for source, expected in [
             ("int main(){int x=2;return x+=5;}", 7),
@@ -1316,7 +1330,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('5/6/7;', Node("/", Node("/", five, six), seven)),
             ('-5*6;', Node("*", Node("NEG", lhs=five), six)),
             ('-(5+6);', Node("NEG", lhs=Node("+", five, six))),
-            ('--5;', Node("NEG", lhs=Node("NEG", lhs=five))),
+            ('- -5;', Node("NEG", lhs=Node("NEG", lhs=five))),
             ('+-5;', Node("NEG", lhs=five)),
             ('5+6*7==47;', Node("==", Node("+", five, Node("*", six, seven)),
                                 Node("NUM", value=47))),
@@ -1577,8 +1591,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){-1;}', 255),
             ('int main(){+42;}', 42),
             ('int main(){1+-2;}', 255),
-            ('int main(){1--2;}', 3),
-            ('int main(){1++2;}', 3),
+            ('int main(){1- -2;}', 3),
+            ('int main(){1+ +2;}', 3),
             ('int main(){1 + +2;}', 3),
             ('int main(){-(3+4)*2;}', 242),
             ('int main(){2*-(3+4);}', 242),

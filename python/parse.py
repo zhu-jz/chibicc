@@ -570,18 +570,24 @@ class Parser:
         ty.params = params
         return ty, position + 1
 
-    # type-suffix = "(" func-params | "[" number "]" type-suffix | empty
+    def array_dimensions(self, position, ty):
+        if self.tokens[position].text == "]":
+            ty, position = self.type_suffix(position + 1, ty)
+            return array_of(ty, -1), position
+        token = self.tokens[position]
+        if token.kind != "NUM":
+            raise CompileError(token, "expected a number")
+        if self.tokens[position + 1].text != "]":
+            raise CompileError(self.tokens[position + 1], "expected ']'")
+        ty, position = self.type_suffix(position + 2, ty)
+        return array_of(ty, token.value), position
+
+    # type-suffix = "(" func-params | "[" array-dimensions | empty
     def type_suffix(self, position, ty):
         if self.tokens[position].text == "(":
             return self.func_params(position + 1, ty)
         if self.tokens[position].text == "[":
-            token = self.tokens[position + 1]
-            if token.kind != "NUM":
-                raise CompileError(token, "expected a number")
-            if self.tokens[position + 2].text != "]":
-                raise CompileError(self.tokens[position + 2], "expected ']'")
-            ty, position = self.type_suffix(position + 3, ty)
-            return array_of(ty, token.value), position
+            return self.array_dimensions(position + 1, ty)
         return ty, position
 
     # declarator = "*"* (identifier | "(" declarator ")") type-suffix
@@ -679,6 +685,8 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
+            if ty.size < 0:
+                raise CompileError(self.tokens[position], "variable has incomplete type")
             if ty.kind == "VOID":
                 raise CompileError(self.tokens[position], "variable declared void")
             var = self.new_lvar(ty.name.text, ty)

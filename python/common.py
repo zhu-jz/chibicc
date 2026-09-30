@@ -52,6 +52,7 @@ class Member:
     ty: Type
     name: Token
     offset: int = 0
+    tok: Optional[Token] = field(default=None, compare=False)
 
 
 @dataclass

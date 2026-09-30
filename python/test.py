@@ -58,6 +58,18 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_incomplete_arrays(self):
+        self.assert_program_returns("int main(){return sizeof(int(*)[][10]);}", 8)
+        self.assert_program_returns("int main(){int a[2];a[1]=42;int (*p)[]=a;return (*p)[1];}", 42)
+        ty = parse_body("int (*p)[][10];").locals[0].ty
+        self.assertEqual((ty.kind, ty.size, ty.base.array_len, ty.base.size), ("PTR", 8, -1, -40))
+        for source in ("int main(){int x[];}", "int main(){int x[][10];}"):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("variable has incomplete type", result.stderr)
+            self.assertEqual(result.stdout, "")
+        self.assertIn("  mov $8, %rax\n", compile_program("int main(){return sizeof(int(*)[]);}").stdout)
+
     def test_logical_short_circuit(self):
         for source, expected in [
             ("int main(){int x=42;0&&++x;return x;}", 42),

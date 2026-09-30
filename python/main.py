@@ -1,6 +1,6 @@
-"""Lesson 85: Short-circuit logical operators.
+"""Lesson 86: Incomplete array types.
 
-Based on chibicc commit f30f78175c1fd50c8cdd132ca804573ae0d18453.
+Based on chibicc commit 29ed294906ebc271c32a755e1aefc360df4d3863.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

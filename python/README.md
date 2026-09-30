@@ -1,35 +1,34 @@
-# Lesson 85: Short-circuit logical operators
+# Lesson 86: Incomplete array types
 
-Original chibicc commit: [`f30f78175c1fd50c8cdd132ca804573ae0d18453`](https://github.com/rui314/chibicc/commit/f30f78175c1fd50c8cdd132ca804573ae0d18453).
+Original chibicc commit: [`29ed294906ebc271c32a755e1aefc360df4d3863`](https://github.com/rui314/chibicc/commit/29ed294906ebc271c32a755e1aefc360df4d3863).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-&& and || produce int 0 or 1 and evaluate left to right. && skips its right
-operand when the left is zero; || skips it when the left is nonzero. The parser
-places && below bitwise | and above ||, with assignment lower still. Separate
-LOGAND/LOGOR nodes emit conditional jumps instead of the normal binary push/pop
-sequence, preserving side effects and avoiding unwanted evaluation.
+An empty [] creates an incomplete array type with length -1 and negative size.
+A pointer to that type is still complete and eight bytes wide. Recursive suffix
+parsing handles a pointer such as int(*)[][10]. Local object declarations reject
+negative-sized types because stack storage needs a known size. The Member model
+also gains a token field for diagnostics, matching the original structural change.
 
-Python's shared label counter supplies unique assembly labels, as C's counter
-does. The original still compares full rax for truth tests; this step preserves
-that limitation with narrow expressions whose upper bits are stale.
+Python uses the same negative sentinel rather than a separate incomplete flag.
+This commit does not complete arrays from initializers or fully diagnose global
+incomplete definitions/sizeof on incomplete types; those historical limits remain.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=42;0&&++x;return x;}\n' > /tmp/lesson85.c
-python3 python/main.py /tmp/lesson85.c > /tmp/lesson85.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson85 /tmp/lesson85.s
-/tmp/lesson85
+printf 'int main(){return sizeof(int(*)[][10]);}\n' > /tmp/lesson86.c
+python3 python/main.py /tmp/lesson86.c > /tmp/lesson86.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson86 /tmp/lesson86.s
+/tmp/lesson86
 echo $?
 ```
 
-A zero comparison branches to `.L.false.N` before the increment instructions.
-The program returns 42 because ++x is skipped. || instead branches on nonzero
-to `.L.true.N`. Tests cover skipped and evaluated effects, guarded null-pointer
-dereferences, normalized results, precedence, label uniqueness, and upstream
-programs. Both operands are parsed and typed even when one is skipped at runtime.
+sizeof measures the pointer, so the emitter uses `mov $8, %rax` without allocating
+or accessing the incomplete array. The shell displays 8. Tests inspect nested
+type metadata, dereference a pointer to an incomplete array with a known valid
+object, check local errors and assembly, and run updated original sizeof tests.
 
 ## Tests and attribution
 

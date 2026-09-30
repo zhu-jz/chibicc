@@ -1,43 +1,46 @@
-# Lesson 44: Block scope
+# Lesson 45: Tests written in C
 
-Original chibicc commit: [`ca8b2434c97fc37c14eddcb3a4e831d030ebb041`](https://github.com/rui314/chibicc/commit/ca8b2434c97fc37c14eddcb3a4e831d030ebb041).
+Original chibicc commit: [`cd832a311e56bda981c9c957ba45f1bc1f6cc737`](https://github.com/rui314/chibicc/commit/cd832a311e56bda981c9c957ba45f1bc1f6cc737).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Name lookup searches a stack of scopes, from the innermost block outward.
-Every compound statement enters a scope at `{` and leaves it at `}`. A
-function also gives parameters their own enclosing scope. Globals live in the
-outermost scope; locals from an earlier function cannot leak into another.
+Upstream moves tests into C programs grouped by arithmetic, control flow,
+functions, pointers, strings, and variables. This commit changes no compiler
+behavior. Matching snapshots are now in `python/test/`, alongside `test.h`'s
+ASSERT macro and the small assertion helper `common`. The existing Python
+assembly and diagnostic tests remain useful and are retained.
 
-The scopes control visibility, while `function.locals` collects storage for
-all variables in that function, even after their names leave scope. Two
-variables called `x` are separate objects with separate stack slots. Python
-lists replace upstream's linked Scope and VarScope records.
+`test_upstream_c_programs` asks GCC to preprocess each test, feeding the result
+to our Python compiler through stdin. GCC expands `ASSERT(expected, expr)`
+into `assert(expected, expr, "expr")`, including macro stringification. Our
+compiler emits the test program's assembly. GCC then assembles/links it with
+the helper, and the harness executes it with a timeout. This compiler still
+has no preprocessor: GCC preprocessing is test preparation only, following
+upstream's test workflow. The original C compiler is never invoked.
 
-For `int x=2; {int x=3;} return x;`, the final lookup finds the outer `x`, so
-the result is 2. In `{x=3;}` without a declaration, lookup finds and changes
-the outer object. Statement expressions also use their block's scope.
+The helper compares full integer results and prints each assertion. This
+avoids relying only on the operating system's eight-bit exit status and lets
+one executable check many expressions. MIT attribution applies to these
+upstream test snapshots as well as the port.
 
-## Assembly and WSL example
+## Run and understand the assembly
 
 ```sh
-printf 'int main(){int x=2; {int x=3;} return x;}\n' > /tmp/lesson44.c
-python3 python/main.py -o /tmp/lesson44.s /tmp/lesson44.c
-cat /tmp/lesson44.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson44 /tmp/lesson44.s
-/tmp/lesson44
+python3 python/test.py ExpressionCompilerTests.test_upstream_c_programs
+printf 'int main(){return 42;}\n' > /tmp/lesson45.c
+python3 python/main.py -o /tmp/lesson45.s /tmp/lesson45.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson45 /tmp/lesson45.s
+/tmp/lesson45
 echo $?
 ```
 
-The two initializations store into different offsets from `%rbp`. The final
-load reads the outer variable, puts 2 in `%rax`, and returns through the
-function epilogue. The executable prints nothing; the shell displays status 2.
-
-Tests cover all three upstream examples, global and parameter shadowing,
-statement-expression scopes, forbidden uses after a scope ends, cross-function
-leaks, and retaining all local storage objects. Same-scope redeclarations are
-still not diagnosed, matching this stage of upstream. Ints remain eight bytes.
+The compiler's instructions are unchanged: the example moves 42 into `%rax`
+and returns through the shared epilogue, so the shell displays 42. The test
+programs also move call arguments into `%rdi`, `%rsi`, and `%rdx`, then execute
+`call assert`. Their output comes from the linked helper's printf, not from
+the compiler. Upstream's six C programs must all finish with status zero and
+print their final `OK`.
 
 ## Tests and attribution
 

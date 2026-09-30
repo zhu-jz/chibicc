@@ -1,6 +1,6 @@
-"""Lesson 44: Block scope.
+"""Lesson 45: Tests written in C.
 
-Based on chibicc commit ca8b2434c97fc37c14eddcb3a4e831d030ebb041.
+Based on chibicc commit cd832a311e56bda981c9c957ba45f1bc1f6cc737.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -36,6 +36,29 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_upstream_c_programs(self):
+        fixtures = Path(__file__).with_name("test")
+        with tempfile.TemporaryDirectory() as directory:
+            for source in sorted(fixtures.glob("*.c")):
+                with self.subTest(source=source.name):
+                    preprocessed = subprocess.run(
+                        ["gcc", "-E", "-P", "-C", str(source)],
+                        capture_output=True, text=True, check=True)
+                    compiled = compile_program(preprocessed.stdout)
+                    self.assertEqual(compiled.returncode, 0, compiled.stderr)
+                    assembly = Path(directory) / (source.stem + ".s")
+                    executable = Path(directory) / source.stem
+                    assembly.write_text(compiled.stdout)
+                    linked = subprocess.run(
+                        ["gcc", "-Wl,-z,noexecstack", "-o", str(executable),
+                         str(assembly), "-xc", str(fixtures / "common")],
+                        capture_output=True, text=True)
+                    self.assertEqual(linked.returncode, 0, linked.stderr)
+                    result = subprocess.run([str(executable)], capture_output=True,
+                                            text=True, timeout=5)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertTrue(result.stdout.endswith("OK\n"), result.stdout)
+
     def test_block_scope(self):
         for source, expected in [
             ("int main(){int x=2;{int x=3;}return x;}", 2),

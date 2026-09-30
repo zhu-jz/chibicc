@@ -180,9 +180,11 @@ class CodeGenerator:
             self.assembly.append(f"  sub {di}, {ax}")
         elif node.kind == "*":
             self.assembly.append(f"  imul {di}, {ax}")
-        elif node.kind == "/":
+        elif node.kind in ("/", "%"):
             self.assembly.append("  cqo" if node.lhs.ty.size == 8 else "  cdq")
             self.assembly.append(f"  idiv {di}")
+            if node.kind == "%":
+                self.assembly.append("  mov %rdx, %rax")
         elif node.kind in ("==", "!=", "<", "<="):
             instructions = {
                 "==": "sete", "!=": "setne", "<": "setl", "<=": "setle",

@@ -1,33 +1,34 @@
-# Lesson 82: Bitwise complement
+# Lesson 83: Remainder and remainder assignment
 
-Original chibicc commit: [`46a96d6862e4c1317ff48df69391fd98a1ae5e3d`](https://github.com/rui314/chibicc/commit/46a96d6862e4c1317ff48df69391fd98a1ae5e3d).
+Original chibicc commit: [`daa739817c58baa8dcd0c23bb403d27d5907abfb`](https://github.com/rui314/chibicc/commit/daa739817c58baa8dcd0c23bb403d27d5907abfb).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Unary ~ creates a BITNOT node and emits `not %rax`, flipping each bit of the
-register. Thus ~0 is -1 and ~-1 is zero. Logical ! checks zero; bitwise ~ changes
-the integer representation. The parser gives it unary precedence.
+% joins multiplication/division precedence and undergoes usual arithmetic
+conversion. %= reuses compound-assignment lowering. Signed idiv supplies both a
+quotient in eax/rax and a remainder in edx/rdx; % moves the remainder into rax.
+The emitter chooses cdq/idiv edi for int and cqo/idiv rdi for long.
 
-This original commit retains the operand's type instead of applying C's full
-integer promotion rules: sizeof(~(char)0) is still 1 here. It also always emits a
-64-bit not. Python preserves those stages and emits assembly rather than using
-Python's own arbitrary-precision bitwise complement for runtime computation.
+C division truncates toward zero, so -17%6 is -5. Python's % on ints would give 1,
+but the compiler never uses it to compute runtime expressions: emitted idiv
+preserves the target behavior. Division by zero and signed division overflow
+retain machine exceptions at this stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return ~0;}\n' > /tmp/lesson82.c
-python3 python/main.py /tmp/lesson82.c > /tmp/lesson82.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson82 /tmp/lesson82.s
-/tmp/lesson82
+printf 'int main(){int x=17;return x%%6;}\n' > /tmp/lesson83.c
+python3 python/main.py /tmp/lesson83.c > /tmp/lesson83.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson83 /tmp/lesson83.s
+/tmp/lesson83
 echo $?
 ```
 
-`mov $0, %rax` followed by `not %rax` produces all one bits (-1). The shell shows
-255 because process exit statuses retain only the low eight bits. Tests check
-both signs, repeated complement, long values, historical sizeof/type behavior,
-assembly, real execution, and updated original programs.
+`idiv %edi` leaves 5 in edx, and `mov %rdx, %rax` selects that result instead of
+the quotient. The shell displays 5. Tests cover operand signs, widths, %=
+results, side-effecting destinations, instruction sequences, actual execution,
+and all updated original programs.
 
 ## Tests and attribution
 

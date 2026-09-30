@@ -58,6 +58,20 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_remainder(self):
+        for source, expected in [
+            ("int main(){return 17%6;}", 5),
+            ("int main(){return -17%6==-5;}", 1),
+            ("int main(){return 17%-6;}", 5),
+            ("int main(){return (long)-17%6==-5;}", 1),
+            ("int main(){int x=10;return x%=4;}", 2),
+            ("int main(){int a[2];a[0]=10;int i=0;a[i++]%=4;return i+a[0];}", 3),
+        ]:
+            self.assert_program_returns(source, expected)
+        for spelling, extend, divisor in (("int", "cdq", "%edi"), ("long", "cqo", "%rdi")):
+            assembly = compile_program(f"int main(){{{spelling} x=17;return x%6;}}").stdout
+            self.assertIn(f"  {extend}\n  idiv {divisor}\n  mov %rdx, %rax\n", assembly)
+
     def test_bitwise_not(self):
         for expression, expected in [("~0", 255), ("~-1", 0), ("~~42", 42),
                                      ("~(long)0==-1", 1), ("sizeof(~(char)0)", 1)]:

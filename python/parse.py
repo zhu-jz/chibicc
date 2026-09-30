@@ -130,7 +130,7 @@ class Parser:
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             node = Node("ASSIGN", node, rhs, tok=token)
-        elif self.tokens[position].text in ("+=", "-=", "*=", "/="):
+        elif self.tokens[position].text in ("+=", "-=", "*=", "/=", "%="):
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             if token.text == "+=":
@@ -183,7 +183,7 @@ class Parser:
     # mul = cast (("*" | "/") cast)*
     def mul(self, position):
         node, position = self.cast(position)
-        while self.tokens[position].text in ("*", "/"):
+        while self.tokens[position].text in ("*", "/", "%"):
             token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.cast(position + 1)

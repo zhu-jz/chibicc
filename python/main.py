@@ -1,6 +1,6 @@
-"""Lesson 82: Bitwise complement.
+"""Lesson 83: Remainder and remainder assignment.
 
-Based on chibicc commit 46a96d6862e4c1317ff48df69391fd98a1ae5e3d.
+Based on chibicc commit daa739817c58baa8dcd0c23bb403d27d5907abfb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

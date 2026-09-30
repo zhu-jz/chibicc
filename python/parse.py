@@ -315,6 +315,7 @@ class Parser:
             ("short",): ty_short, ("int", "short"): ty_short,
             ("int",): ty_int,
             ("long",): ty_long, ("int", "long"): ty_long,
+            ("long", "long"): ty_long, ("int", "long", "long"): ty_long,
         }
         ty = ty_int
         specifiers = []

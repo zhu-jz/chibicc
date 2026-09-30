@@ -1,44 +1,39 @@
-# Lesson 62: Combined type specifiers
+# Lesson 63: Long long as an alias for long
 
-Original chibicc commit: [`287906abb85081b961e118bb80b30decb93fba6f`](https://github.com/rui314/chibicc/commit/287906abb85081b961e118bb80b30decb93fba6f).
+Original chibicc commit: [`f46370ef98adec5d3a840d69a6b34a03d80b0699`](https://github.com/rui314/chibicc/commit/f46370ef98adec5d3a840d69a6b34a03d80b0699).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The declaration-specifier parser consumes a sequence of type words. Short and
-long may include int, in either order: `short int`, `int short`, `long int`,
-and `int long` select the same types as short and long. Char, void and plain
-int remain single-word types. Invalid built-in combinations such as `char int`
-and duplicate `int` are diagnosed at the word that makes the combination bad.
+The permitted type-word combinations now include two longs, with an optional
+int: `long long`, `long long int`, `int long long`, and `long int long` all
+select the existing LONG type. Size and alignment are both 8. No separate type
+kind or codegen instruction is needed because this original step deliberately
+makes long long an alias for long.
 
-C packs keyword counts into one integer and switches on the result. Python
-keeps the seen words in a list and looks up their sorted tuple in a small table
-of permitted combinations. This readable representation replaces the bitfield
-trick without changing the accepted built-in combinations.
-
-The upstream commit message mentions `long long`, but its actual switch has
-no case for two longs. This port follows the code: `long long` is rejected.
-The parser also defaults to int when no type word occurs in a context that
-calls declspec, so `main(){...}` and an implicitly typed named parameter work.
-This is an intermediate older-C behavior, not full modern declaration checking.
-Struct/union combination validation and other storage/type words are incomplete.
+This supplies the cases missing in lesson 62's actual C switch. Three longs,
+two ints, and combining short with long remain invalid. Python extends its
+explicit combination table rather than C's packed keyword counter; the
+accepted combinations have the same behavior. Literal typing and arithmetic
+conversion limits remain at the previous stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int long x=42;return x;}\n' > /tmp/lesson62.c
-python3 python/main.py -o /tmp/lesson62.s /tmp/lesson62.c
-cat /tmp/lesson62.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson62 /tmp/lesson62.s
-/tmp/lesson62
+printf 'int main(){long long x=4294967296;return x/65536/65536;}\n' > /tmp/lesson63.c
+python3 python/main.py -o /tmp/lesson63.s /tmp/lesson63.c
+cat /tmp/lesson63.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson63 /tmp/lesson63.s
+/tmp/lesson63
 echo $?
 ```
 
-`int long` selects the eight-byte long type: the variable uses a full `%rax`
-store/load at -8(%rbp), then returns 42. No new machine instruction implements
-the alternate spelling. Tests cover every upstream combination, the implicit
-int cases, invalid words/duplicates, and the actual long-long restriction.
-The new upstream declaration fixture runs with the complete C fixture suite.
+The literal and full `%rax` store/load preserve the eight-byte value, and two
+signed divisions return 1. The assembly is the same as for a long declaration;
+the shell displays status 1 and the executable prints nothing. Tests inspect
+the alias's type/size/alignment for all word orders, execute a wide stored
+value, reject excess/mixed specifiers, and run the updated upstream declaration
+fixture with every other C fixture.
 
 ## Tests and attribution
 

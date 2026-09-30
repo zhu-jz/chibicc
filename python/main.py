@@ -1,6 +1,6 @@
-"""Lesson 62: Combined type specifiers.
+"""Lesson 63: Long long as an alias for long.
 
-Based on chibicc commit 287906abb85081b961e118bb80b30decb93fba6f.
+Based on chibicc commit f46370ef98adec5d3a840d69a6b34a03d80b0699.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

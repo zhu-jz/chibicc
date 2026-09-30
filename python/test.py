@@ -42,13 +42,24 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_long_long_alias(self):
+        for spelling in ["long long", "long long int", "int long long", "long int long"]:
+            self.assert_program_returns("int main(){" + spelling + " x;return sizeof(x);}", 8)
+            ty = parse_body(spelling + " x;").locals[0].ty
+            self.assertEqual((ty.kind, ty.size, ty.align), ("LONG", 8, 8))
+        self.assert_program_returns("int main(){long long x=4294967296;return x/65536/65536;}", 1)
+        for spelling in ["long long long", "long long int int", "short long long"]:
+            result = compile_program("int main(){" + spelling + " x;}")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid type", result.stderr)
+
     def test_type_specifier_combinations(self):
         for spelling, size in [("char", 1), ("short int", 2), ("int short", 2),
                                ("int", 4), ("long int", 8), ("int long", 8)]:
             self.assert_program_returns("int main(){" + spelling + " x;return sizeof(x);}", size)
         self.assert_program_returns("main(){return 42;}", 42)
         self.assert_program_returns("int f(x){return x;}main(){return f(42);}", 42)
-        for spelling in ["char int", "int int", "long long", "void int", "short long"]:
+        for spelling in ["char int", "int int", "void int", "short long"]:
             result = compile_program("int main(){" + spelling + " x;}")
             self.assertEqual(result.returncode, 1)
             self.assertIn("invalid type", result.stderr)

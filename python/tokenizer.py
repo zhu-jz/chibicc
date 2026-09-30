@@ -20,6 +20,15 @@ def read_escaped_char(source, position):
             position += 1
             count += 1
         return bytes([value & 255]), position
+    if character == "x":
+        position += 1
+        if position >= len(source) or source[position] not in string.hexdigits:
+            raise CompileError(position, "invalid hex escape sequence")
+        value = 0
+        while position < len(source) and source[position] in string.hexdigits:
+            value = value * 16 + int(source[position], 16)
+            position += 1
+        return bytes([value & 255]), position
     escapes = {"a": b"\a", "b": b"\b", "t": b"\t", "n": b"\n",
                "v": b"\v", "f": b"\f", "r": b"\r", "e": b"\x1b"}
     return escapes.get(character, character.encode("utf-8")), position + 1

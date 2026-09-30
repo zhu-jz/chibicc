@@ -1,37 +1,35 @@
-# Lesson 37: Octal string escapes
+# Lesson 38: Hexadecimal string escapes
 
-Original chibicc commit: [`699d2b7e3f4ea4ba6ec2d5080f87e243989a5835`](https://github.com/rui314/chibicc/commit/699d2b7e3f4ea4ba6ec2d5080f87e243989a5835).
+Original chibicc commit: [`c2cc1d3c4500caa34da5e68eb62b7474caf96fe2`](https://github.com/rui314/chibicc/commit/c2cc1d3c4500caa34da5e68eb62b7474caf96fe2).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A backslash followed by an octal digit reads up to three digits (0–7) and
-produces one byte. `\101` is 65. `\1500` reads only `150`, producing byte 104,
-then retains the last 0 as byte 48. Non-octal digits stop the sequence.
+`\x` requires at least one hexadecimal digit and consumes all consecutive
+hexadecimal digits. Both letter cases are accepted. `\x00ff` produces one byte
+255, while `\x41Z` produces byte 65 followed by Z. This differs from the
+three-digit maximum for octal escapes.
 
-The escape helper now returns both decoded bytes and the next source position,
-replacing upstream's pointer output parameter with a Python tuple. Values are
-masked to eight bits to match storage into C's char buffer. Interior zero bytes
-remain in the data and count toward sizeof; the tokenizer also appends the
-separate terminating zero.
+The tokenizer uses standard-library `string.hexdigits` and `int(digit,16)`
+instead of C's isxdigit and a manual digit helper. It reports an invalid escape
+at the first character after x if no digits follow. Decoded values are masked
+to eight bits before storing. Python's accumulator does not overflow a signed
+C int, so long sequences have defined final-byte truncation in this port.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return "\101"[0];}' > /tmp/lesson37.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson37 /tmp/lesson37.s
-/tmp/lesson37
+python3 python/main.py 'int main(){return "\x77"[0];}' > /tmp/lesson38.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson38 /tmp/lesson38.s
+/tmp/lesson38
 echo $?
 ```
 
-The executable prints nothing; the last command shows **65**. Use an interactive
-shell without `set -e` for nonzero statuses. Assembly contains `.byte 65` and
-`.byte 0`; the usual char load reads it. No runtime escape processing occurs.
-
-Tests include all upstream octal cases, the three-digit boundary, byte wrapping,
-non-octal default escapes, and embedded zeros with correct size. Python's bytes
-storage explicitly performs the truncation implicit in upstream's char store.
-Hexadecimal escapes are not part of this original commit.
+The executable prints nothing; the last command shows **119**. Use an interactive
+shell without `set -e` for nonzero statuses. Assembly stores `.byte 119` plus
+its terminator and performs the normal signed byte load. Tests cover every
+upstream hex example, mixed case, stopping at a non-hex character, decoded
+size, truncation, invalid empty sequences, and earlier escape forms.
 
 ## Tests and attribution
 

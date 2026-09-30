@@ -1,6 +1,6 @@
-"""Lesson 37: Octal string escapes.
+"""Lesson 38: Hexadecimal string escapes.
 
-Based on chibicc commit 699d2b7e3f4ea4ba6ec2d5080f87e243989a5835.
+Based on chibicc commit c2cc1d3c4500caa34da5e68eb62b7474caf96fe2.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -32,6 +32,18 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_hex_string_escapes(self):
+        for spelling, expected in [(r"\x00",0),(r"\x77",119),(r"\xA5",165),
+                                   (r"\x00ff",255),(r"\x41Z",65),(r"\x1234",52)]:
+            self.assert_program_returns('int main(){return "'+spelling+'"[0];}', expected)
+        self.assertEqual(tokenize(r'"\x41Z"')[0].str, b"AZ\0")
+        self.assertEqual(tokenize(r'"\x00ff"')[0].ty.size, 2)
+        for source in [r'int main(){return "\x"[0];}', r'int main(){return "\xg"[0];}']:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("invalid hex escape sequence", result.stderr)
+
     def test_octal_string_escapes(self):
         for spelling, expected in [(r"\0",0),(r"\20",16),(r"\101",65),
                                    (r"\1500",104),(r"\777",255),(r"\8",56)]:

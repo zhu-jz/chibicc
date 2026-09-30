@@ -1,6 +1,6 @@
-"""Lesson 65: Sizeof with type names.
+"""Lesson 66: Binary register widths.
 
-Based on chibicc commit 67543ea113c5cc2b15881e2bbb85ffd44feaef1f.
+Based on chibicc commit cb81a379d9f7aef32fb1bbebd18f8618e1617a3f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

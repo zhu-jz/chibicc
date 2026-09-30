@@ -1,44 +1,45 @@
-# Lesson 65: Sizeof with type names
+# Lesson 66: Binary register widths
 
-Original chibicc commit: [`67543ea113c5cc2b15881e2bbb85ffd44feaef1f`](https://github.com/rui314/chibicc/commit/67543ea113c5cc2b15881e2bbb85ffd44feaef1f).
+Original chibicc commit: [`cb81a379d9f7aef32fb1bbebd18f8618e1617a3f`](https://github.com/rui314/chibicc/commit/cb81a379d9f7aef32fb1bbebd18f8618e1617a3f).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Sizeof now accepts a parenthesized type name as well as an expression:
-`sizeof(int)`, `sizeof(int[3][4])`, or `sizeof(int(*)[4])`. A type-name consists
-of declaration specifiers followed by an abstract declarator: stars,
-parenthesized groupings, and suffixes, but no variable name. It uses the same
-two-pass grouping technique as named declarators.
+Binary addition, subtraction, multiplication and comparison now select register
+width from the left operand's type. Long and pointer/array operands use
+`%rax`/`%rdi`; char, short and int use `%eax`/`%edi`. Signed division uses
+`cqo` and a sixty-four-bit divisor for an eight-byte left operand, otherwise
+`cdq` and a thirty-two-bit divisor. Stack temporaries remain eight bytes.
 
-After `sizeof (` the parser uses current scope to decide whether the next
-token is a type name. A typedef selects the type branch; a variable hiding
-that typedef selects the expression branch. The resulting size is folded
-into a NUM node. No variable is allocated and no operand is evaluated.
-`sizeof(void)` is 1 here, preserving upstream's GNU-style void-size extension.
+A write to eax clears the high half of rax, while signed comparisons interpret
+the low thirty-two bits with the chosen width. This matches the original
+commit's intermediate lowering; mixed-type conversions are not complete yet.
+In particular, current literals and calls are long, and negative computed int
+values are not always extended before wider use. Negative variable pointer
+indices are another limitation until conversion rules are added.
 
-Python returns types and token indices instead of C output pointers. The
-abstract parser otherwise follows the original grammar. This does not add
-casts or change the intermediate long type of numeric expressions and calls.
+Python emits the same width choices as C. The multiplication overflow test
+checks this machine's low-bit result; signed overflow is not a portable C
+guarantee. The code generator expects type-annotated binary operands, so its
+hand-built invalid-node test now supplies the operand types explicitly.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return sizeof(int*[4]);}\n' > /tmp/lesson65.c
-python3 python/main.py -o /tmp/lesson65.s /tmp/lesson65.c
-cat /tmp/lesson65.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson65 /tmp/lesson65.s
-/tmp/lesson65
+printf 'int main(){int x=7,y=3;return (x+y)*(x-y)/y;}\n' > /tmp/lesson66.c
+python3 python/main.py -o /tmp/lesson66.s /tmp/lesson66.c
+cat /tmp/lesson66.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson66 /tmp/lesson66.s
+/tmp/lesson66
 echo $?
 ```
 
-The type describes four eight-byte pointers, so its size is 32. The executable
-body only moves 32 into `%rax` and returns; the shell displays status 32.
-Changing the type to `int(*)[4]` gives one pointer, size 8. Tests cover every
-upstream sizeof-type example, typedef/variable ambiguity, void and long long,
-nested pointer/array and function-pointer types, missing parentheses and
-forbidden typedef storage specifiers. An assembly comparison confirms the
-folded constant, and the new sizeof fixture runs with all C fixtures.
+`add %edi, %eax`, `sub %edi, %eax`, and `imul %edi, %eax` compute
+10 times 4. `cdq` prepares edx:eax for `idiv %edi`, yielding 13. The shell
+shows status 13. Replacing int with long selects rax/rdi and cqo instead.
+Tests check those exact operations, signed divisions and comparisons for all
+integer widths, low-bit multiplication, pointer arithmetic, and the complete
+upstream C fixtures. Existing pure-literal arithmetic remains sixty-four bit.
 
 ## Tests and attribution
 

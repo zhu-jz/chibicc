@@ -42,6 +42,27 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_binary_register_widths(self):
+        for spelling in ["int", "long"]:
+            source = "int main(){" + spelling + " x=7,y=3;return (x+y)*(x-y)/y;}"
+            self.assert_program_returns(source, 13)
+            assembly = compile_program(source).stdout
+            ax, di = ("%eax", "%edi") if spelling == "int" else ("%rax", "%rdi")
+            for instruction in ["add", "sub", "imul"]:
+                self.assertIn(f"  {instruction} {di}, {ax}\n", assembly)
+            extension = "cdq" if spelling == "int" else "cqo"
+            self.assertIn(f"  {extension}\n  idiv {di}\n", assembly)
+        for spelling in ["char", "short", "int", "long"]:
+            self.assert_program_returns("int main(){" + spelling + " x=-7;return x/2;}", 253)
+            assembly = compile_program("int main(){" + spelling + " x=3;return x<4;}").stdout
+            comparison = "  cmp %rdi, %rax\n" if spelling == "long" else "  cmp %edi, %eax\n"
+            self.assertIn(comparison, assembly)
+        self.assert_program_returns("int main(){int x=65536;return x*x;}", 0)
+        assembly = compile_program("int main(){int x;int *p=&x;return (p+1)-p;}").stdout
+        self.assertIn("  add %rdi, %rax\n", assembly)
+        self.assertIn("  sub %rdi, %rax\n", assembly)
+        self.assertIn("  cdq\n  idiv %edi\n", assembly)
+
     def test_sizeof_type_names(self):
         for source, expected in [
             ("typedef int T;int main(){return sizeof(T);}", 4),
@@ -837,7 +858,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         token = Token("PUNCT", "?", 8)
         for generate, node, message in [
             (CodeGenerator().gen_stmt, Node("UNKNOWN", tok=token), "invalid statement"),
-            (CodeGenerator().gen_expr, Node("UNKNOWN", Node("NUM"), Node("NUM"),
+            (CodeGenerator().gen_expr, Node("UNKNOWN", Node("NUM", ty=ty_long), Node("NUM", ty=ty_long),
                                            tok=token), "invalid expression"),
         ]:
             with self.assertRaises(CompileError) as caught:

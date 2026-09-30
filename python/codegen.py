@@ -130,20 +130,25 @@ class CodeGenerator:
         self.gen_expr(node.lhs)
         self.pop("%rdi")
 
+        if node.lhs.ty.kind == "LONG" or node.lhs.ty.base is not None:
+            ax, di = "%rax", "%rdi"
+        else:
+            ax, di = "%eax", "%edi"
+
         if node.kind == "+":
-            self.assembly.append("  add %rdi, %rax")
+            self.assembly.append(f"  add {di}, {ax}")
         elif node.kind == "-":
-            self.assembly.append("  sub %rdi, %rax")
+            self.assembly.append(f"  sub {di}, {ax}")
         elif node.kind == "*":
-            self.assembly.append("  imul %rdi, %rax")
+            self.assembly.append(f"  imul {di}, {ax}")
         elif node.kind == "/":
-            self.assembly.append("  cqo")
-            self.assembly.append("  idiv %rdi")
+            self.assembly.append("  cqo" if node.lhs.ty.size == 8 else "  cdq")
+            self.assembly.append(f"  idiv {di}")
         elif node.kind in ("==", "!=", "<", "<="):
             instructions = {
                 "==": "sete", "!=": "setne", "<": "setl", "<=": "setle",
             }
-            self.assembly.append("  cmp %rdi, %rax")
+            self.assembly.append(f"  cmp {di}, {ax}")
             self.assembly.append(f"  {instructions[node.kind]} %al")
             self.assembly.append("  movzb %al, %rax")
         else:

@@ -1,64 +1,45 @@
-# Lesson 17: while loops
+# Lesson 18: license and project documentation
 
-This educational Python port implements original chibicc commit
-[`1f3eb34f637520b01e6b8cd10a9026d05036db6d`](https://github.com/rui314/chibicc/commit/1f3eb34f637520b01e6b8cd10a9026d05036db6d),
-“Add \"while\" statement.” Earlier lessons remain in Git history.
+This educational Python port follows original chibicc commit
+[`5b142b1dcf6561df3c44a743965af3bd4e619112`](https://github.com/rui314/chibicc/commit/5b142b1dcf6561df3c44a743965af3bd4e619112),
+“Add LICENSE and README.md.” Earlier lessons remain in Git history.
 
 ## What changed
 
-A program can now repeat a statement while a condition is true:
+Upstream adds the MIT license, crediting Rui Ueyama, and a README identifying
+chibicc as the reference implementation of the
+[compiler book](https://www.sigbus.info/compilerbook).
 
-```c
-{ i=0; while(i<10) i=i+1; return i; }
-```
+This port already included the original license from the first lesson, as
+requested. [LICENSE](LICENSE) contains that exact notice. This lesson records
+upstream's documentation step without changing compiler behavior. It adds no
+syntax or assembly instructions.
 
-This returns 10. The condition is checked before every iteration. Zero
-ends the loop; any nonzero value, including a negative value, runs the body.
-A false initial condition skips the body entirely. The body can be a block,
-a return, an expression statement, an empty statement, or another loop.
+## Current compiler and assembly
 
-## Parser and tree
+The compiler still accepts a single braced program, with integer arithmetic,
+variables, assignments, returns, blocks, if/else, for, and while statements.
+It emits x86-64 Linux assembly defining `main`.
 
-The tokenizer recognizes the complete word `while` as a keyword. Names
-such as `whilex` remain identifiers. The new statement rule is:
-
-```text
-stmt = "while" "(" expr ")" stmt
-```
-
-The condition and parentheses are required. The parser reuses the `FOR`
-node introduced in lesson 16, setting `cond` and `then` (the body), and
-leaving `init` and `inc` as `None`. Thus `while(x)` and `for(;x;)`
-generate the same assembly.
-
-Code generation now checks whether `init` exists before generating it.
-A for loop's empty initialization is an empty `BLOCK`; a while loop has
-no initialization node at all. Both correctly emit no initialization code.
-
-## Read the assembly
-
-For `{ while(1) return 3; }`, the loop body is:
+For example, `{ return 42; }` produces:
 
 ```asm
-.L.begin.1:
-  mov $1, %rax
-  cmp $0, %rax
-  je  .L.end.1
-  mov $3, %rax
+  .globl main
+main:
+  push %rbp
+  mov %rsp, %rbp
+  sub $0, %rsp
+  mov $42, %rax
   jmp .L.return
-  jmp .L.begin.1
-.L.end.1:
+.L.return:
+  mov %rbp, %rsp
+  pop %rbp
+  ret
 ```
 
-The begin label marks the condition check. The condition's value goes into
-`%rax`; `cmp` and `je` leave the loop if it is zero. Otherwise the body
-executes, and the backward `jmp` repeats. Here the return jumps directly
-to the function epilogue, so the backward jump is never reached.
-
-A variable condition is reevaluated on every pass, so changes made by the
-body affect the next check. Loops and if statements share a counter that
-gives each control statement distinct labels. The existing stack frame and
-`.L.return` cleanup remain unchanged.
+The prologue saves the caller's frame pointer. With no locals, no additional
+stack space is required. `mov $42, %rax` sets the return value; the jump
+reaches common cleanup, restores the frame, and returns to the C runtime.
 
 ## Run it in WSL
 
@@ -66,47 +47,32 @@ With Python 3 and GCC (`build-essential` on Ubuntu), run from the repository
 root on x86-64 Linux:
 
 ```sh
-python3 python/main.py '{ i=0; while(i<10) i=i+1; return i; }' > /tmp/chibicc-python-lesson17.s
-cat /tmp/chibicc-python-lesson17.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson17 /tmp/chibicc-python-lesson17.s
-/tmp/chibicc-python-lesson17
+python3 python/main.py '{ return 42; }' > /tmp/chibicc-python-lesson18.s
+cat /tmp/chibicc-python-lesson18.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson18 /tmp/chibicc-python-lesson18.s
+/tmp/chibicc-python-lesson18
 echo $?
 ```
 
-The last command prints **10**. The executable prints nothing itself;
-`echo $?` immediately afterward displays its exit status. Quote the source
-to pass it as one shell argument. Use an ordinary interactive shell:
-`set -e` would stop a script on status 10.
+The last command prints **42**. The executable prints nothing itself;
+`echo $?` immediately afterward shows its exit status. Use an ordinary
+interactive shell: `set -e` would stop a script on status 42.
 
-GCC assembles and links the emitted assembly with the C runtime. `-static`
-follows upstream tests; `-Wl,-z,noexecstack` marks the stack non-executable.
-Python parses the source and emits instructions; it does not evaluate the
-loop or wrap the original C compiler.
+## Verification and Python/C differences
 
-## Python/C differences and tests
-
-Python `None` replaces C null pointers for absent initialization and
-increment fields. Lists and dataclasses continue to replace linked lists
-and structs. The compiler creates a fresh label counter per compilation.
-
-Existing limits remain: numeric tokens range from 0 through 2147483647,
-locals are uninitialized before assignment, runtime division by zero is
-unchecked, and deep syntax may reach Python's recursion limit. Python accepts
-Unicode whitespace and reports positions in characters. The outer parser
-still ignores tokens after the closing program brace, matching this stage
-of upstream. Exit statuses keep only eight bits of the returned value.
+The license was compared with the original commit's license, and the example
+was checked for both its assembly and executable exit status. The existing
+test suite remains available:
 
 ```sh
 python3 python/test.py
 ```
 
-Tests retain earlier examples and cover the new upstream loop, zero
-iterations, negative conditions, variable updates, nested for/while loops,
-keyword boundaries, a missing condition, the reused tree fields, and
-identical assembly for equivalent for and while loops. New loop execution
-checks use a timeout and clean up temporary files.
+Python uses lists and dataclasses for C linked lists and structs, and `None`
+for null pointers. It accepts Unicode whitespace and reports character
+positions. Decimal tokens are limited to 0 through 2147483647. These
+differences are unchanged by this documentation commit.
 
 The implementation remains in `python/` on `python-lessons`; original C
 files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT
-licensed. The full notice remains in [LICENSE](LICENSE), and this port uses
-the same license.
+licensed. This port preserves the full notice and uses the same license.

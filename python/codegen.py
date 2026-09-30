@@ -57,6 +57,10 @@ class CodeGenerator:
             self.pop("%rdi")
             self.assembly.append("  mov %rax, (%rdi)")
             return
+        if node.kind == "FUNCALL":
+            self.assembly.append("  mov $0, %rax")
+            self.assembly.append(f"  call {node.funcname}")
+            return
 
         # Save the right result, compute the left, then restore the right.
         self.gen_expr(node.rhs)

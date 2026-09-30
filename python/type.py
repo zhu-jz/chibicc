@@ -30,7 +30,7 @@ def add_type(node):
 
     if node.kind in ("+", "-", "*", "/", "NEG", "ASSIGN"):
         node.ty = node.lhs.ty
-    elif node.kind in ("==", "!=", "<", "<=", "NUM"):
+    elif node.kind in ("==", "!=", "<", "<=", "NUM", "FUNCALL"):
         node.ty = ty_int
     elif node.kind == "VAR":
         node.ty = node.var.ty

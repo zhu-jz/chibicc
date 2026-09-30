@@ -51,6 +51,7 @@ class Node:
     inc: Optional["Node"] = None
     tok: Optional[Token] = field(default=None, compare=False)  # Source metadata.
     ty: Optional[Type] = field(default=None, compare=False)  # Inferred type.
+    funcname: str = ""
 
 
 @dataclass

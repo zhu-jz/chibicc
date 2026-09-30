@@ -1,6 +1,6 @@
-"""Lesson 22: compile declared integer and pointer variables.
+"""Lesson 23: Calls without arguments.
 
-Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
+Based on chibicc commit 30a39926272a8341c52018654ca18d2c86ba662b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -32,6 +32,18 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_zero_argument_calls(self):
+        helpers = "int ret3(void) { return 3; } int ret5(void) { return 5; }"
+        for source, expected in [("{return ret3();}", 3), ("{return ret5();}", 5),
+                                 ("{return ret3()+ret5();}", 8)]:
+            self.assert_program_returns(source, expected, helpers)
+        call = parse_body("return ret3();").body.body[0].lhs
+        self.assertEqual(call.funcname, "ret3")
+        self.assertIs(call.ty, ty_int)
+        assembly = compile_program("{return ret3();}").stdout
+        self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
+        self.assertEqual(compile_program("{return ret3(1);}").returncode, 1)
+
     def test_pointer_arithmetic(self):
         for source, expected in [
             ("{int x=3; int y=5; return *(1+&x);}", 5),
@@ -150,15 +162,20 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected an expression", result.stderr)
 
-    def assert_program_returns(self, source, expected):
+    def assert_program_returns(self, source, expected, helper_c=""):
         result = compile_program(source)
         self.assertEqual(result.returncode, 0, result.stderr)
         with tempfile.TemporaryDirectory() as directory:
             assembly = Path(directory) / "program.s"
             executable = Path(directory) / "program"
             assembly.write_text(result.stdout)
+            inputs = [str(assembly)]
+            if helper_c:
+                helper = Path(directory) / "helper.c"
+                helper.write_text(helper_c)
+                inputs.append(str(helper))
             linked = subprocess.run(
-                ["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
+                ["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), *inputs],
                 capture_output=True, text=True,
             )
             self.assertEqual(linked.returncode, 0, linked.stderr)

@@ -10,7 +10,7 @@ from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
-from type import ty_int, ty_long, ty_short
+from type import ty_int, ty_long, ty_short, ty_void
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -42,6 +42,24 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_void_type(self):
+        for source, expected in [
+            ("int main(){void *p;return sizeof(p);}", 8),
+            ("int main(){int x=42;void *p=&x;int *q=p;return *q;}", 42),
+            ("void f();void f(){}int main(){f();return 42;}", 42),
+            ("int main(){int x;void *p=&x;return (p+1)-p;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertEqual((ty_void.size, ty_void.align), (1, 1))
+        self.assertEqual(parse_body("void *p;").locals[0].ty.base.kind, "VOID")
+        for source, message in [("int main(){void x;}", "variable declared void"),
+                                ("int main(){void *p;return *p;}", "dereferencing a void pointer"),
+                                ("int main(){void *p;sizeof(*p);}", "dereferencing a void pointer")]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(message, result.stderr)
+
     def test_function_declarations(self):
         self.assert_program_returns("int f(int x);int main(){return f(42);}int f(int x){return x;}", 42)
         self.assert_program_returns("int ret42();int main(){return ret42();}", 42,

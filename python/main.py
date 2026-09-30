@@ -1,6 +1,6 @@
-"""Lesson 60: Function declarations.
+"""Lesson 61: Void and void pointers.
 
-Based on chibicc commit 74e3acc296d90d6d16ae70803196e967564fb16a.
+Based on chibicc commit 8c3503bb94bd6b2d57e1f979d9fc1d84383b2961.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

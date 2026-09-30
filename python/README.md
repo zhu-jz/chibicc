@@ -1,44 +1,44 @@
-# Lesson 60: Function declarations
+# Lesson 61: Void and void pointers
 
-Original chibicc commit: [`74e3acc296d90d6d16ae70803196e967564fb16a`](https://github.com/rui314/chibicc/commit/74e3acc296d90d6d16ae70803196e967564fb16a).
+Original chibicc commit: [`8c3503bb94bd6b2d57e1f979d9fc1d84383b2961`](https://github.com/rui314/chibicc/commit/8c3503bb94bd6b2d57e1f979d9fc1d84383b2961).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A top-level function declarator may now end with `;`, producing a declaration
-without a body: `int f(int x);`. Obj records is_function and is_definition
-separately. Declarations keep their function type and name in global scope
-but allocate no parameter/local objects. A following `{...}` marks a definition,
-and codegen emits a function only for definitions.
+Void is a type, and `void *` declares a pointer whose pointed-to type is void.
+The pointer itself still occupies eight bytes. A local variable declared
+directly as void is rejected at the token after its declarator. Dereferencing
+a void pointer is rejected during type annotation, including inside sizeof;
+without an object type there is no value to load.
 
-A declaration can precede a definition, or describe a function provided by a
-linked helper or library. Upstream's test header now declares `int printf();`.
-The compiler may retain separate objects for a declaration and a definition,
-but only one body contributes instructions. Python uses the same Obj dataclass
-with an added boolean, following upstream's unified object model.
+Upstream assigns void size/alignment 1 here. This is an implementation choice
+that also makes void-pointer arithmetic byte-wise, a GNU extension. A void
+return type and an empty function body can be declared, but `f(void)`, bare
+`return;`, signature checking, and full global/return validation are not added
+by this commit. Calls still receive the intermediate long type.
 
-This stage still requires parameter names when parameters are written, so
-`int f(int x);` is accepted but `int f(int);` is not. Calls still default to
-long type and do not yet enforce signatures; declarations do not implement
-full prototype compatibility, indirect calls or aggregate calling rules.
+Python adds a Type singleton and explicit CompileError checks, matching the
+valid behavior and diagnostics of this original step. Conversion between an
+object pointer and void pointer uses the same address bits; no runtime Python
+conversion or extra target instruction is involved.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int x);int main(){return f(42);}int f(int x){return x;}\n' > /tmp/lesson60.c
-python3 python/main.py -o /tmp/lesson60.s /tmp/lesson60.c
-cat /tmp/lesson60.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson60 /tmp/lesson60.s
-/tmp/lesson60
+printf 'int main(){int x=42;void *p=&x;int *q=p;return *q;}\n' > /tmp/lesson61.c
+python3 python/main.py -o /tmp/lesson61.s /tmp/lesson61.c
+cat /tmp/lesson61.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson61 /tmp/lesson61.s
+/tmp/lesson61
 echo $?
 ```
 
-The declaration emits no label or storage. main supplies 42 in `%rdi` and
-calls f; f saves `%edi` into its four-byte parameter slot, reloads it with
-sign extension, and returns. The shell reports status 42. Tests check a
-forward declaration/definition, an external GCC-built helper, the definition
-flag and empty declaration storage, exactly one emitted body, the named
-parameter limit, and the C fixture suite with its updated header.
+The pointer assignments store/load eight-byte addresses. Dereferencing q,
+which points to int, uses the four-byte sign-extending load. The result is 42;
+the shell displays its status and the executable prints nothing. Tests cover
+pointer size, passing an address through void pointers, an unused void call,
+the one-byte arithmetic extension, and forbidden void locals/dereferences.
+The updated upstream variable fixture and complete C fixture suite also run.
 
 ## Tests and attribution
 

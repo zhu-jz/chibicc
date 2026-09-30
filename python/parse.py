@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_short, ty_int, ty_long
+from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -305,6 +305,8 @@ class Parser:
 
     # declspec = "char" | "int" | "struct" struct-decl
     def declspec(self, position):
+        if self.tokens[position].text == "void":
+            return ty_void, position + 1
         if self.tokens[position].text == "char":
             return ty_char, position + 1
         if self.tokens[position].text == "short":
@@ -436,6 +438,8 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
+            if ty.kind == "VOID":
+                raise CompileError(self.tokens[position], "variable declared void")
             var = self.new_lvar(ty.name.text, ty)
             if self.tokens[position].text != "=":
                 continue
@@ -452,7 +456,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.tokens[position].text in ("char", "short", "int", "long", "struct", "union"):
+            if self.tokens[position].text in ("void", "char", "short", "int", "long", "struct", "union"):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

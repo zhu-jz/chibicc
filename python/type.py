@@ -9,6 +9,7 @@ from dataclasses import replace
 from common import CompileError, Type
 
 
+ty_void = Type("VOID", size=1, align=1)
 ty_char = Type("CHAR", size=1, align=1)
 ty_short = Type("SHORT", size=2, align=2)
 ty_int = Type("INT", size=4, align=4)
@@ -69,6 +70,8 @@ def add_type(node):
     elif node.kind == "DEREF":
         if node.lhs.ty.base is None:
             raise CompileError(node.tok, "invalid pointer dereference")
+        if node.lhs.ty.base.kind == "VOID":
+            raise CompileError(node.tok, "dereferencing a void pointer")
         node.ty = node.lhs.ty.base
     elif node.kind == "STMT_EXPR":
         if node.body and node.body[-1].kind == "EXPR_STMT":

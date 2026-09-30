@@ -11,6 +11,11 @@ from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarSco
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
 
 
+def new_cast(expression, ty):
+    add_type(expression)
+    return Node("CAST", lhs=expression, ty=copy_type(ty), tok=expression.tok)
+
+
 def new_add(lhs, rhs, token):
     add_type(lhs)
     add_type(rhs)
@@ -155,30 +160,43 @@ class Parser:
                 node = new_sub(node, rhs, token)
         return node, position
 
-    # mul = unary (("*" | "/") unary)*
+    # mul = cast (("*" | "/") cast)*
     def mul(self, position):
-        node, position = self.unary(position)
+        node, position = self.cast(position)
         while self.tokens[position].text in ("*", "/"):
             token = self.tokens[position]
             operator = self.tokens[position].text
-            rhs, position = self.unary(position + 1)
+            rhs, position = self.cast(position + 1)
             node = Node(operator, node, rhs, tok=token)
         return node, position
 
-    # unary = ("+" | "-" | "*" | "&") unary | postfix
+    # cast = "(" type-name ")" cast | unary
+    def cast(self, position):
+        token = self.tokens[position]
+        if token.text == "(" and self.is_typename(position + 1):
+            ty, position = self.typename(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            operand, position = self.cast(position + 1)
+            node = new_cast(operand, ty)
+            node.tok = token
+            return node, position
+        return self.unary(position)
+
+    # unary = ("+" | "-" | "*" | "&") cast | postfix
     def unary(self, position):
         token = self.tokens[position]
         operator = self.tokens[position].text
         if operator == "+":
-            return self.unary(position + 1)
+            return self.cast(position + 1)
         if operator == "-":
-            operand, position = self.unary(position + 1)
+            operand, position = self.cast(position + 1)
             return Node("NEG", lhs=operand, tok=token), position
         if operator == "&":
-            operand, position = self.unary(position + 1)
+            operand, position = self.cast(position + 1)
             return Node("ADDR", lhs=operand, tok=token), position
         if operator == "*":
-            operand, position = self.unary(position + 1)
+            operand, position = self.cast(position + 1)
             return Node("DEREF", lhs=operand, tok=token), position
         return self.postfix(position)
 

@@ -14,6 +14,14 @@ ARGREG16 = ("%di", "%si", "%dx", "%cx", "%r8w", "%r9w")
 ARGREG32 = ("%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d")
 
 
+CAST_TABLE = (
+    (None, None, None, "movsxd %eax, %rax"),
+    ("movsbl %al, %eax", None, None, "movsxd %eax, %rax"),
+    ("movsbl %al, %eax", "movswl %ax, %eax", None, "movsxd %eax, %rax"),
+    ("movsbl %al, %eax", "movswl %ax, %eax", None, None),
+)
+
+
 class CodeGenerator:
     def __init__(self):
         self.assembly = []
@@ -77,6 +85,16 @@ class CodeGenerator:
         else:
             self.assembly.append("  mov %rax, (%rdi)")
 
+    def cast(self, from_ty, to_ty):
+        if to_ty.kind == "VOID":
+            return
+        type_ids = {"CHAR": 0, "SHORT": 1, "INT": 2}
+        source = type_ids.get(from_ty.kind, 3)
+        target = type_ids.get(to_ty.kind, 3)
+        instruction = CAST_TABLE[source][target]
+        if instruction is not None:
+            self.assembly.append("  " + instruction)
+
     def gen_expr(self, node):
         if node.tok is not None:
             self.assembly.append(f"  .loc 1 {node.tok.line_no}")
@@ -122,6 +140,10 @@ class CodeGenerator:
         if node.kind == "COMMA":
             self.gen_expr(node.lhs)
             self.gen_expr(node.rhs)
+            return
+        if node.kind == "CAST":
+            self.gen_expr(node.lhs)
+            self.cast(node.lhs.ty, node.ty)
             return
 
         # Save the right result, compute the left, then restore the right.

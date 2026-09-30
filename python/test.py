@@ -42,6 +42,27 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_explicit_casts(self):
+        for source, expected in [
+            ("int main(){return (long)(short)65535<0;}", 1),
+            ("int main(){return (long)(char)255<0;}", 1),
+            ("int main(){int x=-1;return (long)x<0;}", 1),
+            ("int main(){int x=0;(void)(x=7);return x;}", 7),
+            ("typedef int T;int main(){return (T)42;}", 42),
+            ("typedef int T;int main(){long T=3;return (T)+1;}", 4),
+            ("int main(){int a[2];a[0]=42;int i=-1;int *p=a+1;return *(p+(long)i);}", 42),
+            ("int main(){return sizeof((short)1);}", 2),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){return (long)(short)(char)255;}").stdout
+        self.assertIn("  movsbl %al, %eax\n", assembly)
+        self.assertIn("  movsxd %eax, %rax\n", assembly)
+        node = parse_body("return (short)1;").body.body[0].lhs
+        self.assertEqual((node.kind, node.ty.kind, node.lhs.ty.kind, node.tok.text),
+                         ("CAST", "SHORT", "LONG", "("))
+        for source in ["int main(){return (int 1;}", "int main(){return (int);}"]:
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_binary_register_widths(self):
         for spelling in ["int", "long"]:
             source = "int main(){" + spelling + " x=7,y=3;return (x+y)*(x-y)/y;}"

@@ -1,6 +1,6 @@
-"""Lesson 66: Binary register widths.
+"""Lesson 67: Explicit type casts.
 
-Based on chibicc commit cb81a379d9f7aef32fb1bbebd18f8618e1617a3f.
+Based on chibicc commit cfc4fa94c1eb17f37466571f74bbdfae03a6e11f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

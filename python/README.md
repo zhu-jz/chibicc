@@ -1,45 +1,47 @@
-# Lesson 66: Binary register widths
+# Lesson 67: Explicit type casts
 
-Original chibicc commit: [`cb81a379d9f7aef32fb1bbebd18f8618e1617a3f`](https://github.com/rui314/chibicc/commit/cb81a379d9f7aef32fb1bbebd18f8618e1617a3f).
+Original chibicc commit: [`cfc4fa94c1eb17f37466571f74bbdfae03a6e11f`](https://github.com/rui314/chibicc/commit/cfc4fa94c1eb17f37466571f74bbdfae03a6e11f).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Binary addition, subtraction, multiplication and comparison now select register
-width from the left operand's type. Long and pointer/array operands use
-`%rax`/`%rdi`; char, short and int use `%eax`/`%edi`. Signed division uses
-`cqo` and a sixty-four-bit divisor for an eight-byte left operand, otherwise
-`cdq` and a thirty-two-bit divisor. Stack temporaries remain eight bytes.
+Cast expressions use `(` type-name `)` followed by another cast or unary
+expression. Scope-aware type-name recognition distinguishes `(T)x` from a
+parenthesized variable. Multiplication and unary operators now call this cast
+parser, preserving precedence. A CAST node records its already-annotated
+operand and a copied destination type; explicit casts keep the opening
+parenthesis as their source token.
 
-A write to eax clears the high half of rax, while signed comparisons interpret
-the low thirty-two bits with the chosen width. This matches the original
-commit's intermediate lowering; mixed-type conversions are not complete yet.
-In particular, current literals and calls are long, and negative computed int
-values are not always extended before wider use. Negative variable pointer
-indices are another limitation until conversion rules are added.
+Codegen evaluates the operand and follows upstream's conversion table.
+Narrowing to char/short uses `movsbl %al, %eax` or `movswl %ax, %eax`.
+Widening small integers to long uses `movsxd %eax, %rax`. Casts between
+pointer/long representations emit no conversion instruction. A void cast
+still evaluates side effects, then performs no conversion.
 
-Python emits the same width choices as C. The multiplication overflow test
-checks this machine's low-bit result; signed overflow is not a portable C
-guarantee. The code generator expects type-annotated binary operands, so its
-hand-built invalid-node test now supplies the operand types explicitly.
+The table has intermediate no-op cases, including long-to-int. A following
+thirty-two-bit use observes the low bits; not every wider context has the
+implicit conversion it needs yet. Full cast legality and automatic arithmetic,
+assignment and call conversions are not added by this original commit.
+Python emits the same table instead of evaluating casts at compile time.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=7,y=3;return (x+y)*(x-y)/y;}\n' > /tmp/lesson66.c
-python3 python/main.py -o /tmp/lesson66.s /tmp/lesson66.c
-cat /tmp/lesson66.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson66 /tmp/lesson66.s
-/tmp/lesson66
+printf 'int main(){return (long)(short)65535<0;}\n' > /tmp/lesson67.c
+python3 python/main.py -o /tmp/lesson67.s /tmp/lesson67.c
+cat /tmp/lesson67.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson67 /tmp/lesson67.s
+/tmp/lesson67
 echo $?
 ```
 
-`add %edi, %eax`, `sub %edi, %eax`, and `imul %edi, %eax` compute
-10 times 4. `cdq` prepares edx:eax for `idiv %edi`, yielding 13. The shell
-shows status 13. Replacing int with long selects rax/rdi and cqo instead.
-Tests check those exact operations, signed divisions and comparisons for all
-integer widths, low-bit multiplication, pointer arithmetic, and the complete
-upstream C fixtures. Existing pure-literal arithmetic remains sixty-four bit.
+`movswl %ax, %eax` selects and sign-extends the low word (-1), and
+`movsxd %eax, %rax` extends it to long. A signed comparison produces 1,
+which the shell displays as the exit status. Tests cover upstream's narrowing,
+address/integer and pointer casts, nested sign extensions, typedef ambiguity,
+void side effects, sizeof casts and malformed syntax. Casting a negative int
+index to long also verifies a real backwards pointer access. The new cast
+fixture runs with all upstream C fixtures.
 
 ## Tests and attribution
 

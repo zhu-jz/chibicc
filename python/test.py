@@ -58,6 +58,23 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_argument_conversions(self):
+        for source, expected in [
+            ("int f(long a,long b){return a/b;}int main(){return f(-10,2)==-5;}", 1),
+            ("int f(char x){return x;}int main(){return f(261);}", 5),
+            ("int f(short x){return x<0;}int main(){return f(65535);}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        call = parse(tokenize("int f(long x);int main(){return f(-1);}"))[0].body.body[0].lhs.lhs
+        self.assertEqual(call.func_ty.kind, "FUNC")
+        self.assertEqual((call.args[0].kind, call.args[0].ty.kind), ("CAST", "LONG"))
+        assembly = compile_program("int f(long x);int main(){return f(-1);}").stdout
+        self.assertIn("  movsxd %eax, %rax\n", assembly)
+        for kind in ("struct", "union"):
+            result = compile_program(f"{kind} T{{int x;}};int f({kind} T x);int main(){{{kind} T a;return f(a);}}")
+            self.assertIn("passing struct or union is not supported yet", result.stderr)
+            self.assertEqual(result.returncode, 1)
+
     def test_return_conversions(self):
         for source, expected in [
             ("char f(int x){return x;}int main(){return f(261);}", 5),

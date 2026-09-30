@@ -234,7 +234,7 @@ class Parser:
             raise CompileError(token, "implicit declaration of a function")
         if binding.var is None or binding.var.ty.kind != "FUNC":
             raise CompileError(token, "not a function")
-        return_ty = binding.var.ty.return_ty
+        function_ty = binding.var.ty
         position += 2
         args = []
         while self.tokens[position].text != ")":
@@ -243,11 +243,15 @@ class Parser:
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
             arg, position = self.assign(position)
-            args.append(arg)
-        for arg in args:
             add_type(arg)
+            if len(args) < len(function_ty.params):
+                param_ty = function_ty.params[len(args)]
+                if param_ty.kind in ("STRUCT", "UNION"):
+                    raise CompileError(arg.tok, "passing struct or union is not supported yet")
+                arg = new_cast(arg, param_ty)
+            args.append(arg)
         return Node("FUNCALL", funcname=token.text, args=args, tok=token,
-                    ty=return_ty), position + 1
+                    ty=function_ty.return_ty, func_ty=function_ty), position + 1
 
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):

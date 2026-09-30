@@ -1,35 +1,33 @@
-# Lesson 70: Return type conversions
+# Lesson 71: Function argument conversions
 
-Original chibicc commit: [`818352acc07d0a982076b4b49345b42be706f5e1`](https://github.com/rui314/chibicc/commit/818352acc07d0a982076b4b49345b42be706f5e1).
+Original chibicc commit: [`fdc80bc6b5faa058b88d838332c71b7101712896`](https://github.com/rui314/chibicc/commit/fdc80bc6b5faa058b88d838332c71b7101712896).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The parser keeps the current function object while reading its body. Each return
-expression is annotated and wrapped in a cast to that function's return type.
-This makes narrow integer returns truncate/sign-extend correctly and preserves
-pointer result types. The same cast builder serves explicit, arithmetic,
-assignment, and now return conversions. Bare `return;` remains unsupported.
+Call nodes now retain the whole declared function type. Arguments corresponding
+to named parameters are wrapped in casts to those parameter types. This widens
+negative ints to signed longs before passing them in 64-bit registers, and
+converts narrow integer arguments. Struct/union parameters explicitly report
+that passing aggregates is unsupported. Arguments beyond the declared list
+remain unconverted, and arity checking is still incomplete, as in this commit.
 
-Python stores current_fn on the parser instance rather than in a C global.
-Existing grammar checks inspect through the new return wrapper; dedicated tests
-check the wrapper itself. The original's conversion table still implements a
-long-to-int conversion without an extra instruction at this stage.
+Python uses list indices to walk the parameter types alongside arguments; C
+walks linked lists. Runtime and tree tests check conversions and function metadata.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'char f(int x){return x;}int main(){return f(261);}\n' > /tmp/lesson70.c
-python3 python/main.py /tmp/lesson70.c > /tmp/lesson70.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson70 /tmp/lesson70.s
-/tmp/lesson70
+printf 'int f(long a,long b){return a/b;}int main(){return f(-10,2)==-5;}\n' > /tmp/lesson71.c
+python3 python/main.py /tmp/lesson71.c > /tmp/lesson71.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson71 /tmp/lesson71.s
+/tmp/lesson71
 echo $?
 ```
 
-Before f returns, `movsbl %al, %eax` keeps the low byte of 261 (5) and interprets
-it as a signed char. Main returns 5; `echo $?` displays it. Tests cover narrow
-signed returns, long widening, pointer returns, typed return CAST nodes, and the
-updated original function tests.
+`movsxd %eax, %rax` sign-extends an int argument before it reaches rdi/rsi.
+Inside f, `cqo` and `idiv %rdi` perform signed 64-bit division. Main's comparison
+returns 1. The compiler emits these instructions; GCC assembles and links them.
 
 ## Tests and attribution
 

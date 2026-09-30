@@ -1,6 +1,6 @@
-"""Lesson 70: Return type conversions.
+"""Lesson 71: Function argument conversions.
 
-Based on chibicc commit 818352acc07d0a982076b4b49345b42be706f5e1.
+Based on chibicc commit fdc80bc6b5faa058b88d838332c71b7101712896.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,47 +1,35 @@
-# Lesson 68: Implicit arithmetic conversions
+# Lesson 69: Declared function calls
 
-Original chibicc commit: [`8b430a6c5fd6d33a637f2c615f8e5ec59e7be30e`](https://github.com/rui314/chibicc/commit/8b430a6c5fd6d33a637f2c615f8e5ec59e7be30e).
+Original chibicc commit: [`9e211cbf1d459babf035fd6b3407c2bd184cb639`](https://github.com/rui314/chibicc/commit/9e211cbf1d459babf035fd6b3407c2bd184cb639).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Type annotation now inserts CAST nodes. Char and short arithmetic promotes
-to int; an eight-byte operand selects long; a pointer left operand selects a
-pointer to its base. Both binary operands convert to that common type.
-Comparisons return int. Unary minus also promotes its operand, and assignment
-converts its right operand to the left type (struct copying remains separate).
+A call now looks up its identifier in the current scopes. Missing declarations
+produce `implicit declaration of a function`; a variable or typedef used as a
+callee produces `not a function`. Definitions declare their own names before
+parsing their bodies, so recursion works. Forward and externally linked calls
+need prototypes. Call nodes retain the declared return type, and arguments are
+annotated before attaching them to a typed call node.
 
-A numeric node now selects int if its value fits signed thirty-two bits,
-otherwise long. Pointer scaling constants are explicitly long so multiplying
-a negative int index first sign-extends it to the address width. Char/short
-loads extend to eax, and a later cast to long extends eax to rax as needed.
-Functions still default to long call results; full call and return conversion
-rules remain incomplete at this original stage.
-
-Python keeps the cast-building helper in type.py to avoid an import cycle
-between the parser and type annotator; C exports it from parse.c through its
-header. Grammar tests ignore only implicit wrappers (which share the operand's
-source token). New conversion tests inspect actual wrappers and their types,
-while explicit casts stay visible in grammar comparisons.
+The original diagnostic formatter no longer exits internally. Python already
+raises CompileError and formats it at the command-line boundary, so no matching
+change is needed. Parameter conversions remain incomplete at this stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){char x=-1;long y=x;return y<0;}\n' > /tmp/lesson68.c
-python3 python/main.py -o /tmp/lesson68.s /tmp/lesson68.c
-cat /tmp/lesson68.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson68 /tmp/lesson68.s
-/tmp/lesson68
+printf 'int f();int main(){return f();}int f(){return 42;}\n' > /tmp/lesson69.c
+python3 python/main.py /tmp/lesson69.c > /tmp/lesson69.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson69 /tmp/lesson69.s
+/tmp/lesson69
 echo $?
 ```
 
-`movsbl (%rax), %eax` loads x's signed byte; `movsxd %eax, %rax` widens it
-before storing into the long y. The signed comparison returns 1, displayed by
-the shell. Small-literal arithmetic now uses eax/edi and can wrap at thirty-two
-bits; overflow tests describe emitted machine behavior, not portable C rules.
-Tests cover mixed signed arithmetic, promotions and sizeof, assignment casts,
-negative variable indices, wrapper metadata, and all updated upstream fixtures.
-The full Python suite is run to check instruction and runtime progression.
+`call f` pushes a return address and transfers control to f. Its return value
+comes back in eax/rax and main returns it; the shell displays 42. Declaring f
+emits no function body. Tests check prototypes, recursion, return-type metadata,
+undeclared/shadowed callees, assembly, and all upstream programs.
 
 ## Tests and attribution
 

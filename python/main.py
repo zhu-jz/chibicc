@@ -1,6 +1,6 @@
-"""Lesson 68: Implicit arithmetic conversions.
+"""Lesson 69: Declared function calls.
 
-Based on chibicc commit 8b430a6c5fd6d33a637f2c615f8e5ec59e7be30e.
+Based on chibicc commit 9e211cbf1d459babf035fd6b3407c2bd184cb639.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

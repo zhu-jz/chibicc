@@ -58,6 +58,22 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_declared_calls(self):
+        self.assert_program_returns("int f();int main(){return f();}int f(){return 42;}", 42)
+        call = parse(tokenize("char f();int main(){return f();}"))[0].body.body[0].lhs
+        self.assertEqual(call.ty.kind, "CHAR")
+        self.assert_program_returns("int f(int x){if(x==0)return 42;return f(x-1);}int main(){return f(3);}", 42)
+        for source, message in [
+            ("int main(){return missing();}", "implicit declaration of a function"),
+            ("int main(){int f;return f();}", "not a function"),
+            ("typedef int f;int main(){return f();}", "not a function"),
+            ("int f();int main(){int f;return f();}", "not a function"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+            self.assertEqual(result.stdout, "")
+
     def test_usual_arithmetic_conversions(self):
         for source, expected in [
             ("int main(){int x=-10;long y=5;return (x+y)==-5;}", 1),
@@ -270,7 +286,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("long f(long x){return x+1;}int main(){return f(4294967296)/65536/65536;}", 1),
             ("int main(){long a[2];a[0]=3;a[1]=4;return *(a+1);}", 4),
             ("int main(){struct {char a;long b;} x;return sizeof(x);}", 16),
-            ("int main(){return sizeof(1)+sizeof(1==2)+sizeof(missing());}", 16),
+            ("long missing();int main(){return sizeof(1)+sizeof(1==2)+sizeof(missing());}", 16),
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("long f(long a){return a;}int main(){long x=4294967296;return f(x)/65536/65536;}").stdout
@@ -297,7 +313,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int f(char c,int x,int *p,int y,char d,int z){return c+x+*p+y+d+z;}int main(){int v=7;return f(1,2,&v,3,4,5);}", 22),
         ]:
             self.assert_program_returns(source, expected)
-        self.assert_program_returns("int main(){int a[2];a[0]=3;a[1]=4;return sum(a);}", 7,
+        self.assert_program_returns("int sum(int *a);int main(){int a[2];a[0]=3;a[1]=4;return sum(a);}", 7,
                                     "int sum(int *a){return a[0]+a[1];}")
         assembly = compile_program("int main(){int x=42;return x;}").stdout
         self.assertIn("  mov %eax, (%rdi)\n", assembly)
@@ -673,7 +689,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){char x=1;char y=2;return y;}",2),
             ("int main(){char x;return sizeof(x);}",1),
             ("int main(){char x[10];return sizeof(x);}",10),
-            ("int main(){return sub_char(7,3,3);} int sub_char(char a,char b,char c){return a-b-c;}",1),
+            ("int sub_char(char a,char b,char c);int main(){return sub_char(7,3,3);} int sub_char(char a,char b,char c){return a-b-c;}",1),
             ("int main(){char x=255;return x<0;}",1),
             ("int main(){char x=1;int y=513;x=257;return y==513;}",1),
             ("int main(){char a[3];a[1]=7;return a[1];}",7),
@@ -730,8 +746,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int x=1; sizeof(x=2); return x;",1),
             ("return sizeof missing();",8),
         ]:
-            self.assert_program_returns("int main(){"+body+"}", expected)
-        assembly = compile_program("int main(){return sizeof missing();}").stdout
+            self.assert_program_returns("long missing();int main(){"+body+"}", expected)
+        assembly = compile_program("long missing();int main(){return sizeof missing();}").stdout
         self.assertNotIn("call", assembly)
         self.assertEqual(compile_program("int main(){return sizeof *1;}").returncode, 1)
         self.assertEqual(tokenize("sizeof sizeofx")[1].kind, "IDENT")
@@ -780,9 +796,9 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_function_parameters(self):
         for source, expected in [
-            ("int main(){return add2(3,4);} int add2(int x,int y){return x+y;}", 7),
-            ("int main(){return sub2(4,3);} int sub2(int x,int y){return x-y;}", 1),
-            ("int main(){return fib(9);} int fib(int x){if(x<=1)return 1; return fib(x-1)+fib(x-2);}", 55),
+            ("int add2(int x,int y);int main(){return add2(3,4);} int add2(int x,int y){return x+y;}", 7),
+            ("int sub2(int x,int y);int main(){return sub2(4,3);} int sub2(int x,int y){return x-y;}", 1),
+            ("int fib(int x);int main(){return fib(9);} int fib(int x){if(x<=1)return 1; return fib(x-1)+fib(x-2);}", 55),
             ("int f(int a,int b,int c,int d,int e,int f){return a+2*b+3*c+4*d+5*e+6*f;} int main(){return f(1,2,3,4,5,6);}", 91),
             ("int set(int *p){*p=9; return *p;} int main(){int x=1; return set(&x);}", 9),
         ]:
@@ -793,7 +809,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = CodeGenerator().generate([function])
         self.assertIn("  mov %edi, -8(%rbp)\n  mov %esi, -12(%rbp)\n", assembly)
         self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 1)
-        result = compile_program("int main(){return f(*3);}")
+        result = compile_program("int f();int main(){return f(*3);}")
         self.assertIn("invalid pointer dereference", result.stderr)
 
     def test_argument_calls(self):
@@ -801,6 +817,7 @@ class ExpressionCompilerTests(unittest.TestCase):
 int add(int x,int y) {return x+y;} int sub(int x,int y) {return x-y;}
 int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 """
+        declarations = "int add();int sub();int add6();"
         for source, expected in [
             ('int main(){return add(3,5);}', 8), ('int main(){return sub(5,3);}', 2),
             ('int main(){return add6(1,2,3,4,5,6);}', 21),
@@ -808,27 +825,28 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16);}', 136),
             ('int main(){int x=0; return sub(x=5,x=3);}', 2),
         ]:
-            self.assert_program_returns(source, expected, helpers)
-        assembly = compile_program('int main(){return add6(1,2,3,4,5,6);}').stdout
+            self.assert_program_returns(declarations + source, expected, helpers)
+        assembly = compile_program(declarations + 'int main(){return add6(1,2,3,4,5,6);}').stdout
         self.assertIn("  pop %r9\n  pop %r8\n  pop %rcx\n  pop %rdx\n"
                       "  pop %rsi\n  pop %rdi\n", assembly)
-        result = compile_program('int main(){return f(1,2,3,4,5,6,7);}')
+        result = compile_program('int f();int main(){return f(1,2,3,4,5,6,7);}')
         self.assertEqual(result.returncode, 1)
         self.assertIn("at most 6 arguments", result.stderr)
-        for source in ['int main(){return f(1 2);}', 'int main(){return f(1,);}']:
+        for source in ['int f();int main(){return f(1 2);}', 'int f();int main(){return f(1,);}']:
             self.assertEqual(compile_program(source).returncode, 1)
 
     def test_zero_argument_calls(self):
+        declarations = "int ret3();int ret5();"
         helpers = "int ret3(void) { return 3; } int ret5(void) { return 5; }"
         for source, expected in [('int main(){return ret3();}', 3), ('int main(){return ret5();}', 5),
                                  ('int main(){return ret3()+ret5();}', 8)]:
-            self.assert_program_returns(source, expected, helpers)
-        call = parse_body("return ret3();").body.body[0].lhs
+            self.assert_program_returns(declarations + source, expected, helpers)
+        call = parse(tokenize("int ret3();int main(){return ret3();}"))[0].body.body[0].lhs
         self.assertEqual(call.funcname, "ret3")
-        self.assertIs(call.ty, ty_long)
-        assembly = compile_program('int main(){return ret3();}').stdout
+        self.assertEqual(call.ty.kind, "INT")
+        assembly = compile_program(declarations + 'int main(){return ret3();}').stdout
         self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
-        self.assertEqual(compile_program('int main(){return ret3(,);}').returncode, 1)
+        self.assertEqual(compile_program(declarations + 'int main(){return ret3(,);}').returncode, 1)
 
     def test_pointer_arithmetic(self):
         for source, expected in [
@@ -1042,7 +1060,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                          "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return.main\n" + EPILOGUE)
 
     def test_function_definitions(self):
-        source = "int main(){return ret32();} int ret32(){return 32;}"
+        source = "int ret32();int main(){return ret32();} int ret32(){return 32;}"
         self.assert_program_returns(source, 32)
         self.assert_program_returns("int f(){int x=4; return x;} int main(){int x=3; return f()+x;}", 7)
         assembly = compile_program(source).stdout

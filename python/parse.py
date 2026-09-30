@@ -228,6 +228,12 @@ class Parser:
     # funcall = identifier "(" (assign ("," assign)*)? ")"
     def funcall(self, position):
         token = self.tokens[position]
+        binding = self.find_var(token.text)
+        if binding is None:
+            raise CompileError(token, "implicit declaration of a function")
+        if binding.var is None or binding.var.ty.kind != "FUNC":
+            raise CompileError(token, "not a function")
+        return_ty = binding.var.ty.return_ty
         position += 2
         args = []
         while self.tokens[position].text != ")":
@@ -237,7 +243,10 @@ class Parser:
                 position += 1
             arg, position = self.assign(position)
             args.append(arg)
-        return Node("FUNCALL", funcname=token.text, args=args, tok=token), position + 1
+        for arg in args:
+            add_type(arg)
+        return Node("FUNCALL", funcname=token.text, args=args, tok=token,
+                    ty=return_ty), position + 1
 
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):

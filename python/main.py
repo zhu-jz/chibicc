@@ -1,6 +1,6 @@
-"""Lesson 69: Declared function calls.
+"""Lesson 70: Return type conversions.
 
-Based on chibicc commit 9e211cbf1d459babf035fd6b3407c2bd184cb639.
+Based on chibicc commit 818352acc07d0a982076b4b49345b42be706f5e1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

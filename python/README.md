@@ -1,35 +1,35 @@
-# Lesson 69: Declared function calls
+# Lesson 70: Return type conversions
 
-Original chibicc commit: [`9e211cbf1d459babf035fd6b3407c2bd184cb639`](https://github.com/rui314/chibicc/commit/9e211cbf1d459babf035fd6b3407c2bd184cb639).
+Original chibicc commit: [`818352acc07d0a982076b4b49345b42be706f5e1`](https://github.com/rui314/chibicc/commit/818352acc07d0a982076b4b49345b42be706f5e1).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A call now looks up its identifier in the current scopes. Missing declarations
-produce `implicit declaration of a function`; a variable or typedef used as a
-callee produces `not a function`. Definitions declare their own names before
-parsing their bodies, so recursion works. Forward and externally linked calls
-need prototypes. Call nodes retain the declared return type, and arguments are
-annotated before attaching them to a typed call node.
+The parser keeps the current function object while reading its body. Each return
+expression is annotated and wrapped in a cast to that function's return type.
+This makes narrow integer returns truncate/sign-extend correctly and preserves
+pointer result types. The same cast builder serves explicit, arithmetic,
+assignment, and now return conversions. Bare `return;` remains unsupported.
 
-The original diagnostic formatter no longer exits internally. Python already
-raises CompileError and formats it at the command-line boundary, so no matching
-change is needed. Parameter conversions remain incomplete at this stage.
+Python stores current_fn on the parser instance rather than in a C global.
+Existing grammar checks inspect through the new return wrapper; dedicated tests
+check the wrapper itself. The original's conversion table still implements a
+long-to-int conversion without an extra instruction at this stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f();int main(){return f();}int f(){return 42;}\n' > /tmp/lesson69.c
-python3 python/main.py /tmp/lesson69.c > /tmp/lesson69.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson69 /tmp/lesson69.s
-/tmp/lesson69
+printf 'char f(int x){return x;}int main(){return f(261);}\n' > /tmp/lesson70.c
+python3 python/main.py /tmp/lesson70.c > /tmp/lesson70.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson70 /tmp/lesson70.s
+/tmp/lesson70
 echo $?
 ```
 
-`call f` pushes a return address and transfers control to f. Its return value
-comes back in eax/rax and main returns it; the shell displays 42. Declaring f
-emits no function body. Tests check prototypes, recursion, return-type metadata,
-undeclared/shadowed callees, assembly, and all upstream programs.
+Before f returns, `movsbl %al, %eax` keeps the low byte of 261 (5) and interprets
+it as a signed char. Main returns 5; `echo $?` displays it. Tests cover narrow
+signed returns, long widening, pointer returns, typed return CAST nodes, and the
+updated original function tests.
 
 ## Tests and attribution
 

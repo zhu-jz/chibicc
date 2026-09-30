@@ -58,9 +58,22 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_return_conversions(self):
+        for source, expected in [
+            ("char f(int x){return x;}int main(){return f(261);}", 5),
+            ("short f(){return 65535;}int main(){return f()<0;}", 1),
+            ("long f(){return -1;}int main(){return f()<0;}", 1),
+            ("int x;int *f(){return &x;}int main(){x=42;return *f();}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = parse(tokenize("char f(){return 261;}"))[0].body.body[0].lhs
+        self.assertEqual((node.kind, node.ty.kind, node.lhs.kind), ("CAST", "CHAR", "NUM"))
+        assembly = compile_program("char f(){return 261;}").stdout
+        self.assertIn("  movsbl %al, %eax\n  jmp .L.return.f", assembly)
+
     def test_declared_calls(self):
         self.assert_program_returns("int f();int main(){return f();}int f(){return 42;}", 42)
-        call = parse(tokenize("char f();int main(){return f();}"))[0].body.body[0].lhs
+        call = parse(tokenize("char f();int main(){return f();}"))[0].body.body[0].lhs.lhs
         self.assertEqual(call.ty.kind, "CHAR")
         self.assert_program_returns("int f(int x){if(x==0)return 42;return f(x-1);}int main(){return f(3);}", 42)
         for source, message in [
@@ -85,14 +98,14 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){return 1073741824*100/100;}", 0),
         ]:
             self.assert_program_returns(source, expected)
-        node = parse_body("int x;long y;return x+y;").body.body[-1].lhs
+        node = parse_body("int x;long y;return x+y;").body.body[-1].lhs.lhs
         self.assertEqual((node.ty.kind, node.lhs.kind, node.rhs.kind), ("LONG", "CAST", "CAST"))
         self.assertEqual((node.lhs.lhs.ty.kind, node.lhs.ty.kind), ("INT", "LONG"))
-        comparison = parse_body("return 1<2;").body.body[0].lhs
+        comparison = parse_body("return 1<2;").body.body[0].lhs.lhs
         self.assertEqual(comparison.ty.kind, "INT")
         assignment = parse_body("long x; x=-1;").body.body[-1].lhs
         self.assertEqual((assignment.rhs.kind, assignment.rhs.ty.kind), ("CAST", "LONG"))
-        self.assertIs(parse_body("return 2147483648;").body.body[0].lhs.ty, ty_long)
+        self.assertIs(parse_body("return 2147483648;").body.body[0].lhs.lhs.ty, ty_long)
         assembly = compile_program("int main(){char x=-1;long y=x;return y<0;}").stdout
         self.assertIn("  movsbl (%rax), %eax\n", assembly)
         self.assertIn("  movsxd %eax, %rax\n", assembly)
@@ -112,7 +125,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("int main(){return (long)(short)(char)255;}").stdout
         self.assertIn("  movsbl %al, %eax\n", assembly)
         self.assertIn("  movsxd %eax, %rax\n", assembly)
-        node = parse_body("return (short)1;").body.body[0].lhs
+        node = parse_body("return (short)1;").body.body[0].lhs.lhs
         self.assertEqual((node.kind, node.ty.kind, node.lhs.ty.kind, node.tok.text),
                          ("CAST", "SHORT", "INT", "("))
         for source in ["int main(){return (int 1;}", "int main(){return (int);}"]:
@@ -294,7 +307,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
         self.assertIn("  mov %rax, (%rdi)\n", assembly)
         self.assertEqual((ty_long.size, ty_long.align), (8, 8))
-        self.assertIs(parse_body("return 1;").body.body[0].lhs.ty, ty_int)
+        self.assertIs(parse_body("return 1;").body.body[0].lhs.lhs.ty, ty_int)
         self.assertEqual(tokenize("9223372036854775807")[0].value, 9223372036854775807)
         self.assertEqual(tokenize("short")[0].kind, "KEYWORD")
         result = compile_program("int main(){short x;}")
@@ -447,7 +460,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int pair(int a,int b){return a+b;}int main(){int x=0;return pair((x=1,7),x);}", 8),
         ]:
             self.assert_program_returns(source, expected)
-        node = parse_body("return 1,2,3;").body.body[0].lhs
+        node = parse_body("return 1,2,3;").body.body[0].lhs.lhs
         self.assertEqual((node.kind, node.rhs.kind), ("COMMA", "COMMA"))
         self.assertIs(node.ty, ty_int)
         result = compile_program("int main(){(1,2)=3;}")
@@ -460,7 +473,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout.startswith('.file 1 "-"\n'))
         locations = [line for line in result.stdout.splitlines() if ".loc" in line]
-        self.assertEqual(locations, ["  .loc 1 2"] * 3)
+        self.assertEqual(locations, ["  .loc 1 2"] * 4)
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'source "quoted".c'
             assembly = Path(directory) / "program.s"
@@ -841,7 +854,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for source, expected in [('int main(){return ret3();}', 3), ('int main(){return ret5();}', 5),
                                  ('int main(){return ret3()+ret5();}', 8)]:
             self.assert_program_returns(declarations + source, expected, helpers)
-        call = parse(tokenize("int ret3();int main(){return ret3();}"))[0].body.body[0].lhs
+        call = parse(tokenize("int ret3();int main(){return ret3();}"))[0].body.body[0].lhs.lhs
         self.assertEqual(call.funcname, "ret3")
         self.assertEqual(call.ty.kind, "INT")
         assembly = compile_program(declarations + 'int main(){return ret3();}').stdout
@@ -859,20 +872,20 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
-        expression = without_implicit_casts(parse_body("int x; return &x+1;").body.body[-1].lhs)
+        expression = without_implicit_casts(parse_body("int x; return &x+1;").body.body[-1].lhs.lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.ty.base.kind, "INT")
         self.assertEqual(expression.rhs.kind, "*")
         self.assertEqual(expression.rhs.rhs.value, 4)
-        expression = parse_body("int x,y; return &x-&y;").body.body[-1].lhs
+        expression = parse_body("int x,y; return &x-&y;").body.body[-1].lhs.lhs
         self.assertEqual(expression.ty.kind, "INT")
         self.assertEqual(expression.kind, "/")
         self.assertEqual(expression.lhs.ty.kind, "INT")
         self.assertEqual((expression.lhs.kind, expression.rhs.kind), ("CAST", "CAST"))
         self.assertEqual(expression.rhs.lhs.value, 4)
-        expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs
+        expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs.lhs
         self.assertEqual(expression.lhs.ty.kind, "PTR")
-        expression = without_implicit_casts(parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs)
+        expression = without_implicit_casts(parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs.lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.rhs.kind, "*")
 

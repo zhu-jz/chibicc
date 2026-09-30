@@ -47,6 +47,7 @@ class Parser:
         self.globals = []
         self.unique_id = 0
         self.scopes = [Scope()]  # Global scope, followed by nested block scopes.
+        self.current_fn = None
 
     def enter_scope(self):
         self.scopes.append(Scope())
@@ -301,6 +302,7 @@ class Parser:
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position], "expected ';'")
+            node = new_cast(node, self.current_fn.ty.return_ty)
             return Node("RETURN", lhs=node, tok=token), position + 1
         if self.tokens[position].text == "if":
             position += 1
@@ -573,6 +575,7 @@ class Parser:
         if self.tokens[position].text == ";":
             return position + 1
         function.is_definition = True
+        self.current_fn = function
         self.locals = []
         self.enter_scope()
         for param in reversed(ty.params):

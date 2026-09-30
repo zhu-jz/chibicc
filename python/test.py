@@ -32,6 +32,18 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_named_string_escapes(self):
+        for escape, expected in [("a",7),("b",8),("t",9),("n",10),("v",11),
+                                 ("f",12),("r",13),("e",27),("j",106),("k",107),("l",108)]:
+            self.assert_program_returns('int main(){return "\\'+escape+'"[0];}', expected)
+        for index, expected in enumerate([7,120,10,121]):
+            self.assert_program_returns(r'int main(){return "\ax\ny"['+str(index)+'];}', expected)
+        self.assert_program_returns(r'int main(){return "\""[0];}', 34)
+        self.assert_program_returns(r'int main(){return "\\"[0];}', 92)
+        self.assertEqual(tokenize(r'"\n"')[0].str, b"\n\0")
+        self.assertEqual(tokenize(r'"\n"')[0].ty.size, 2)
+        self.assertEqual(compile_program('int main(){return "abc\\').returncode, 1)
+
     def test_string_literals(self):
         for body, expected in [('return ""[0];',0), ('return sizeof("");',1),
                                ('return "abc"[0];',97), ('return "abc"[1];',98),

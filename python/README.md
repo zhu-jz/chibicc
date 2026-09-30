@@ -1,37 +1,41 @@
-# Lesson 35: Formatting utility refactor
+# Lesson 36: Named string escapes
 
-Original chibicc commit: [`35a0bcd366163168bf3337975130f62fc1c30235`](https://github.com/rui314/chibicc/commit/35a0bcd366163168bf3337975130f62fc1c30235).
+Original chibicc commit: [`ad7749f2fad87a4b1df644d4e1c345b3f87d386d`](https://github.com/rui314/chibicc/commit/ad7749f2fad87a4b1df644d4e1c345b3f87d386d).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Upstream adds a printf-style `format()` utility implemented with a memory
-stream, and uses it to generate anonymous names instead of writing into a
-fixed-size C buffer. It introduces no language or assembly change.
+The tokenizer first finds the closing quote while skipping escaped characters,
+then decodes the contents. This separates source spelling from stored bytes.
+The recognized escapes are `\a`, `\b`, `\t`, `\n`, `\v`, `\f`, `\r`, and GNU
+`\e` (byte 27). Escaped quotes and backslashes work through the default rule:
+an unrecognized escape contributes its character without the backslash.
 
-The Python port already uses `f".L..{self.unique_id}"`, which constructs a
-string of the required length directly. We retain that straightforward
-standard-language operation. An extra utility wrapping it would add no value.
-This is an intentional Python/C implementation difference: Python does not
-need C allocation, varargs, or stream management to format a name.
-
-Each literal still gets a distinct global name, byte data, and a RIP-relative
-address. The existing string tests and a two-literal name/data check verify
-that behavior. The compiler files and generated assembly remain unchanged.
+`"\ax\ny"` becomes bytes 7, 120, 10, 121, 0. Its sizeof is 5 even though its
+source spelling is longer. Python uses bytearray while decoding, then stores
+immutable bytes including the terminating zero. Named codes come from Python's
+own byte escapes, paralleling upstream's use of its host C compiler's escapes.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return "abc"[1];}' > /tmp/lesson35.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson35 /tmp/lesson35.s
-/tmp/lesson35
+python3 python/main.py 'int main(){return "\n"[0];}' > /tmp/lesson36.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson36 /tmp/lesson36.s
+/tmp/lesson36
 echo $?
 ```
 
-The executable prints nothing; the last command shows **98**. Use an interactive
-shell without `set -e` for nonzero statuses. The assembly retains `.byte` data,
-`lea .L..0(%rip),%rax`, a byte-offset calculation, and a signed char load.
-String escapes remain unsupported at this exact stage.
+The executable prints nothing; the last command shows **10**. Use an interactive
+shell without `set -e` for nonzero statuses. Assembly emits `.byte 10` and
+`.byte 0`, then indexes and loads the byte. Escape handling is entirely in the
+tokenizer; no code-generator changes are needed.
+
+Tests cover every new upstream named/default escape and mixed-string position,
+escaped quotes/backslashes, decoded size, and an incomplete escape at EOF.
+The port reports incomplete strings cleanly rather than permitting a C read
+past the input buffer. Diagnostics for unclosed strings now point just after
+the opening quote, matching this original refactor. Numeric escape decoding
+is not part of this commit.
 
 ## Tests and attribution
 

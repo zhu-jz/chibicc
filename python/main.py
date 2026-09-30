@@ -1,6 +1,6 @@
-"""Lesson 35: Formatting utility refactor.
+"""Lesson 36: Named string escapes.
 
-Based on chibicc commit 35a0bcd366163168bf3337975130f62fc1c30235.
+Based on chibicc commit ad7749f2fad87a4b1df644d4e1c345b3f87d386d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

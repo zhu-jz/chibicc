@@ -10,18 +10,40 @@ from common import CompileError, Token
 from type import array_of, ty_char
 
 
-def read_string_literal(source, start):
-    position = start + 1
+def read_escaped_char(character):
+    escapes = {"a": b"\a", "b": b"\b", "t": b"\t", "n": b"\n",
+               "v": b"\v", "f": b"\f", "r": b"\r", "e": b"\x1b"}
+    return escapes.get(character, character.encode("utf-8"))
+
+
+def string_literal_end(source, position):
+    start = position
     while position < len(source) and source[position] != '"':
-        if source[position] == "\n":
+        if source[position] in ("\n", "\0"):
             raise CompileError(start, "unclosed string literal")
+        if source[position] == "\\":
+            position += 1
         position += 1
-    if position == len(source):
+    if position >= len(source):
         raise CompileError(start, "unclosed string literal")
-    data = source[start + 1:position].encode("utf-8") + b"\0"
-    token = Token("STR", source[start:position + 1], start,
-                  ty=array_of(ty_char, len(data)), str=data)
-    return token, position + 1
+    return position
+
+
+def read_string_literal(source, start):
+    end = string_literal_end(source, start + 1)
+    data = bytearray()
+    position = start + 1
+    while position < end:
+        if source[position] == "\\":
+            data.extend(read_escaped_char(source[position + 1]))
+            position += 2
+        else:
+            data.extend(source[position].encode("utf-8"))
+            position += 1
+    data.append(0)
+    token = Token("STR", source[start:end + 1], start,
+                  ty=array_of(ty_char, len(data)), str=bytes(data))
+    return token, end + 1
 
 
 def is_ident1(character):

@@ -1,6 +1,6 @@
 """Allocate local stack slots and generate x86-64 Linux assembly.
 
-Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
+Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -24,7 +24,7 @@ class CodeGenerator:
 
     def gen_addr(self, node):
         if node.kind != "VAR":
-            raise CompileError(None, "not an lvalue")
+            raise CompileError(node.tok.position, "not an lvalue")
         self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
 
     def gen_expr(self, node):
@@ -70,7 +70,7 @@ class CodeGenerator:
             self.assembly.append(f"  {instructions[node.kind]} %al")
             self.assembly.append("  movzb %al, %rax")
         else:
-            raise AssertionError("invalid expression")
+            raise CompileError(node.tok.position, "invalid expression")
 
     def gen_stmt(self, node):
         if node.kind == "IF":
@@ -113,7 +113,7 @@ class CodeGenerator:
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
             return
-        raise AssertionError("invalid statement")
+        raise CompileError(node.tok.position, "invalid statement")
 
     def generate(self, program):
         offset = 0

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 from codegen import CodeGenerator
-from common import Function, Node, Obj, Token
+from common import CompileError, Function, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
 
@@ -31,6 +31,40 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_representative_tokens(self):
+        source = "{return -(1+2)*3>4;}"
+        tokens = tokenize(source)
+        program = parse(tokens)
+        statement = program.body.body[0]
+        self.assertIs(program.body.tok, tokens[1])
+        self.assertIs(statement.tok, tokens[1])
+        comparison = statement.lhs
+        self.assertEqual(comparison.kind, "<")
+        self.assertEqual(comparison.tok.text, ">")
+        multiply = comparison.rhs
+        self.assertEqual(multiply.tok.position, source.index("*"))
+        self.assertEqual(multiply.lhs.tok.position, source.index("-"))
+        self.assertEqual(multiply.lhs.lhs.tok.position, source.index("+"))
+        self.assertEqual(multiply.rhs.tok.text, "3")
+        for source, position in [("{1=2;}", 1), ("{(1+2)=3;}", 3),
+                                 ("{-a=3;}", 1), ("{(2>1)=3;}", 3)]:
+            with self.subTest(source=source):
+                result = compile_program(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, source + "\n" + " " * position
+                                 + "^ not an lvalue\n")
+        token = Token("PUNCT", "?", 8)
+        for generate, node, message in [
+            (CodeGenerator().gen_stmt, Node("UNKNOWN", tok=token), "invalid statement"),
+            (CodeGenerator().gen_expr, Node("UNKNOWN", Node("NUM"), Node("NUM"),
+                                           tok=token), "invalid expression"),
+        ]:
+            with self.assertRaises(CompileError) as caught:
+                generate(node)
+            self.assertEqual(caught.exception.position, 8)
+            self.assertEqual(str(caught.exception), message)
+
     def test_while(self):
         for source, expected in [
             ("{i=0; while(i<10) {i=i+1;} return i;}", 10),
@@ -487,13 +521,13 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("if() return 2;", "if() return 2;\n   ^ expected an expression\n"),
             ("else return 1;", "else return 1;\n^ expected an expression\n"),
             ("if(1)", "if(1)\n     ^ expected an expression\n"),
-            ("if(0) 1=2; return 3;", "not an lvalue\n"),
+            ("if(0) 1=2; return 3;", "if(0) 1=2; return 3;\n      ^ not an lvalue\n"),
             ("return;", "return;\n      ^ expected an expression\n"),
             ("return 1", "return 1\n        ^ expected ';'\n"),
             ("return=1;", "return=1;\n      ^ expected an expression\n"),
             ("a=return;", "a=return;\n  ^ expected an expression\n"),
             ("return 1; 2", "return 1; 2\n           ^ expected ';'\n"),
-            ("return 1; 1=3;", "not an lvalue\n"),
+            ("return 1; 1=3;", "return 1; 1=3;\n          ^ not an lvalue\n"),
             ("42", "42\n  ^ expected ';'\n"),
             ("1; 2", "1; 2\n    ^ expected ';'\n"),
             ("1; 2+;", "1; 2+;\n     ^ expected an expression\n"),
@@ -513,9 +547,9 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("()", "()\n ^ expected an expression\n"),
             ("1/", "1/\n  ^ expected an expression\n"),
             ("(1 2)", "(1 2)\n   ^ expected ')'\n"),
-            ("1=1;", "not an lvalue\n"),
-            ("(a+1)=3;", "not an lvalue\n"),
-            ("-a=3;", "not an lvalue\n"),
+            ("1=1;", "1=1;\n^ not an lvalue\n"),
+            ("(a+1)=3;", "(a+1)=3;\n  ^ not an lvalue\n"),
+            ("-a=3;", "-a=3;\n^ not an lvalue\n"),
             ("a=;", "a=;\n  ^ expected an expression\n"),
             ("é=3;", "é=3;\n^ invalid token\n"),
             ("12abc=3;", "12abc=3;\n  ^ expected ';'\n"),

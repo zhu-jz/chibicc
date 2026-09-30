@@ -1,6 +1,6 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
+Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -41,6 +41,7 @@ class Node:
     els: Optional["Node"] = None
     init: Optional["Node"] = None
     inc: Optional["Node"] = None
+    tok: Optional[Token] = field(default=None, compare=False)  # Source metadata.
 
 
 @dataclass

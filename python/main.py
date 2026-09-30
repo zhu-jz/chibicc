@@ -1,6 +1,6 @@
-"""Lesson 17: compile while loops.
+"""Lesson 19: attach source tokens to syntax-tree nodes.
 
-Based on chibicc commit 1f3eb34f637520b01e6b8cd10a9026d05036db6d.
+Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,6 +1,6 @@
 """Build a function containing statements and local variables.
 
-Based on chibicc commit 72b841508f562c65b427a502fe6b270c3717319b.
+Based on chibicc commit 3d8627719be00e39070eaca0ee5b599f2a877c5c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -27,59 +27,65 @@ class Parser:
     def assign(self, position):
         node, position = self.equality(position)
         if self.tokens[position].text == "=":
+            token = self.tokens[position]
             rhs, position = self.assign(position + 1)
-            node = Node("ASSIGN", node, rhs)
+            node = Node("ASSIGN", node, rhs, tok=token)
         return node, position
 
     # equality = relational (("==" | "!=") relational)*
     def equality(self, position):
         node, position = self.relational(position)
         while self.tokens[position].text in ("==", "!="):
+            token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.relational(position + 1)
-            node = Node(operator, node, rhs)
+            node = Node(operator, node, rhs, tok=token)
         return node, position
 
     # relational = add (("<" | "<=" | ">" | ">=") add)*
     def relational(self, position):
         node, position = self.add(position)
         while self.tokens[position].text in ("<", "<=", ">", ">="):
+            token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.add(position + 1)
             if operator == ">":
-                node = Node("<", rhs, node)
+                node = Node("<", rhs, node, tok=token)
             elif operator == ">=":
-                node = Node("<=", rhs, node)
+                node = Node("<=", rhs, node, tok=token)
             else:
-                node = Node(operator, node, rhs)
+                node = Node(operator, node, rhs, tok=token)
         return node, position
 
     # add = mul (("+" | "-") mul)*
     def add(self, position):
         node, position = self.mul(position)
         while self.tokens[position].text in ("+", "-"):
+            token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.mul(position + 1)
-            node = Node(operator, node, rhs)
+            node = Node(operator, node, rhs, tok=token)
         return node, position
 
     # mul = unary (("*" | "/") unary)*
     def mul(self, position):
         node, position = self.unary(position)
         while self.tokens[position].text in ("*", "/"):
+            token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.unary(position + 1)
-            node = Node(operator, node, rhs)
+            node = Node(operator, node, rhs, tok=token)
         return node, position
 
     # unary = ("+" | "-") unary | primary
     def unary(self, position):
+        token = self.tokens[position]
         operator = self.tokens[position].text
         if operator == "+":
             return self.unary(position + 1)
         if operator == "-":
             operand, position = self.unary(position + 1)
-            return Node("NEG", lhs=operand), position
+            return Node("NEG", lhs=operand, tok=token), position
         return self.primary(position)
 
     # primary = "(" expr ")" | identifier | number
@@ -96,10 +102,10 @@ class Parser:
             if var is None:
                 var = Obj(token.text)
                 self.locals.insert(0, var)
-            return Node("VAR", var=var), position + 1
+            return Node("VAR", var=var, tok=token), position + 1
 
         if token.kind == "NUM":
-            return Node("NUM", value=token.value), position + 1
+            return Node("NUM", value=token.value, tok=token), position + 1
 
         raise CompileError(token.position, "expected an expression")
 
@@ -108,11 +114,12 @@ class Parser:
     #      | "for" "(" expr-stmt expr? ";" expr? ")" stmt
     #      | "while" "(" expr ")" stmt
     def stmt(self, position):
+        token = self.tokens[position]
         if self.tokens[position].text == "return":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position].position, "expected ';'")
-            return Node("RETURN", lhs=node), position + 1
+            return Node("RETURN", lhs=node, tok=token), position + 1
         if self.tokens[position].text == "if":
             position += 1
             if self.tokens[position].text != "(":
@@ -124,7 +131,7 @@ class Parser:
             els = None
             if self.tokens[position].text == "else":
                 els, position = self.stmt(position + 1)
-            return Node("IF", cond=cond, then=then, els=els), position
+            return Node("IF", cond=cond, then=then, els=els, tok=token), position
         if self.tokens[position].text == "for":
             position += 1
             if self.tokens[position].text != "(":
@@ -142,7 +149,7 @@ class Parser:
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position].position, "expected ')'")
             then, position = self.stmt(position + 1)
-            return Node("FOR", init=init, cond=cond, inc=inc, then=then), position
+            return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token), position
         if self.tokens[position].text == "while":
             position += 1
             if self.tokens[position].text != "(":
@@ -151,27 +158,29 @@ class Parser:
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position].position, "expected ')'")
             then, position = self.stmt(position + 1)
-            return Node("FOR", cond=cond, then=then), position
+            return Node("FOR", cond=cond, then=then, tok=token), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
 
     # compound-stmt = stmt* "}"
     def compound_stmt(self, position):
+        token = self.tokens[position]
         statements = []
         while self.tokens[position].text != "}":
             node, position = self.stmt(position)
             statements.append(node)
-        return Node("BLOCK", body=statements), position + 1
+        return Node("BLOCK", body=statements, tok=token), position + 1
 
     # expr-stmt = expr? ";"
     def expr_stmt(self, position):
+        token = self.tokens[position]
         if self.tokens[position].text == ";":
-            return Node("BLOCK"), position + 1
+            return Node("BLOCK", tok=token), position + 1
         node, position = self.expr(position)
         if self.tokens[position].text != ";":
             raise CompileError(self.tokens[position].position, "expected ';'")
-        return Node("EXPR_STMT", lhs=node), position + 1
+        return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
     # program = "{" compound-stmt
     def parse(self):

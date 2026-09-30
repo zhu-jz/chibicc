@@ -1,41 +1,45 @@
-# Lesson 39: GNU statement expressions
+# Lesson 40: Read source files and report line locations
 
-Original chibicc commit: [`9dae23461eb6250865f4ee727a0e727a6a4e03ba`](https://github.com/rui314/chibicc/commit/9dae23461eb6250865f4ee727a0e727a6a4e03ba).
+Original chibicc commit: [`d9ea59757e2710e34f105e98230f30f578e0e662`](https://github.com/rui314/chibicc/commit/d9ea59757e2710e34f105e98230f30f578e0e662).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A parenthesized block `({ statements; })` can now appear as an expression.
-The parser creates STMT_EXPR with the block's statement list. Type annotation
-requires its last statement to be an expression statement and uses that
-expression's type. Empty blocks or a final declaration/return are rejected
-because statement expressions returning void are not supported at this stage.
+The command line now takes a filename, not source text. A filename of `-`
+reads standard input. Input is read completely and a final newline is added
+if missing, matching upstream. In-memory tokenization remains available for
+unit tests; the driver explicitly passes file contents to the tokenizer.
 
-Code generation executes each statement using the existing statement generator.
-The final expression leaves its result in `%rax`, ready for enclosing arithmetic,
-assignment, calls, or dereference. A return inside the block still jumps to the
-containing function's cleanup label; it does not return merely from the block.
-Locals still use the existing function-wide name list, matching upstream's
-current scope behavior.
+Diagnostics now show `filename:line: source line` followed by a caret and
+message. The driver finds the line containing the error and adds the filename
+prefix width to the caret indentation. Only that line is printed, not the
+whole translation unit. File-opening failures have a plain error message.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return ({int x=3; x=x+2; x;});}' > /tmp/lesson39.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson39 /tmp/lesson39.s
-/tmp/lesson39
+printf 'int main(){return 42;}\n' > /tmp/lesson40.c
+python3 python/main.py /tmp/lesson40.c > /tmp/lesson40.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson40 /tmp/lesson40.s
+/tmp/lesson40
 echo $?
+printf 'int main(){return 42;}\n' | python3 python/main.py -
 ```
 
-The executable prints nothing; the last command shows **5**. Use an interactive
-shell without `set -e` for nonzero statuses. The emitted assignments store into
-x's stack slot; the final load places its value in `%rax` before main returns.
-This syntax is a GNU C extension rather than standard C.
+The executable prints nothing; `echo $?` shows **42**. Use an interactive shell
+without `set -e` for nonzero statuses. The final pipeline prints the same
+assembly through stdin. Code generation is unchanged in this commit.
 
-Tests cover all upstream examples, arithmetic combinations, a return escaping
-the block, declarations, pointer-valued blocks, sizeof, and unsupported
-valueless blocks. Python uses its list's final element where C walks to the
-last linked-list node. No new intentional behavioral difference is introduced.
+The complete suite now supplies source through stdin. Tests also check files
+with spaces in their names, final-newline normalization, a filename/line/caret
+diagnostic on line 2, missing files, and invalid encoding.
+
+Python uses standard file I/O and explicit driver state instead of C memory
+streams and tokenizer globals. Files are decoded as UTF-8; invalid UTF-8 is
+reported cleanly. Newline bytes are preserved in named files. Python's EOF
+location handling is bounded, avoiding upstream's possible read past its buffer
+when reporting an error exactly at EOF. Carets still count characters rather
+than bytes, with the same simple space indentation used by upstream.
 
 ## Tests and attribution
 

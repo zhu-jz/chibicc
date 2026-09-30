@@ -19,6 +19,10 @@ EPILOGUE = ".L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
 def compile_program(*arguments):
+    """Feed in-memory source fixtures to the compiler through stdin."""
+    if len(arguments) == 1:
+        return subprocess.run([sys.executable, str(COMPILER), "-"],
+                              input=arguments[0], capture_output=True, text=True)
     return subprocess.run(
         [sys.executable, str(COMPILER), *arguments],
         capture_output=True,
@@ -32,6 +36,33 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_file_input(self):
+        source = "int main(){return 42;}"
+        expected = compile_program(source)
+        self.assertEqual(expected.returncode, 0, expected.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source with spaces.c"
+            for contents in [source, source + "\n"]:
+                path.write_text(contents)
+                result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected.stdout)
+            path.write_text("int main(){\n return missing;\n}\n")
+            result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+                                    capture_output=True, text=True)
+            prefix = f"{path}:2: "
+            self.assertEqual(result.stderr, prefix + " return missing;\n"
+                             + " " * (len(prefix) + 8) + "^ undefined variable\n")
+            path.write_bytes(b"\xff")
+            result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+                                    capture_output=True, text=True)
+            self.assertIn("cannot decode", result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), "/tmp/chibicc-no-such-source-40.c"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot open", result.stderr)
+
     def test_statement_expressions(self):
         for body, expected in [
             ("return ({0;});",0), ("return ({0;1;2;});",2),
@@ -321,7 +352,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout, "")
-            self.assertEqual(result.stderr, source + "\n" + " " * position
+            self.assertEqual(result.stderr, "-:1: " + source + "\n" + " " * (position + len("-:1: "))
                              + "^ not an lvalue\n")
 
     def test_representative_tokens(self):
@@ -345,7 +376,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, source + "\n" + " " * position
+                self.assertEqual(result.stderr, "-:1: " + source + "\n" + " " * (position + len("-:1: "))
                                  + "^ not an lvalue\n")
         token = Token("PUNCT", "?", 8)
         for generate, node, message in [
@@ -429,7 +460,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
-            self.assertEqual(result.stderr, source + "\n" + " " * position + "^ " + message + "\n")
+            self.assertEqual(result.stderr, "-:1: " + source + "\n" + " " * (position + len("-:1: ")) + "^ " + message + "\n")
 
     def test_if_tree_and_labels(self):
         program = parse_body("if(1) if(0) return 2; else return 3;")
@@ -964,7 +995,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 self.assertEqual(result.stdout, "")
                 if expected.startswith(source + "\n"):
                     expected = 'int main(){' + source + "}\n" + " " * 11 + expected[len(source) + 1:]
-                self.assertEqual(result.stderr, expected)
+                self.assertEqual(result.stderr, "-:1: " + expected.replace("\n", "\n" + " " * len("-:1: "), 1))
 
     def test_argument_error_has_no_source_location(self):
         for arguments in [(), ("1", "2")]:
@@ -1032,7 +1063,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, source + "\n" + " " * position
+                self.assertEqual(result.stderr, "-:1: " + source + "\n" + " " * (position + len("-:1: "))
                                  + "^ " + message + "\n")
 
 

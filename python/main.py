@@ -1,6 +1,6 @@
-"""Lesson 39: GNU statement expressions.
+"""Lesson 40: Read source files and report line locations.
 
-Based on chibicc commit 9dae23461eb6250865f4ee727a0e727a6a4e03ba.
+Based on chibicc commit d9ea59757e2710e34f105e98230f30f578e0e662.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -9,7 +9,7 @@ import sys
 from codegen import codegen
 from common import CompileError
 from parse import parse
-from tokenizer import tokenize
+from tokenizer import read_file, tokenize
 
 
 def main():
@@ -17,8 +17,9 @@ def main():
         print(f"{sys.argv[0]}: invalid number of arguments", file=sys.stderr)
         return 1
 
-    source = sys.argv[1]
+    filename = sys.argv[1]
     try:
+        source = read_file(filename)
         tokens = tokenize(source)
         program = parse(tokens)
         assembly = codegen(program)
@@ -26,8 +27,16 @@ def main():
         if error.position is None:
             print(error, file=sys.stderr)
         else:
-            print(source, file=sys.stderr)
-            print(" " * error.position + "^ " + str(error), file=sys.stderr)
+            position = error.position
+            line_start = source.rfind("\n", 0, position) + 1
+            line_end = source.find("\n", position)
+            if line_end == -1:
+                line_end = len(source)
+            line_number = source.count("\n", 0, line_start) + 1
+            prefix = f"{filename}:{line_number}: "
+            print(prefix + source[line_start:line_end], file=sys.stderr)
+            print(" " * (len(prefix) + position - line_start) + "^ " + str(error),
+                  file=sys.stderr)
         return 1
 
     sys.stdout.write(assembly + ("\n" if assembly else ""))

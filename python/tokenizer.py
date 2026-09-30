@@ -5,9 +5,26 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import string
+import sys
 
 from common import CompileError, Token
 from type import array_of, ty_char
+
+
+def read_file(path):
+    try:
+        if path == "-":
+            source = sys.stdin.buffer.read().decode("utf-8")
+        else:
+            with open(path, encoding="utf-8", newline="") as input_file:
+                source = input_file.read()
+    except OSError as error:
+        raise CompileError(None, f"cannot open {path}: {error.strerror}") from None
+    except UnicodeError:
+        raise CompileError(None, f"cannot decode {path} as UTF-8") from None
+    if not source.endswith("\n"):
+        source += "\n"
+    return source
 
 
 def read_escaped_char(source, position):

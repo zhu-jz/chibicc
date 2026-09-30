@@ -1,6 +1,6 @@
-"""Lesson 27: One-dimensional arrays.
+"""Lesson 28: Arrays of arrays.
 
-Based on chibicc commit 8b6395d0f2be4024bd7e7921157a6496951eb162.
+Based on chibicc commit 3ce1b2d067164f754dcb4216c193dc98e164b3ce.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

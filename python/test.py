@@ -32,6 +32,17 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_arrays_of_arrays(self):
+        for index, expression in enumerate(["**x", "*(*x+1)", "*(*x+2)",
+                                            "**(x+1)", "*(*(x+1)+1)", "*(*(x+1)+2)"]):
+            self.assert_program_returns("int main(){int x[2][3]; int *y=x;"
+                                        f"*(y+{index})={index}; return {expression};}}", index)
+        function = parse(tokenize("int main(){int x[2][3]; return x+1;}"))[0]
+        ty = function.locals[0].ty
+        self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,48,3,24))
+        self.assertEqual(function.body.body[-1].lhs.rhs.rhs.value, 24)
+        self.assert_program_returns("int main(){int x[2][3][4]; *(*(*(x+1)+2)+3)=9; return *(*(*(x+1)+2)+3);}", 9)
+
     def test_one_dimensional_arrays(self):
         self.assert_program_returns("int main(){int x[2]; int *y=&x; *y=3; return *x;}", 3)
         for offset, expected in [(0,3),(1,4),(2,5)]:

@@ -241,7 +241,7 @@ class Parser:
         ty.params = params
         return ty, position + 1
 
-    # type-suffix = "(" func-params | "[" number "]" | empty
+    # type-suffix = "(" func-params | "[" number "]" type-suffix | empty
     def type_suffix(self, position, ty):
         if self.tokens[position].text == "(":
             return self.func_params(position + 1, ty)
@@ -251,7 +251,8 @@ class Parser:
                 raise CompileError(token.position, "expected a number")
             if self.tokens[position + 2].text != "]":
                 raise CompileError(self.tokens[position + 2].position, "expected ']'")
-            return array_of(ty, token.value), position + 3
+            ty, position = self.type_suffix(position + 3, ty)
+            return array_of(ty, token.value), position
         return ty, position
 
     # declarator = "*"* identifier type-suffix

@@ -1,35 +1,33 @@
-# Lesson 89: Goto and labeled statements
+# Lesson 90: Labels may share typedef names
 
-Original chibicc commit: [`6116cae4c4b98ef9ed55736f3a6c1d872de97767`](https://github.com/rui314/chibicc/commit/6116cae4c4b98ef9ed55736f3a6c1d872de97767).
+Original chibicc commit: [`a4be55b333c9f712c334aac81e7ef4e076c2bc9b`](https://github.com/rui314/chibicc/commit/a4be55b333c9f712c334aac81e7ef4e076c2bc9b).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`goto name;` and `name: statement` get GOTO/LABEL nodes. Parsing records them,
-then resolves jumps after the whole function is known, allowing forward labels.
-Each label receives a unique assembly name from the parser's counter. Labels
-have function scope, independent of variable names and ordinary block scope.
-An unresolved jump reports `use of undeclared label` at the identifier.
+A compound statement checks for a following colon before interpreting a known
+type name as a declaration. Thus a typedef named T can coexist with the label
+T:. The statement parser recognizes the label, while later `T x;` still uses the
+typedef. This is a parsing ambiguity fix: labels have a separate namespace.
+No type-system or code-generation change is needed.
 
-Python lists replace the original goto_next linked lists; goto entries also
-retain the label token for the diagnostic. The lists reset after each function.
-Duplicate-label validation remains incomplete in this historical implementation.
+Python checks the next token by list index; C checks tok->next. Tests preserve
+the shared label name and verify both declaration parsing and executable results.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){goto answer;return 1;answer:return 42;}\n' > /tmp/lesson89.c
-python3 python/main.py /tmp/lesson89.c > /tmp/lesson89.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson89 /tmp/lesson89.s
-/tmp/lesson89
+printf 'typedef int T;int main(){goto T;T:return 42;}\n' > /tmp/lesson90.c
+python3 python/main.py /tmp/lesson90.c > /tmp/lesson90.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson90 /tmp/lesson90.s
+/tmp/lesson90
 echo $?
 ```
 
-`jmp .L..N` transfers control directly to the matching `.L..N:` label, skipping
-the first return. Main exits with 42. Tests cover forward/backward jumps, labels
-inside blocks, repeated label spellings across functions, variable/label name
-coexistence, unresolved diagnostics, matched assembly symbols, and updated
-original control programs.
+The typedef emits no instructions. goto emits a jump to the unique assembly label
+for T:, and the return loads 42. The shell displays 42. Tests exercise global and
+local typedefs, continued use of the typedef after the label, tree/assembly label
+matching, prior goto behavior, and the updated upstream control tests.
 
 ## Tests and attribution
 

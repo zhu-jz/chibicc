@@ -1,6 +1,6 @@
-"""Lesson 89: Goto and labeled statements.
+"""Lesson 90: Labels may share typedef names.
 
-Based on chibicc commit 6116cae4c4b98ef9ed55736f3a6c1d872de97767.
+Based on chibicc commit a4be55b333c9f712c334aac81e7ef4e076c2bc9b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

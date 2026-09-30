@@ -740,7 +740,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.is_typename(position):
+            if self.is_typename(position) and self.tokens[position + 1].text != ":":
                 attr = VarAttr()
                 basety, position = self.declspec(position, attr)
                 if attr.is_typedef:

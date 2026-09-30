@@ -58,6 +58,15 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_typedef_label_names(self):
+        self.assert_program_returns("typedef int T;int main(){goto T;return 1;T:;T x=42;return x;}", 42)
+        self.assert_program_returns("int main(){typedef int T;goto T;T:return sizeof(T);}", 4)
+        function = parse_body("typedef int T;goto T;T:return 42;")
+        jump, label = function.body.body
+        self.assertEqual((jump.kind, label.kind), ("GOTO", "LABEL"))
+        self.assertEqual(jump.unique_label, label.unique_label)
+        self.assertIn("  jmp .L..", compile_program("typedef int T;int main(){goto T;T:return 42;}").stdout)
+
     def test_goto_labels(self):
         for source, expected in [
             ("int main(){goto done;return 1;done:return 42;}", 42),

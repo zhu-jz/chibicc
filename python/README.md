@@ -1,38 +1,43 @@
-# Lesson 43: Line and block comments
+# Lesson 44: Block scope
 
-Original chibicc commit: [`6c0a42926a10ea5abc781c9db89b105e007512b1`](https://github.com/rui314/chibicc/commit/6c0a42926a10ea5abc781c9db89b105e007512b1).
+Original chibicc commit: [`ca8b2434c97fc37c14eddcb3a4e831d030ebb041`](https://github.com/rui314/chibicc/commit/ca8b2434c97fc37c14eddcb3a4e831d030ebb041).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer skips `//` through the next newline and `/*` through the first
-`*/`. Comments act like whitespace, so `int/*note*/x` still gives two tokens.
-Their text stays in the source buffer: diagnostic line numbers and carets keep
-pointing at the original file. Strings are read as a unit, so comment markers
-inside a string do not start a comment. Block comments do not nest.
+Name lookup searches a stack of scopes, from the innermost block outward.
+Every compound statement enters a scope at `{` and leaves it at `}`. A
+function also gives parameters their own enclosing scope. Globals live in the
+outermost scope; locals from an earlier function cannot leak into another.
 
-An unfinished block comment reports `unclosed block comment` at its opening.
-Python also safely accepts an EOF line comment in direct tokenizer calls; the
-C file reader normally supplies a final newline before tokenizing.
+The scopes control visibility, while `function.locals` collects storage for
+all variables in that function, even after their names leave scope. Two
+variables called `x` are separate objects with separate stack slots. Python
+lists replace upstream's linked Scope and VarScope records.
+
+For `int x=2; {int x=3;} return x;`, the final lookup finds the outer `x`, so
+the result is 2. In `{x=3;}` without a declaration, lookup finds and changes
+the outer object. Statement expressions also use their block's scope.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){ /* ignored */ return 42; }\n' > /tmp/lesson43.c
-python3 python/main.py -o /tmp/lesson43.s /tmp/lesson43.c
-cat /tmp/lesson43.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson43 /tmp/lesson43.s
-/tmp/lesson43
+printf 'int main(){int x=2; {int x=3;} return x;}\n' > /tmp/lesson44.c
+python3 python/main.py -o /tmp/lesson44.s /tmp/lesson44.c
+cat /tmp/lesson44.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson44 /tmp/lesson44.s
+/tmp/lesson44
 echo $?
 ```
 
-The comment emits no instructions. `mov $42, %rax` sets the return value,
-then the shared function epilogue restores the stack and returns. The program
-prints nothing; `echo $?` immediately afterward displays 42.
+The two initializations store into different offsets from `%rbp`. The final
+load reads the outer variable, puts 2 in `%rax`, and returns through the
+function epilogue. The executable prints nothing; the shell displays status 2.
 
-Tests run both upstream examples, compare assembly with/without comments,
-check markers inside strings and EOF, and check an unclosed comment diagnostic.
-All previous compiler features and limits remain at lesson 42's stage.
+Tests cover all three upstream examples, global and parameter shadowing,
+statement-expression scopes, forbidden uses after a scope ends, cross-function
+leaks, and retaining all local storage objects. Same-scope redeclarations are
+still not diagnosed, matching this stage of upstream. Ints remain eight bytes.
 
 ## Tests and attribution
 

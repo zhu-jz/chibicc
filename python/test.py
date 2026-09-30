@@ -36,6 +36,25 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_block_scope(self):
+        for source, expected in [
+            ("int main(){int x=2;{int x=3;}return x;}", 2),
+            ("int main(){int x=2;{int x=3;}{int y=4;return x;}}", 2),
+            ("int main(){int x=2;{x=3;}return x;}", 3),
+            ("int x;int main(){x=7;{int x=3;}return x;}", 7),
+            ("int main(){int x=2;return ({int x=3;x;})+x;}", 5),
+            ("int f(int x){{int x=3;}return x;}int main(){return f(7);}", 7),
+        ]:
+            self.assert_program_returns(source, expected)
+        for source in ["int main(){{int x=2;}return x;}",
+                       "int f(){int x=2;return x;}int main(){return x;}",
+                       "int main(){({int x=2;x;});return x;}"]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("undefined variable", result.stderr)
+        program = parse(tokenize("int main(){int x;{int x;int y;}}"))
+        self.assertEqual([var.name for var in program[0].locals], ["y", "x", "x"])
+
     def test_comments(self):
         for source in ["int main(){/* return 1; */ return 2;}",
                        "int main(){// return 1;\nreturn 2;}"]:
@@ -1071,8 +1090,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){int x=3,*p=&x; *p=7; return x;}', 7),
             ('int main(){int a,b; a=b=3; return a+b;}', 6),
             ('int main(){int integer=5; return integer;}', 5),
-            ('int main(){int x=1; {int y=4;} return x+y;}', 5),
-            ('int main(){int x=1; {int x=4;} return x;}', 4),
+            ('int main(){int x=1; {int y=4; return x+y;}}', 5),
+            ('int main(){int x=1; {int x=4;} return x;}', 1),
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)

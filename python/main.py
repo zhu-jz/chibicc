@@ -1,6 +1,6 @@
-"""Lesson 43: Line and block comments.
+"""Lesson 44: Block scope.
 
-Based on chibicc commit 6c0a42926a10ea5abc781c9db89b105e007512b1.
+Based on chibicc commit ca8b2434c97fc37c14eddcb3a4e831d030ebb041.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -46,15 +46,24 @@ class Parser:
         self.locals = []
         self.globals = []
         self.unique_id = 0
+        self.scopes = [[]]  # Global scope, followed by nested block scopes.
+
+    def enter_scope(self):
+        self.scopes.append([])
+
+    def leave_scope(self):
+        self.scopes.pop()
 
     def new_lvar(self, name, ty):
         var = Obj(name, ty=ty, is_local=True)
         self.locals.insert(0, var)
+        self.scopes[-1].insert(0, var)
         return var
 
     def new_gvar(self, name, ty):
         var = Obj(name, ty=ty)
         self.globals.insert(0, var)
+        self.scopes[-1].insert(0, var)
         return var
 
     def new_string_literal(self, data, ty):
@@ -64,12 +73,10 @@ class Parser:
         return var
 
     def find_var(self, name):
-        for var in self.locals:
-            if var.name == name:
-                return var
-        for var in self.globals:
-            if var.name == name:
-                return var
+        for scope in reversed(self.scopes):
+            for var in scope:
+                if var.name == name:
+                    return var
         return None
 
     # Each parser function returns (node, next unconsumed token index).
@@ -345,6 +352,7 @@ class Parser:
     def compound_stmt(self, position):
         token = self.tokens[position]
         statements = []
+        self.enter_scope()
         while self.tokens[position].text != "}":
             if self.tokens[position].text in ("char", "int"):
                 node, position = self.declaration(position)
@@ -352,6 +360,7 @@ class Parser:
                 node, position = self.stmt(position)
             add_type(node)
             statements.append(node)
+        self.leave_scope()
         return Node("BLOCK", body=statements, tok=token), position + 1
 
     # expr-stmt = expr? ";"
@@ -369,6 +378,7 @@ class Parser:
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
         self.locals = []
+        self.enter_scope()
         for param in reversed(ty.params):
             self.new_lvar(param.name.text, param)
         function.params = self.locals.copy()
@@ -376,6 +386,7 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected '{'")
         function.body, position = self.compound_stmt(position + 1)
         function.locals = self.locals
+        self.leave_scope()
         return position
 
     def global_variable(self, position, basety):

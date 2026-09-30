@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Function, Node, Obj, Type
+from common import CompileError, Node, Obj
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_int
 
 
@@ -44,6 +44,17 @@ class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.locals = []
+        self.globals = []
+
+    def new_lvar(self, name, ty):
+        var = Obj(name, ty=ty, is_local=True)
+        self.locals.insert(0, var)
+        return var
+
+    def new_gvar(self, name, ty):
+        var = Obj(name, ty=ty)
+        self.globals.insert(0, var)
+        return var
 
     def find_var(self, name):
         for var in self.locals:
@@ -299,8 +310,7 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
-            var = Obj(ty.name.text, ty=ty)
-            self.locals.insert(0, var)
+            var = self.new_lvar(ty.name.text, ty)
             if self.tokens[position].text != "=":
                 continue
             lhs = Node("VAR", var=var, tok=ty.name)
@@ -333,24 +343,27 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected ';'")
         return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
-    def function(self, position):
-        ty, position = self.declspec(position)
-        ty, position = self.declarator(position, ty)
-        params = [Obj(param.name.text, ty=param) for param in ty.params]
-        self.locals = params.copy()
+    def function(self, position, basety):
+        ty, position = self.declarator(position, basety)
+        function = self.new_gvar(ty.name.text, ty)
+        function.is_function = True
+        self.locals = []
+        for param in reversed(ty.params):
+            self.new_lvar(param.name.text, param)
+        function.params = self.locals.copy()
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position].position, "expected '{'")
-        body, position = self.compound_stmt(position + 1)
-        return Function(body, self.locals, name=ty.name.text, params=params), position
+        function.body, position = self.compound_stmt(position + 1)
+        function.locals = self.locals
+        return position
 
     # program = function-definition*
     def parse(self):
-        functions = []
         position = 0
         while self.tokens[position].kind != "EOF":
-            function, position = self.function(position)
-            functions.append(function)
-        return functions
+            basety, position = self.declspec(position)
+            position = self.function(position, basety)
+        return self.globals
 
 
 def parse(tokens):

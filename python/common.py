@@ -38,6 +38,12 @@ class Obj:
     name: str
     offset: int = 0
     ty: Optional[Type] = field(default=None, compare=False)
+    is_local: bool = False
+    is_function: bool = False
+    params: list["Obj"] = field(default_factory=list)
+    body: Optional["Node"] = None
+    locals: list["Obj"] = field(default_factory=list)
+    stack_size: int = 0
 
 
 @dataclass
@@ -57,12 +63,3 @@ class Node:
     ty: Optional[Type] = field(default=None, compare=False)  # Inferred type.
     funcname: str = ""
     args: list["Node"] = field(default_factory=list)
-
-
-@dataclass
-class Function:
-    body: Node
-    locals: list[Obj]
-    stack_size: int = 0
-    name: str = "main"
-    params: list[Obj] = field(default_factory=list)

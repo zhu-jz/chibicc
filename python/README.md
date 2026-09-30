@@ -1,38 +1,39 @@
-# Lesson 30: sizeof expressions
+# Lesson 31: Unified variable and function objects
 
-Original chibicc commit: [`3e55cafef80f0fc9d74bb06ea174de4b53e2ef94`](https://github.com/rui314/chibicc/commit/3e55cafef80f0fc9d74bb06ea174de4b53e2ef94).
+Original chibicc commit: [`0b7663481d0513067e0c0af04765b8578ae2a498`](https://github.com/rui314/chibicc/commit/0b7663481d0513067e0c0af04765b8578ae2a498).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`sizeof` reads a unary expression, annotates its type, and returns a numeric
-node containing its size. No runtime node for the operand remains. Thus
-`sizeof(x=2)` does not assign 2 to x, and `sizeof missing()` does not call or
-require a definition of missing. The operand must still parse and type-check.
+Upstream merges its Function and variable structures into Obj, without a
+language change. The Python port follows: Obj holds a name/type, local and
+function flags, a local offset, and optional function body/parameters/locals.
+The separate Function dataclass is removed.
 
-Parentheses can group a larger expression: `sizeof x+1` means `(sizeof x)+1`,
-while `sizeof(x+1)` measures the whole addition. Type-name operands such as
-`sizeof(int)` are not supported in this lesson. Arrays retain their full type
-for sizeof, rather than converting to pointers: a 3-by-4 int array is 96 bytes,
-one row is 32, and one element is 8 at this stage.
+Local construction marks `is_local`; function construction creates a global
+object and marks `is_function`. Top-level objects are prepended, so their
+emission order is reversed, matching upstream's linked-list behavior. Local
+objects still belong to individual function frames. Code generation skips
+non-function objects and explicitly selects `.text` before each function.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){int x[3][4]; return sizeof(*x);}' > /tmp/lesson30.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson30 /tmp/lesson30.s
-/tmp/lesson30
+python3 python/main.py 'int helper(){return 3;} int main(){return helper();}' > /tmp/lesson31.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson31 /tmp/lesson31.s
+/tmp/lesson31
 echo $?
 ```
 
-The executable prints nothing; the last command shows **32**. Use an interactive
-shell without `set -e` for nonzero statuses. The body simply emits `mov $32,%rax`
-and jumps to the main return label; no row is loaded.
+The executable prints nothing; the last command shows **3**. Use an interactive
+shell without `set -e` for nonzero statuses. Assembly emits main first here,
+then helper; calls are resolved regardless of emission order. Function-specific
+return labels and frame cleanup are unchanged.
 
-Tests cover all twelve upstream examples, sizes for scalars/pointers/arrays,
-precedence, suppressed assignments and calls, invalid operand types, and
-keyword boundaries. Integers still occupy eight bytes. No new intentional
-Python/C difference is introduced; size arithmetic uses Python integers.
+Tests verify unified objects, flags, object order, `.text`, calls, parameters,
+and exact assembly. No global-variable syntax is added in this commit.
+Python lists replace the original object linked lists; no new behavioral
+Python/C differences are introduced.
 
 ## Tests and attribution
 

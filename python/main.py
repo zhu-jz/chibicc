@@ -1,6 +1,6 @@
-"""Lesson 30: sizeof expressions.
+"""Lesson 31: Unified variable and function objects.
 
-Based on chibicc commit 3e55cafef80f0fc9d74bb06ea174de4b53e2ef94.
+Based on chibicc commit 0b7663481d0513067e0c0af04765b8578ae2a498.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

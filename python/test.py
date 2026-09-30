@@ -7,14 +7,14 @@ import tempfile
 import unittest
 
 from codegen import CodeGenerator
-from common import CompileError, Function, Node, Token
+from common import CompileError, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
 from type import ty_int
 
 
 COMPILER = Path(__file__).with_name("main.py")
-PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
+PROLOGUE = "  .globl main\n  .text\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
 EPILOGUE = ".L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
@@ -32,6 +32,16 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unified_objects(self):
+        objects = parse(tokenize("int a(){int x;return 3;} int main(){return a();}"))
+        self.assertEqual([obj.name for obj in objects], ["main", "a"])
+        self.assertTrue(all(obj.is_function and not obj.is_local for obj in objects))
+        self.assertTrue(objects[1].locals[0].is_local)
+        self.assertEqual(objects[1].ty.kind, "FUNC")
+        assembly = CodeGenerator().generate(objects)
+        self.assertEqual(assembly.count("  .text\n"), 2)
+        self.assert_program_returns("int a(){return 3;} int main(){return a();}", 3)
+
     def test_sizeof(self):
         for body, expected in [
             ("int x; return sizeof(x);",8), ("int x; return sizeof x;",8),
@@ -412,7 +422,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(parse_body(source), Function(Node("BLOCK"), []))
+                self.assertEqual(parse_body(source), Obj("main", body=Node("BLOCK"), is_function=True))
                 result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")

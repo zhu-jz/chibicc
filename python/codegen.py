@@ -151,13 +151,15 @@ class CodeGenerator:
     def generate(self, program):
         self.assembly = []
         for function in program:
+            if not function.is_function:
+                continue
             offset = 0
             for var in function.locals:
                 offset += var.ty.size
                 var.offset = -offset
             function.stack_size = (offset + 15) // 16 * 16
             self.current_fn = function
-            self.assembly.extend([f"  .globl {function.name}", f"{function.name}:",
+            self.assembly.extend([f"  .globl {function.name}", "  .text", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
             if len(function.params) > len(ARGREG):

@@ -234,7 +234,13 @@ class Parser:
                 return Node("MEMBER", lhs=lhs, member=member, tok=token)
         raise CompileError(token, "no such member")
 
-    # postfix = primary ("[" expr "]" | "." identifier | "->" identifier)*
+    def new_inc_dec(self, node, token, addend):
+        add_type(node)
+        update = self.to_assign(new_add(node, Node("NUM", value=addend, tok=token), token))
+        old_value = new_add(update, Node("NUM", value=-addend, tok=token), token)
+        return new_cast(old_value, node.ty)
+
+    # postfix = primary ("[" expr "]" | "." identifier | "->" identifier | "++" | "--")*
     def postfix(self, position):
         node, position = self.primary(position)
         while True:
@@ -252,6 +258,10 @@ class Parser:
                 node = Node("DEREF", lhs=node, tok=self.tokens[position])
                 node = self.struct_ref(node, self.tokens[position + 1])
                 position += 2
+            elif self.tokens[position].text in ("++", "--"):
+                token = self.tokens[position]
+                node = self.new_inc_dec(node, token, 1 if token.text == "++" else -1)
+                position += 1
             else:
                 return node, position
 

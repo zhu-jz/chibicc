@@ -1,6 +1,6 @@
-"""Lesson 78: Prefix increment and decrement.
+"""Lesson 79: Postfix increment and decrement.
 
-Based on chibicc commit 47f19371f75db9029ea1b8b3783624fb7838d2db.
+Based on chibicc commit e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

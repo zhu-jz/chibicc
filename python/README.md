@@ -1,34 +1,35 @@
-# Lesson 78: Prefix increment and decrement
+# Lesson 79: Postfix increment and decrement
 
-Original chibicc commit: [`47f19371f75db9029ea1b8b3783624fb7838d2db`](https://github.com/rui314/chibicc/commit/47f19371f75db9029ea1b8b3783624fb7838d2db).
+Original chibicc commit: [`e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63`](https://github.com/rui314/chibicc/commit/e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Prefix ++ and -- parse a unary operand and reuse compound-assignment lowering:
-++x becomes x+=1, --x becomes x-=1. They return the updated value, preserve the
-destination type, evaluate its address once, and scale pointer updates by the
-element size. sizeof parses and types these expressions without executing them.
-Postfix forms are not part of this commit.
+Postfix x++ updates x but returns its previous value. This commit lowers it to
+`(type of x)((x += 1) - 1)`; x-- uses an addend of -1 and reverses that afterward.
+The compound-assignment helper evaluates the address once. Pointer scaling works
+for both the update and reverse adjustment. The final cast restores char/short
+width, including boundary wrapping. Postfix binds tightly: *p++ dereferences the
+old pointer and advances p, whereas (*p)++ updates the pointed-to object.
 
-Python reuses the same helper and Node constructors as the prior lesson. The
-emitter remains unchanged; introducing a syntax feature does not always require
-new assembly operations.
+Python uses the same lowering, not a special runtime evaluator. This historical
+update-then-reverse strategy is imperfect for _Bool at value 1; general postfix
+semantics are not fully mature yet. Signed overflow remains outside portable C.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=41;return ++x;}\n' > /tmp/lesson78.c
-python3 python/main.py /tmp/lesson78.c > /tmp/lesson78.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson78 /tmp/lesson78.s
-/tmp/lesson78
+printf 'int main(){int x=42;return x++;}\n' > /tmp/lesson79.c
+python3 python/main.py /tmp/lesson79.c > /tmp/lesson79.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson79 /tmp/lesson79.s
+/tmp/lesson79
 echo $?
 ```
 
-The saved address is dereferenced, `add %edi, %eax` adds one, and a store updates
-x before main returns 42. Tests cover both prefix forms, pointer movement,
-side-effecting targets, sizeof suppression, invalid lvalues, assembly, and the
-updated original arithmetic and sizeof fixtures.
+The emitter stores 43 into x, then adds -1 to the expression result, returning
+42. Tests cover old/updated values, pointer precedence, side-effecting targets,
+char boundary conversion, sizeof suppression, tree types, invalid lvalues, and
+the original arithmetic/sizeof tests.
 
 ## Tests and attribution
 

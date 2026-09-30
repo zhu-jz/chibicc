@@ -58,6 +58,22 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_postfix_increment(self):
+        for source, expected in [
+            ("int main(){int x=2;return x++;}", 2),
+            ("int main(){int x=2;x--;return x;}", 1),
+            ("int main(){int a[2];a[0]=3;a[1]=42;int *p=a;int x=*p++;return x+*p;}", 45),
+            ("int main(){int a[2];a[0]=3;a[1]=7;int i=0;a[i++]++;return i+a[0]+a[1];}", 12),
+            ("int main(){char x=127;int y=x++;return y==127;}", 1),
+            ("int main(){char x=1;int s=sizeof(x++);return x+s;}", 2),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("char x=1;x++;")
+        node = function.body.body[-1].lhs
+        self.assertEqual((node.kind, node.ty.kind), ("CAST", "CHAR"))
+        self.assertEqual(len([var for var in function.locals if var.name == ""]), 1)
+        self.assertEqual(compile_program("int main(){return 1++;}").returncode, 1)
+
     def test_prefix_increment(self):
         for source, expected in [
             ("int main(){int x=2;return ++x;}", 3),

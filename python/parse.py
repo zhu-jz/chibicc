@@ -8,12 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
-
-
-def new_cast(expression, ty):
-    add_type(expression)
-    return Node("CAST", lhs=expression, ty=copy_type(ty), tok=expression.tok)
+from type import add_type, array_of, copy_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -26,7 +21,7 @@ def new_add(lhs, rhs, token):
     # Canonicalize integer + pointer to pointer + integer.
     if lhs.ty.base is None and rhs.ty.base is not None:
         lhs, rhs = rhs, lhs
-    rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
+    rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token, ty=ty_long), tok=token)
     return Node("+", lhs, rhs, tok=token)
 
 
@@ -36,7 +31,7 @@ def new_sub(lhs, rhs, token):
     if is_integer(lhs.ty) and is_integer(rhs.ty):
         return Node("-", lhs, rhs, tok=token)
     if lhs.ty.base is not None and is_integer(rhs.ty):
-        rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
+        rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token, ty=ty_long), tok=token)
         add_type(rhs)
         return Node("-", lhs, rhs, tok=token, ty=lhs.ty)
     if lhs.ty.base is not None and rhs.ty.base is not None:

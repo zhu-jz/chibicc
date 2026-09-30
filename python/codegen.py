@@ -61,9 +61,9 @@ class CodeGenerator:
         if ty.kind in ("ARRAY", "STRUCT", "UNION"):
             return
         if ty.size == 1:
-            self.assembly.append("  movsbq (%rax), %rax")
+            self.assembly.append("  movsbl (%rax), %eax")
         elif ty.size == 2:
-            self.assembly.append("  movswq (%rax), %rax")
+            self.assembly.append("  movswl (%rax), %eax")
         elif ty.size == 4:
             self.assembly.append("  movsxd (%rax), %rax")
         else:

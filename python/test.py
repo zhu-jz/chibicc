@@ -1,6 +1,7 @@
 """Run with python3 python/test.py on x86-64 Linux with GCC installed."""
 
 from pathlib import Path
+from dataclasses import replace
 import subprocess
 import sys
 import tempfile
@@ -41,7 +42,45 @@ def instruction_assembly(assembly):
                    if not line.lstrip().startswith((".file ", ".loc ")))
 
 
+def without_implicit_casts(node):
+    """Compare grammar trees; separate tests check the inserted conversions."""
+    if isinstance(node, list):
+        return [without_implicit_casts(child) for child in node]
+    if isinstance(node, Obj):
+        return replace(node, body=without_implicit_casts(node.body))
+    if not isinstance(node, Node):
+        return node
+    if node.kind == "CAST" and node.tok is node.lhs.tok:
+        return without_implicit_casts(node.lhs)
+    children = {name: without_implicit_casts(getattr(node, name))
+                for name in ("lhs", "rhs", "cond", "then", "els", "init", "inc", "body", "args")}
+    return replace(node, **children)
+
+
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_usual_arithmetic_conversions(self):
+        for source, expected in [
+            ("int main(){int x=-10;long y=5;return (x+y)==-5;}", 1),
+            ("int main(){char x=-1;short y=2;return sizeof(x+y);}", 4),
+            ("int main(){char x=-1;long y=2;return x+y;}", 1),
+            ("int main(){long x=(int)4294967295;return x<0;}", 1),
+            ("int main(){int a[2];a[0]=42;int i=-1;int *p=a+1;return p[i];}", 42),
+            ("int main(){return sizeof(1)+sizeof(1==2);}", 8),
+            ("int main(){return 1073741824*100/100;}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = parse_body("int x;long y;return x+y;").body.body[-1].lhs
+        self.assertEqual((node.ty.kind, node.lhs.kind, node.rhs.kind), ("LONG", "CAST", "CAST"))
+        self.assertEqual((node.lhs.lhs.ty.kind, node.lhs.ty.kind), ("INT", "LONG"))
+        comparison = parse_body("return 1<2;").body.body[0].lhs
+        self.assertEqual(comparison.ty.kind, "INT")
+        assignment = parse_body("long x; x=-1;").body.body[-1].lhs
+        self.assertEqual((assignment.rhs.kind, assignment.rhs.ty.kind), ("CAST", "LONG"))
+        self.assertIs(parse_body("return 2147483648;").body.body[0].lhs.ty, ty_long)
+        assembly = compile_program("int main(){char x=-1;long y=x;return y<0;}").stdout
+        self.assertIn("  movsbl (%rax), %eax\n", assembly)
+        self.assertIn("  movsxd %eax, %rax\n", assembly)
+
     def test_explicit_casts(self):
         for source, expected in [
             ("int main(){return (long)(short)65535<0;}", 1),
@@ -59,7 +98,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertIn("  movsxd %eax, %rax\n", assembly)
         node = parse_body("return (short)1;").body.body[0].lhs
         self.assertEqual((node.kind, node.ty.kind, node.lhs.ty.kind, node.tok.text),
-                         ("CAST", "SHORT", "LONG", "("))
+                         ("CAST", "SHORT", "INT", "("))
         for source in ["int main(){return (int 1;}", "int main(){return (int);}"]:
             self.assertEqual(compile_program(source).returncode, 1)
 
@@ -221,7 +260,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("short f(short a){return a;}int main(){short x=42;return f(x);}").stdout
         self.assertIn("  mov %di, -2(%rbp)\n", assembly)
         self.assertIn("  mov %ax, (%rdi)\n", assembly)
-        self.assertIn("  movswq (%rax), %rax\n", assembly)
+        self.assertIn("  movswl (%rax), %eax\n", assembly)
         self.assertEqual((ty_short.size, ty_short.align), (2, 2))
 
     def test_long_type(self):
@@ -231,7 +270,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("long f(long x){return x+1;}int main(){return f(4294967296)/65536/65536;}", 1),
             ("int main(){long a[2];a[0]=3;a[1]=4;return *(a+1);}", 4),
             ("int main(){struct {char a;long b;} x;return sizeof(x);}", 16),
-            ("int main(){return sizeof(1)+sizeof(1==2)+sizeof(missing());}", 24),
+            ("int main(){return sizeof(1)+sizeof(1==2)+sizeof(missing());}", 16),
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("long f(long a){return a;}int main(){long x=4294967296;return f(x)/65536/65536;}").stdout
@@ -239,7 +278,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
         self.assertIn("  mov %rax, (%rdi)\n", assembly)
         self.assertEqual((ty_long.size, ty_long.align), (8, 8))
-        self.assertIs(parse_body("return 1;").body.body[0].lhs.ty, ty_long)
+        self.assertIs(parse_body("return 1;").body.body[0].lhs.ty, ty_int)
         self.assertEqual(tokenize("9223372036854775807")[0].value, 9223372036854775807)
         self.assertEqual(tokenize("short")[0].kind, "KEYWORD")
         result = compile_program("int main(){short x;}")
@@ -394,7 +433,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         node = parse_body("return 1,2,3;").body.body[0].lhs
         self.assertEqual((node.kind, node.rhs.kind), ("COMMA", "COMMA"))
-        self.assertIs(node.ty, ty_long)
+        self.assertIs(node.ty, ty_int)
         result = compile_program("int main(){(1,2)=3;}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("not an lvalue", result.stderr)
@@ -644,7 +683,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         assembly = compile_program("int main(){char x=1;return x;}").stdout
         self.assertIn("  mov %al, (%rdi)\n", assembly)
-        self.assertIn("  movsbq (%rax), %rax\n", assembly)
+        self.assertIn("  movsbl (%rax), %eax\n", assembly)
 
     def test_global_variables(self):
         for source, expected in [
@@ -719,7 +758,8 @@ class ExpressionCompilerTests(unittest.TestCase):
         function = parse(tokenize("int main(){int x[2][3]; return x+1;}"))[0]
         ty = function.locals[0].ty
         self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,24,3,12))
-        self.assertEqual(function.body.body[-1].lhs.rhs.rhs.value, 12)
+        expression = without_implicit_casts(function.body.body[-1].lhs)
+        self.assertEqual(expression.rhs.rhs.value, 12)
         self.assert_program_returns("int main(){int x[2][3][4]; *(*(*(x+1)+2)+3)=9; return *(*(*(x+1)+2)+3);}", 9)
 
     def test_one_dimensional_arrays(self):
@@ -801,19 +841,20 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
-        expression = parse_body("int x; return &x+1;").body.body[-1].lhs
+        expression = without_implicit_casts(parse_body("int x; return &x+1;").body.body[-1].lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.ty.base.kind, "INT")
         self.assertEqual(expression.rhs.kind, "*")
         self.assertEqual(expression.rhs.rhs.value, 4)
         expression = parse_body("int x,y; return &x-&y;").body.body[-1].lhs
-        self.assertIs(expression.ty, ty_int)
+        self.assertEqual(expression.ty.kind, "INT")
         self.assertEqual(expression.kind, "/")
-        self.assertIs(expression.lhs.ty, ty_int)
-        self.assertEqual(expression.rhs.value, 4)
+        self.assertEqual(expression.lhs.ty.kind, "INT")
+        self.assertEqual((expression.lhs.kind, expression.rhs.kind), ("CAST", "CAST"))
+        self.assertEqual(expression.rhs.lhs.value, 4)
         expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs
         self.assertEqual(expression.lhs.ty.kind, "PTR")
-        expression = parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs
+        expression = without_implicit_casts(parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.rhs.kind, "*")
 
@@ -833,7 +874,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
         program = parse_body("int *x; 1**x;")
-        expression = program.body.body[1].lhs
+        expression = without_implicit_casts(program.body.body[1].lhs)
         self.assertEqual(expression.kind, "*")
         self.assertEqual(expression.rhs.kind, "DEREF")
         self.assertEqual(expression.rhs.tok.text, "*")
@@ -860,7 +901,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         statement = program.body.body[0]
         self.assertIs(program.body.tok, tokens[5])
         self.assertIs(statement.tok, tokens[5])
-        comparison = statement.lhs
+        comparison = without_implicit_casts(statement.lhs)
         self.assertEqual(comparison.kind, "<")
         self.assertEqual(comparison.tok.text, ">")
         multiply = comparison.rhs
@@ -945,7 +986,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 self.assert_program_returns(source, expected)
         program = parse_body("for(;;) return 3;")
         node = program.body.body[0]
-        self.assertEqual(node.init, Node("BLOCK"))
+        self.assertEqual(without_implicit_casts(node.init), Node("BLOCK"))
         self.assertIsNone(node.cond)
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
@@ -965,16 +1006,16 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         program = parse_body("if(1) if(0) return 2; else return 3;")
         outer = program.body.body[0]
         self.assertEqual(outer.kind, "IF")
-        self.assertEqual(outer.cond, Node("NUM", value=1))
+        self.assertEqual(without_implicit_casts(outer.cond), Node("NUM", value=1))
         self.assertIsNone(outer.els)
-        self.assertEqual(outer.then.els, Node("RETURN", lhs=Node("NUM", value=3)))
+        self.assertEqual(without_implicit_casts(outer.then.els), Node("RETURN", lhs=Node("NUM", value=3)))
         assembly = CodeGenerator().generate([program])
         for label in (".L.else.1:", ".L.end.1:", ".L.else.2:", ".L.end.2:"):
             self.assertEqual(assembly.count(label), 1)
 
     def test_null_statements(self):
         program = parse(tokenize('int main(){ ;;; return 5; }'))[0]
-        self.assertEqual(program.body, Node("BLOCK", body=[
+        self.assertEqual(without_implicit_casts(program.body), Node("BLOCK", body=[
             Node("BLOCK"), Node("BLOCK"), Node("BLOCK"),
             Node("RETURN", lhs=Node("NUM", value=5)),
         ]))
@@ -991,7 +1032,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_nested_block_tree(self):
         program = parse(tokenize('int main(){ {1;} return 2; }'))[0]
-        self.assertEqual(program.body, Node("BLOCK", body=[
+        self.assertEqual(without_implicit_casts(program.body), Node("BLOCK", body=[
             Node("BLOCK", body=[Node("EXPR_STMT", lhs=Node("NUM", value=1))]),
             Node("RETURN", lhs=Node("NUM", value=2)),
         ]))
@@ -1015,7 +1056,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_return_tree(self):
         program = parse_body("return 1+2; 3;")
-        self.assertEqual(program.body.body, [
+        self.assertEqual(without_implicit_casts(program.body.body), [
             Node("RETURN", lhs=Node("+", Node("NUM", value=1), Node("NUM", value=2))),
             Node("EXPR_STMT", lhs=Node("NUM", value=3)),
         ])
@@ -1025,9 +1066,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
         bar, foo = program.locals
         self.assertIs(program.body.body[0].body[0].lhs.lhs.var, foo)
-        self.assertIs(program.body.body[2].lhs.lhs.var, foo)
+        expression = without_implicit_casts(program.body.body[2].lhs)
+        self.assertIs(expression.lhs.var, foo)
         self.assertIs(program.body.body[1].body[0].lhs.lhs.var, bar)
-        self.assertIs(program.body.body[2].lhs.rhs.var, bar)
+        self.assertIs(expression.rhs.var, bar)
         CodeGenerator().generate([program])
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-4, -8, 16))
         another = parse_body("int foo=1; return foo;")
@@ -1045,7 +1087,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_statement_list(self):
         statements = parse_body("1; 2+3;")
-        self.assertEqual(statements.body.body, [
+        self.assertEqual(without_implicit_casts(statements.body.body), [
             Node("EXPR_STMT", lhs=Node("NUM", value=1)),
             Node("EXPR_STMT", lhs=Node("+", Node("NUM", value=2), Node("NUM", value=3))),
         ])
@@ -1058,7 +1100,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(parse_body(source), Obj("main", body=Node("BLOCK"), is_function=True,
+                self.assertEqual(without_implicit_casts(parse_body(source)), Obj("main", body=Node("BLOCK"), is_function=True,
                                                         is_definition=True))
                 result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -1132,7 +1174,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for source, expected in cases:
             with self.subTest(source=source):
                 statements = parse_body(source)
-                self.assertEqual(statements.body.body, [Node("EXPR_STMT", lhs=expected)])
+                self.assertEqual(without_implicit_casts(statements.body.body), [Node("EXPR_STMT", lhs=expected)])
                 generator = CodeGenerator()
                 generator.generate([statements])
                 self.assertEqual(generator.depth, 0)
@@ -1154,31 +1196,31 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("1; 2; 3;", "  mov $1, %rax\n  mov $2, %rax\n  mov $3, %rax\n"),
             ('42;', "  mov $42, %rax\n"),
             ('5+6*7;', "  mov $7, %rax\n  push %rax\n  mov $6, %rax\n"
-             "  pop %rdi\n  imul %rdi, %rax\n  push %rax\n  mov $5, %rax\n"
-             "  pop %rdi\n  add %rdi, %rax\n"),
+             "  pop %rdi\n  imul %edi, %eax\n  push %rax\n  mov $5, %rax\n"
+             "  pop %rdi\n  add %edi, %eax\n"),
             ('(3+5)/2;', "  mov $2, %rax\n  push %rax\n  mov $5, %rax\n"
-             "  push %rax\n  mov $3, %rax\n  pop %rdi\n  add %rdi, %rax\n"
-             "  pop %rdi\n  cqo\n  idiv %rdi\n"),
+             "  push %rax\n  mov $3, %rax\n  pop %rdi\n  add %edi, %eax\n"
+             "  pop %rdi\n  cdq\n  idiv %edi\n"),
             ('10-3;', "  mov $3, %rax\n  push %rax\n  mov $10, %rax\n"
-             "  pop %rdi\n  sub %rdi, %rax\n"),
+             "  pop %rdi\n  sub %edi, %eax\n"),
             ('-10;', "  mov $10, %rax\n  neg %rax\n"),
             ('+10;', "  mov $10, %rax\n"),
             ('- - +10;', "  mov $10, %rax\n  neg %rax\n  neg %rax\n"),
             ('2*-(3+4);', "  mov $4, %rax\n  push %rax\n  mov $3, %rax\n"
-             "  pop %rdi\n  add %rdi, %rax\n  neg %rax\n  push %rax\n"
-             "  mov $2, %rax\n  pop %rdi\n  imul %rdi, %rax\n"),
+             "  pop %rdi\n  add %edi, %eax\n  neg %rax\n  push %rax\n"
+             "  mov $2, %rax\n  pop %rdi\n  imul %edi, %eax\n"),
             ('1==2;', "  mov $2, %rax\n  push %rax\n  mov $1, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  sete %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  sete %al\n  movzb %al, %rax\n"),
             ('1!=2;', "  mov $2, %rax\n  push %rax\n  mov $1, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  setne %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  setne %al\n  movzb %al, %rax\n"),
             ('1<2;', "  mov $2, %rax\n  push %rax\n  mov $1, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  setl %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  setl %al\n  movzb %al, %rax\n"),
             ('1<=2;', "  mov $2, %rax\n  push %rax\n  mov $1, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  setle %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  setle %al\n  movzb %al, %rax\n"),
             ('1>2;', "  mov $1, %rax\n  push %rax\n  mov $2, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  setl %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  setl %al\n  movzb %al, %rax\n"),
             ('1>=2;', "  mov $1, %rax\n  push %rax\n  mov $2, %rax\n"
-             "  pop %rdi\n  cmp %rdi, %rax\n  setle %al\n  movzb %al, %rax\n"),
+             "  pop %rdi\n  cmp %edi, %eax\n  setle %al\n  movzb %al, %rax\n"),
         ]
         for source, instructions in cases:
             with self.subTest(source=source):
@@ -1374,7 +1416,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){(0-7)/(0-2);}', 3),
             ('int main(){(0-3)*4;}', 244),
             ('int main(){100/(2+3*(4-2));}', 12),
-            ('int main(){65536*65536/65536/65536;}', 1),
+            ('int main(){65536*65536/65536/65536;}', 0),
             ('int main(){-10+20;}', 10),
             ('int main(){- -10;}', 10),
             ('int main(){- - +10;}', 10),
@@ -1412,7 +1454,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){0>-1;}', 1),
             ('int main(){-2<=-1;}', 1),
             ('int main(){-1>=0;}', 0),
-            ('int main(){2147483647+1>0;}', 1),
+            ('int main(){2147483647+1>0;}', 0),
             ('int main(){5+6*7==47;}', 1),
             ('int main(){5+6*7!=47;}', 0),
             ('int main(){5==2+3;}', 1),
@@ -1533,7 +1575,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             self.assertEqual(statement.kind, "EXPR_STMT")
             self.assertEqual(statement.lhs.kind, "ASSIGN")
         program = parse_body("int a,b; a=b=3;")
-        assignment = program.body.body[1].lhs
+        assignment = without_implicit_casts(program.body.body[1].lhs)
         self.assertEqual(assignment.kind, "ASSIGN")
         self.assertEqual(assignment.rhs.kind, "ASSIGN")
         result = compile_program('int main(){int x; return 7;}')

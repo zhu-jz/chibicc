@@ -1,47 +1,47 @@
-# Lesson 67: Explicit type casts
+# Lesson 68: Implicit arithmetic conversions
 
-Original chibicc commit: [`cfc4fa94c1eb17f37466571f74bbdfae03a6e11f`](https://github.com/rui314/chibicc/commit/cfc4fa94c1eb17f37466571f74bbdfae03a6e11f).
+Original chibicc commit: [`8b430a6c5fd6d33a637f2c615f8e5ec59e7be30e`](https://github.com/rui314/chibicc/commit/8b430a6c5fd6d33a637f2c615f8e5ec59e7be30e).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Cast expressions use `(` type-name `)` followed by another cast or unary
-expression. Scope-aware type-name recognition distinguishes `(T)x` from a
-parenthesized variable. Multiplication and unary operators now call this cast
-parser, preserving precedence. A CAST node records its already-annotated
-operand and a copied destination type; explicit casts keep the opening
-parenthesis as their source token.
+Type annotation now inserts CAST nodes. Char and short arithmetic promotes
+to int; an eight-byte operand selects long; a pointer left operand selects a
+pointer to its base. Both binary operands convert to that common type.
+Comparisons return int. Unary minus also promotes its operand, and assignment
+converts its right operand to the left type (struct copying remains separate).
 
-Codegen evaluates the operand and follows upstream's conversion table.
-Narrowing to char/short uses `movsbl %al, %eax` or `movswl %ax, %eax`.
-Widening small integers to long uses `movsxd %eax, %rax`. Casts between
-pointer/long representations emit no conversion instruction. A void cast
-still evaluates side effects, then performs no conversion.
+A numeric node now selects int if its value fits signed thirty-two bits,
+otherwise long. Pointer scaling constants are explicitly long so multiplying
+a negative int index first sign-extends it to the address width. Char/short
+loads extend to eax, and a later cast to long extends eax to rax as needed.
+Functions still default to long call results; full call and return conversion
+rules remain incomplete at this original stage.
 
-The table has intermediate no-op cases, including long-to-int. A following
-thirty-two-bit use observes the low bits; not every wider context has the
-implicit conversion it needs yet. Full cast legality and automatic arithmetic,
-assignment and call conversions are not added by this original commit.
-Python emits the same table instead of evaluating casts at compile time.
+Python keeps the cast-building helper in type.py to avoid an import cycle
+between the parser and type annotator; C exports it from parse.c through its
+header. Grammar tests ignore only implicit wrappers (which share the operand's
+source token). New conversion tests inspect actual wrappers and their types,
+while explicit casts stay visible in grammar comparisons.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return (long)(short)65535<0;}\n' > /tmp/lesson67.c
-python3 python/main.py -o /tmp/lesson67.s /tmp/lesson67.c
-cat /tmp/lesson67.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson67 /tmp/lesson67.s
-/tmp/lesson67
+printf 'int main(){char x=-1;long y=x;return y<0;}\n' > /tmp/lesson68.c
+python3 python/main.py -o /tmp/lesson68.s /tmp/lesson68.c
+cat /tmp/lesson68.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson68 /tmp/lesson68.s
+/tmp/lesson68
 echo $?
 ```
 
-`movswl %ax, %eax` selects and sign-extends the low word (-1), and
-`movsxd %eax, %rax` extends it to long. A signed comparison produces 1,
-which the shell displays as the exit status. Tests cover upstream's narrowing,
-address/integer and pointer casts, nested sign extensions, typedef ambiguity,
-void side effects, sizeof casts and malformed syntax. Casting a negative int
-index to long also verifies a real backwards pointer access. The new cast
-fixture runs with all upstream C fixtures.
+`movsbl (%rax), %eax` loads x's signed byte; `movsxd %eax, %rax` widens it
+before storing into the long y. The signed comparison returns 1, displayed by
+the shell. Small-literal arithmetic now uses eax/edi and can wrap at thirty-two
+bits; overflow tests describe emitted machine behavior, not portable C rules.
+Tests cover mixed signed arithmetic, promotions and sizeof, assignment casts,
+negative variable indices, wrapper metadata, and all updated upstream fixtures.
+The full Python suite is run to check instruction and runtime progression.
 
 ## Tests and attribution
 

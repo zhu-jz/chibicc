@@ -6,7 +6,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 
 from dataclasses import replace
 
-from common import CompileError, Type
+from common import CompileError, Node, Type
 
 
 ty_void = Type("VOID", size=1, align=1)
@@ -36,6 +36,24 @@ def array_of(base, length):
     return Type("ARRAY", base, size=base.size * length, array_len=length, align=base.align)
 
 
+def new_cast(expression, ty):
+    add_type(expression)
+    return Node("CAST", lhs=expression, ty=copy_type(ty), tok=expression.tok)
+
+
+def get_common_type(left, right):
+    if left.base is not None:
+        return pointer_to(left.base)
+    if left.size == 8 or right.size == 8:
+        return ty_long
+    return ty_int
+
+
+def usual_arith_conv(left, right):
+    ty = get_common_type(left.ty, right.ty)
+    return new_cast(left, ty), new_cast(right, ty)
+
+
 def add_type(node):
     if node is None or node.ty is not None:
         return
@@ -48,13 +66,24 @@ def add_type(node):
     for arg in node.args:
         add_type(arg)
 
-    if node.kind in ("+", "-", "*", "/", "NEG"):
+    if node.kind == "NUM":
+        node.ty = ty_int if -(2**31) <= node.value < 2**31 else ty_long
+    elif node.kind in ("+", "-", "*", "/"):
+        node.lhs, node.rhs = usual_arith_conv(node.lhs, node.rhs)
         node.ty = node.lhs.ty
+    elif node.kind == "NEG":
+        node.ty = get_common_type(ty_int, node.lhs.ty)
+        node.lhs = new_cast(node.lhs, node.ty)
     elif node.kind == "ASSIGN":
         if node.lhs.ty.kind == "ARRAY":
             raise CompileError(node.lhs.tok, "not an lvalue")
+        if node.lhs.ty.kind != "STRUCT":
+            node.rhs = new_cast(node.rhs, node.lhs.ty)
         node.ty = node.lhs.ty
-    elif node.kind in ("==", "!=", "<", "<=", "NUM", "FUNCALL"):
+    elif node.kind in ("==", "!=", "<", "<="):
+        node.lhs, node.rhs = usual_arith_conv(node.lhs, node.rhs)
+        node.ty = ty_int
+    elif node.kind == "FUNCALL":
         node.ty = ty_long
     elif node.kind == "VAR":
         node.ty = node.var.ty

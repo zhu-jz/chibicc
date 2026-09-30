@@ -70,8 +70,20 @@ class Obj:
 
 
 @dataclass
+class VarScope:
+    name: str
+    var: Optional[Obj] = None
+    type_def: Optional[Type] = None
+
+
+@dataclass
+class VarAttr:
+    is_typedef: bool = False
+
+
+@dataclass
 class Scope:
-    vars: list[Obj] = field(default_factory=list)
+    vars: list[VarScope] = field(default_factory=list)
     tags: dict[str, Type] = field(default_factory=dict)
 
 

@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Member, Node, Obj, Scope, Type, align_to
+from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
 
 
@@ -54,16 +54,21 @@ class Parser:
     def leave_scope(self):
         self.scopes.pop()
 
+    def push_scope(self, name):
+        binding = VarScope(name)
+        self.scopes[-1].vars.insert(0, binding)
+        return binding
+
     def new_lvar(self, name, ty):
         var = Obj(name, ty=ty, is_local=True)
         self.locals.insert(0, var)
-        self.scopes[-1].vars.insert(0, var)
+        self.push_scope(name).var = var
         return var
 
     def new_gvar(self, name, ty):
         var = Obj(name, ty=ty)
         self.globals.insert(0, var)
-        self.scopes[-1].vars.insert(0, var)
+        self.push_scope(name).var = var
         return var
 
     def new_string_literal(self, data, ty):
@@ -74,15 +79,23 @@ class Parser:
 
     def find_var(self, name):
         for scope in reversed(self.scopes):
-            for var in scope.vars:
-                if var.name == name:
-                    return var
+            for binding in scope.vars:
+                if binding.name == name:
+                    return binding
         return None
 
     def find_tag(self, name):
         for scope in reversed(self.scopes):
             if name in scope.tags:
                 return scope.tags[name]
+        return None
+
+    def find_typedef(self, position):
+        token = self.tokens[position]
+        if token.kind == "IDENT":
+            binding = self.find_var(token.text)
+            if binding is not None:
+                return binding.type_def
         return None
 
     # Each parser function returns (node, next unconsumed token index).
@@ -235,10 +248,10 @@ class Parser:
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":
                 return self.funcall(position)
-            var = self.find_var(token.text)
-            if var is None:
+            binding = self.find_var(token.text)
+            if binding is None or binding.var is None:
                 raise CompileError(token, "undefined variable")
-            return Node("VAR", var=var, tok=token), position + 1
+            return Node("VAR", var=binding.var, tok=token), position + 1
 
         if token.kind == "STR":
             var = self.new_string_literal(token.str, token.ty)
@@ -305,11 +318,11 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "char", "short", "int", "long",
-                                              "struct", "union")
+                                              "struct", "union", "typedef") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
-    def declspec(self, position):
+    def declspec(self, position, attr=None):
         combinations = {
             ("void",): ty_void, ("char",): ty_char,
             ("short",): ty_short, ("int", "short"): ty_short,
@@ -321,11 +334,23 @@ class Parser:
         specifiers = []
         while self.is_typename(position):
             token = self.tokens[position]
-            if token.text in ("struct", "union"):
+            if token.text == "typedef":
+                if attr is None:
+                    raise CompileError(token, "storage class specifier is not allowed in this context")
+                attr.is_typedef = True
+                position += 1
+                continue
+            type_def = self.find_typedef(position)
+            if token.text in ("struct", "union") or type_def is not None:
+                if specifiers:
+                    break
                 if token.text == "struct":
                     ty, position = self.struct_decl(position + 1)
-                else:
+                elif token.text == "union":
                     ty, position = self.union_decl(position + 1)
+                else:
+                    ty = type_def
+                    position += 1
                 specifiers.append("other")
                 continue
             specifiers.append(token.text)
@@ -441,8 +466,7 @@ class Parser:
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
-    def declaration(self, position):
-        basety, position = self.declspec(position)
+    def declaration(self, position, basety):
         statements = []
         first = True
         while self.tokens[position].text != ";":
@@ -471,7 +495,12 @@ class Parser:
         self.enter_scope()
         while self.tokens[position].text != "}":
             if self.is_typename(position):
-                node, position = self.declaration(position)
+                attr = VarAttr()
+                basety, position = self.declspec(position, attr)
+                if attr.is_typedef:
+                    position = self.parse_typedef(position, basety)
+                    continue
+                node, position = self.declaration(position, basety)
             else:
                 node, position = self.stmt(position)
             add_type(node)
@@ -526,11 +555,27 @@ class Parser:
         ty, _ = self.declarator(position, Type("INT"))
         return ty.kind == "FUNC"
 
-    # program = (function-definition | global-variable)*
+    def parse_typedef(self, position, basety):
+        first = True
+        while self.tokens[position].text != ";":
+            if not first:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            first = False
+            ty, position = self.declarator(position, basety)
+            self.push_scope(ty.name.text).type_def = ty
+        return position + 1
+
+    # program = (typedef | function-definition | global-variable)*
     def parse(self):
         position = 0
         while self.tokens[position].kind != "EOF":
-            basety, position = self.declspec(position)
+            attr = VarAttr()
+            basety, position = self.declspec(position, attr)
+            if attr.is_typedef:
+                position = self.parse_typedef(position, basety)
+                continue
             if self.is_function(position):
                 position = self.function(position, basety)
             else:

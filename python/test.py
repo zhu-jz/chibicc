@@ -42,6 +42,28 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_typedefs(self):
+        for source, expected in [
+            ("typedef int Row[3];int main(){Row a[2];Row *p=a;p[1][2]=42;return a[1][2];}", 42),
+            ("typedef long L;L twice(L x){return x+x;}int main(){return twice(2147483648)/65536/65536;}", 1),
+            ("typedef int T;int main(){{int T=3;}T x=42;return x;}", 42),
+            ("typedef int T;int main(){int T=3;{typedef char T;T c=2;}return T;}", 3),
+            ("int main(){typedef int t;t t=3;return t;}", 3),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertEqual(compile_program("typedef int T;").stdout, '.file 1 "-"\n')
+        program = parse_body("typedef int T;T x=1;")
+        self.assertEqual([var.name for var in program.locals], ["x"])
+        for source, message in [
+            ("int main(){{typedef int T;}T x;}", "undefined variable"),
+            ("int main(){typedef int T;return T;}", "undefined variable"),
+            ("struct s{typedef int T;};", "storage class specifier is not allowed in this context"),
+            ("int f(typedef int x);", "storage class specifier is not allowed in this context"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_long_long_alias(self):
         for spelling in ["long long", "long long int", "int long long", "long int long"]:
             self.assert_program_returns("int main(){" + spelling + " x;return sizeof(x);}", 8)

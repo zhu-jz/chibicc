@@ -1,6 +1,6 @@
-"""Lesson 63: Long long as an alias for long.
+"""Lesson 64: Typedef names and scope.
 
-Based on chibicc commit f46370ef98adec5d3a840d69a6b34a03d80b0699.
+Based on chibicc commit a6b82da1ae9eefa44dada0baa885c283823ad59a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

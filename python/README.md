@@ -1,39 +1,47 @@
-# Lesson 63: Long long as an alias for long
+# Lesson 64: Typedef names and scope
 
-Original chibicc commit: [`f46370ef98adec5d3a840d69a6b34a03d80b0699`](https://github.com/rui314/chibicc/commit/f46370ef98adec5d3a840d69a6b34a03d80b0699).
+Original chibicc commit: [`a6b82da1ae9eefa44dada0baa885c283823ad59a`](https://github.com/rui314/chibicc/commit/a6b82da1ae9eefa44dada0baa885c283823ad59a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The permitted type-word combinations now include two longs, with an optional
-int: `long long`, `long long int`, `int long long`, and `long int long` all
-select the existing LONG type. Size and alignment are both 8. No separate type
-kind or codegen instruction is needed because this original step deliberately
-makes long long an alias for long.
+Typedef creates a name for a type: `typedef int T;`, `typedef int Row[3];`, or
+`typedef struct {int a;} S;`. An alias is available wherever a type is parsed,
+including parameters and members. It creates no variable, stack slot, data
+symbol, or executable instruction. Comma-separated aliases and an empty
+`typedef int;` are accepted as in upstream; `typedef t;` defaults to int.
 
-This supplies the cases missing in lesson 62's actual C switch. Three longs,
-two ints, and combining short with long remain invalid. Python extends its
-explicit combination table rather than C's packed keyword counter; the
-accepted combinations have the same behavior. Literal typing and arithmetic
-conversion limits remain at the previous stage.
+Variable scope entries now distinguish an object binding from a type_def
+binding. Lookup stops at the nearest name either way, so a variable can hide
+a typedef. `typedef int t; t t=3;` first uses the alias as the type, then
+registers the second t as a variable. The declaration-specifier parser stops
+after the already-selected type rather than consuming that name a second time.
+Block scope restores an outer alias after the inner binding ends. Struct/union
+tags still have their separate name space.
+
+VarAttr carries the typedef flag while declaration specifiers are parsed.
+Parameters and struct members pass no attributes and reject typedef there.
+Python dataclasses and lists represent C's scope records; copying a named
+declaration's Type keeps shared aliases' name metadata intact. Function-call
+signature, return-conversion, and aggregate ABI limits remain at this stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){long long x=4294967296;return x/65536/65536;}\n' > /tmp/lesson63.c
-python3 python/main.py -o /tmp/lesson63.s /tmp/lesson63.c
-cat /tmp/lesson63.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson63 /tmp/lesson63.s
-/tmp/lesson63
+printf 'typedef int T;int main(){T x=42;return x;}\n' > /tmp/lesson64.c
+python3 python/main.py -o /tmp/lesson64.s /tmp/lesson64.c
+cat /tmp/lesson64.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson64 /tmp/lesson64.s
+/tmp/lesson64
 echo $?
 ```
 
-The literal and full `%rax` store/load preserve the eight-byte value, and two
-signed divisions return 1. The assembly is the same as for a long declaration;
-the shell displays status 1 and the executable prints nothing. Tests inspect
-the alias's type/size/alignment for all word orders, execute a wide stored
-value, reject excess/mixed specifiers, and run the updated upstream declaration
-fixture with every other C fixture.
+Only x occupies storage: it is a four-byte int at -4(%rbp). The existing
+`%eax` store and sign-extending int load return 42; the shell displays its
+status. Tests cover all upstream alias cases, arrays and pointer-to-array
+aliases, aliased return/parameter types, shadowing, no typedef storage, and
+invalid alias expressions/contexts. The new upstream typedef fixture runs
+with every other C fixture; the full Python suite is also checked.
 
 ## Tests and attribution
 

@@ -69,6 +69,12 @@ class Obj:
 
 
 @dataclass
+class Scope:
+    vars: list[Obj] = field(default_factory=list)
+    tags: dict[str, Type] = field(default_factory=dict)
+
+
+@dataclass
 class Node:
     kind: str
     lhs: Optional["Node"] = None

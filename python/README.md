@@ -1,44 +1,43 @@
-# Lesson 51: Aligned local stack slots
+# Lesson 52: Struct tags and their scope
 
-Original chibicc commit: [`dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4`](https://github.com/rui314/chibicc/commit/dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4).
+Original chibicc commit: [`e1e831ea3ee46ed7d4c975822f418d60d3050e1b`](https://github.com/rui314/chibicc/commit/e1e831ea3ee46ed7d4c975822f418d60d3050e1b).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Stack allocation now respects each local variable's alignment. Walking the
-function's locals in their existing reverse declaration order, first add the
-variable's size, round the running offset up to its alignment, then negate
-that offset to get its address relative to `%rbp`. The complete frame is
-still rounded to 16 bytes. Struct fields already have internal alignment;
-this commit also aligns their containing local object.
+A struct definition may now have a tag: `struct Point {int x; int y;};`.
+Later `struct Point p;` retrieves that type from the nearest visible tag
+binding. A tag-only definition needs no variable declaration. A definition
+inside braces shadows an outer tag until the block ends.
 
-For `int x; char y;`, allocation visits y first: y is at -1 and x at -16.
-The seven-byte gap makes x's start divisible by eight. For `char x; int y;`,
-y is at -8 and x at -9, with no intervening padding. No extra instruction
-executes to create padding; only addresses and frame size change.
+Each Scope now holds separate variable and tag collections. A variable and
+a tag may share a spelling: `int Point; struct Point p;` is unambiguous because
+`struct` selects the tag collection. Python uses a dictionary for tags and
+lists for variable bindings, replacing C's linked lists in its Scope records.
+The declaration's type is still copied to attach a variable name without
+changing the shared tag's type metadata.
 
-Python reuses align_to with integer `//`. Global data alignment and call-site
-temporary-stack alignment remain at their previous stage; this commit only
-changes local-variable offsets. Ints are still eight bytes. Upstream's new
-address-difference examples intentionally depend on this compiler's layout
-rather than portable C guarantees about separate local variables.
+This commit registers a tag after its definition finishes. Unknown tags are
+errors; forward declarations and a self-referential struct are not supported
+at this point. Layout and field access keep their previous aligned behavior.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=42;char y=1;return x;}\n' > /tmp/lesson51.c
-python3 python/main.py -o /tmp/lesson51.s /tmp/lesson51.c
-cat /tmp/lesson51.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson51 /tmp/lesson51.s
-/tmp/lesson51
+printf 'struct Point{int x;int y;}; int main(){struct Point p;p.x=20;p.y=22;return p.x+p.y;}\n' > /tmp/lesson52.c
+python3 python/main.py -o /tmp/lesson52.s /tmp/lesson52.c
+cat /tmp/lesson52.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson52 /tmp/lesson52.s
+/tmp/lesson52
 echo $?
 ```
 
-The prologue reserves 16 bytes. Addresses use `lea -1(%rbp), %rax` for y and
-`lea -16(%rbp), %rax` for x. The typed stores and loads are unchanged, and
-the shell displays status 42. Tests inspect offsets and frame sizes for both
-orders and a struct/char mixture, run the two upstream address-difference
-examples, and run the updated C variable fixture with the other C fixtures.
+The tag itself emits no instructions or storage. p occupies 16 bytes, with
+fields at offsets 0 and 8. Member-address instructions and integer stores,
+loads, and addition produce 42 in `%rax`; the shell displays exit status 42.
+Tests cover upstream's four tagged-struct cases, global usage, inner/outer tag
+scope, separate variable names, unknown tags, and the current self-reference
+limit, alongside the complete C fixture suite.
 
 ## Tests and attribution
 

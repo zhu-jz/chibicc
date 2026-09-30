@@ -42,6 +42,21 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_tags(self):
+        for source, expected in [
+            ("struct t{int a;};struct t g;int main(){g.a=5;return g.a;}", 5),
+            ("int main(){struct t{int a;};{struct t{char a;};struct t x;return sizeof(x);}}", 1),
+            ("int main(){struct t{int a;};{struct t{char a;};}struct t x;return sizeof(x);}", 8),
+            ("int main(){struct t{int a;};int t=3;struct t x;x.a=4;return t+x.a;}", 7),
+        ]:
+            self.assert_program_returns(source, expected)
+        for source in ["int main(){struct missing x;}",
+                       "int main(){{struct t{int a;};}struct t x;}",
+                       "struct t{struct t *next;};"]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unknown struct type", result.stderr)
+
     def test_local_alignment(self):
         for source, offsets, stack_size in [
             ("int x;char y;", [-1, -16], 16),

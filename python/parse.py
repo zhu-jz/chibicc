@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Member, Node, Obj, Type, align_to
+from common import CompileError, Member, Node, Obj, Scope, Type, align_to
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int
 
 
@@ -46,10 +46,10 @@ class Parser:
         self.locals = []
         self.globals = []
         self.unique_id = 0
-        self.scopes = [[]]  # Global scope, followed by nested block scopes.
+        self.scopes = [Scope()]  # Global scope, followed by nested block scopes.
 
     def enter_scope(self):
-        self.scopes.append([])
+        self.scopes.append(Scope())
 
     def leave_scope(self):
         self.scopes.pop()
@@ -57,13 +57,13 @@ class Parser:
     def new_lvar(self, name, ty):
         var = Obj(name, ty=ty, is_local=True)
         self.locals.insert(0, var)
-        self.scopes[-1].insert(0, var)
+        self.scopes[-1].vars.insert(0, var)
         return var
 
     def new_gvar(self, name, ty):
         var = Obj(name, ty=ty)
         self.globals.insert(0, var)
-        self.scopes[-1].insert(0, var)
+        self.scopes[-1].vars.insert(0, var)
         return var
 
     def new_string_literal(self, data, ty):
@@ -74,9 +74,15 @@ class Parser:
 
     def find_var(self, name):
         for scope in reversed(self.scopes):
-            for var in scope:
+            for var in scope.vars:
                 if var.name == name:
                     return var
+        return None
+
+    def find_tag(self, name):
+        for scope in reversed(self.scopes):
+            if name in scope.tags:
+                return scope.tags[name]
         return None
 
     # Each parser function returns (node, next unconsumed token index).
@@ -303,8 +309,17 @@ class Parser:
             return self.struct_decl(position + 1)
         raise CompileError(self.tokens[position], "typename expected")
 
-    # struct-decl = "{" (declspec (declarator ("," declarator)*)? ";")* "}"
+    # struct-decl = identifier? "{" struct-members "}" | identifier
     def struct_decl(self, position):
+        tag = None
+        if self.tokens[position].kind == "IDENT":
+            tag = self.tokens[position]
+            position += 1
+        if tag is not None and self.tokens[position].text != "{":
+            ty = self.find_tag(tag.text)
+            if ty is None:
+                raise CompileError(tag, "unknown struct type")
+            return ty, position
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
         position += 1
@@ -328,8 +343,11 @@ class Parser:
             member.offset = offset
             offset += member.ty.size
             alignment = max(alignment, member.ty.align)
-        return Type("STRUCT", size=align_to(offset, alignment), align=alignment,
-                    members=members), position + 1
+        ty = Type("STRUCT", size=align_to(offset, alignment), align=alignment,
+                  members=members)
+        if tag is not None:
+            self.scopes[-1].tags[tag.text] = ty
+        return ty, position + 1
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
     def func_params(self, position, ty):

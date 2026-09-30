@@ -1,6 +1,6 @@
-"""Lesson 51: Aligned local stack slots.
+"""Lesson 52: Struct tags and their scope.
 
-Based on chibicc commit dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4.
+Based on chibicc commit e1e831ea3ee46ed7d4c975822f418d60d3050e1b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

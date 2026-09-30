@@ -1,43 +1,42 @@
-# Lesson 52: Struct tags and their scope
+# Lesson 53: Member access through pointers
 
-Original chibicc commit: [`e1e831ea3ee46ed7d4c975822f418d60d3050e1b`](https://github.com/rui314/chibicc/commit/e1e831ea3ee46ed7d4c975822f418d60d3050e1b).
+Original chibicc commit: [`f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef`](https://github.com/rui314/chibicc/commit/f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A struct definition may now have a tag: `struct Point {int x; int y;};`.
-Later `struct Point p;` retrieves that type from the nearest visible tag
-binding. A tag-only definition needs no variable declaration. A definition
-inside braces shadows an outer tag until the block ends.
+The tokenizer recognizes `->` as one punctuation token. Postfix parsing rewrites
+`p->field` into a DEREF node for p followed by the existing MEMBER node. This
+is exactly the operation described by `(*p).field`: obtain the pointed-to
+struct, then select its field. Chains such as `p->next->value` and combinations
+with array subscripts work through the same postfix loop.
 
-Each Scope now holds separate variable and tag collections. A variable and
-a tag may share a spelling: `int Point; struct Point p;` is unambiguous because
-`struct` selects the tag collection. Python uses a dictionary for tags and
-lists for variable bindings, replacing C's linked lists in its Scope records.
-The declaration's type is still copied to attach a variable name without
-changing the shared tag's type metadata.
+No code-generation rule is added. Address generation for DEREF evaluates the
+pointer expression; MEMBER then adds the field offset. Reading the selected
+member loads its type, while assigning to it stores through that address.
+Type checking rejects a non-pointer dereference or a member access on an int.
+As before, runtime pointer validity is not checked.
 
-This commit registers a tag after its definition finishes. Unknown tags are
-errors; forward declarations and a self-referential struct are not supported
-at this point. Layout and field access keep their previous aligned behavior.
+Python's ordinary nested nodes express the same lowering as upstream's C
+nodes. This step introduces no additional Python/C semantic difference.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'struct Point{int x;int y;}; int main(){struct Point p;p.x=20;p.y=22;return p.x+p.y;}\n' > /tmp/lesson52.c
-python3 python/main.py -o /tmp/lesson52.s /tmp/lesson52.c
-cat /tmp/lesson52.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson52 /tmp/lesson52.s
-/tmp/lesson52
+printf 'int main(){struct t{int a;} x;struct t *p=&x;p->a=42;return x.a;}\n' > /tmp/lesson53.c
+python3 python/main.py -o /tmp/lesson53.s /tmp/lesson53.c
+cat /tmp/lesson53.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson53 /tmp/lesson53.s
+/tmp/lesson53
 echo $?
 ```
 
-The tag itself emits no instructions or storage. p occupies 16 bytes, with
-fields at offsets 0 and 8. Member-address instructions and integer stores,
-loads, and addition produce 42 in `%rax`; the shell displays exit status 42.
-Tests cover upstream's four tagged-struct cases, global usage, inner/outer tag
-scope, separate variable names, unknown tags, and the current self-reference
-limit, alongside the complete C fixture suite.
+Codegen loads p's address value, adds a's offset (zero here), and stores 42
+through it. The final field load returns 42 in `%rax`, so the shell displays
+42. Tests execute upstream's read/write examples, array/pointer combinations,
+a chain through a pointer field, and invalid types. An instruction comparison
+confirms that `p->a` emits the same code as `(*p).a`; the C struct fixture is
+updated and run with all other upstream C fixtures.
 
 ## Tests and attribution
 

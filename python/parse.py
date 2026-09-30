@@ -178,7 +178,7 @@ class Parser:
                 return Node("MEMBER", lhs=lhs, member=member, tok=token)
         raise CompileError(token, "no such member")
 
-    # postfix = primary ("[" expr "]" | "." identifier)*
+    # postfix = primary ("[" expr "]" | "." identifier | "->" identifier)*
     def postfix(self, position):
         node, position = self.primary(position)
         while True:
@@ -190,6 +190,10 @@ class Parser:
                 node = Node("DEREF", lhs=new_add(node, index, token), tok=token)
                 position += 1
             elif self.tokens[position].text == ".":
+                node = self.struct_ref(node, self.tokens[position + 1])
+                position += 2
+            elif self.tokens[position].text == "->":
+                node = Node("DEREF", lhs=node, tok=self.tokens[position])
                 node = self.struct_ref(node, self.tokens[position + 1])
                 position += 2
             else:

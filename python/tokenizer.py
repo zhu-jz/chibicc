@@ -150,7 +150,7 @@ def tokenize(source):
             tokens.append(Token("IDENT", source[start:position], start))
             continue
 
-        if source.startswith(("==", "!=", "<=", ">="), position):
+        if source.startswith(("==", "!=", "<=", ">=", "->"), position):
             tokens.append(Token("PUNCT", source[position:position + 2], position))
             position += 2
             continue

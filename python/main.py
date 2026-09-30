@@ -1,6 +1,6 @@
-"""Lesson 52: Struct tags and their scope.
+"""Lesson 53: Member access through pointers.
 
-Based on chibicc commit e1e831ea3ee46ed7d4c975822f418d60d3050e1b.
+Based on chibicc commit f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

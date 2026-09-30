@@ -42,6 +42,25 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_member_arrow(self):
+        for source, expected in [
+            ("int main(){struct t{char a;} x;struct t *y=&x;x.a=3;return y->a;}", 3),
+            ("int main(){struct t{char a;} x;struct t *y=&x;y->a=3;return x.a;}", 3),
+            ("int main(){struct t{int a;} x[2];struct t *p=x;p[1].a=7;return (p+1)->a;}", 7),
+            ("int main(){struct n{int v;} x;struct h{struct n *p;} y;struct h *z=&y;y.p=&x;z->p->v=42;return x.v;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        prefix = "int main(){struct t{int a;} x;struct t *p=&x;"
+        arrow = compile_program(prefix + "return p->a;}")
+        dot = compile_program(prefix + "return (*p).a;}")
+        self.assertEqual(instruction_assembly(arrow.stdout), instruction_assembly(dot.stdout))
+        self.assertEqual(tokenize("p->a")[1].text, "->")
+        for source, message in [("int main(){int x;return x->a;}", "invalid pointer dereference"),
+                                ("int main(){int x;int *p=&x;return p->a;}", "not a struct")]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_struct_tags(self):
         for source, expected in [
             ("struct t{int a;};struct t g;int main(){g.a=5;return g.a;}", 5),

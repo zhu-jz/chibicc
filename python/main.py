@@ -1,6 +1,6 @@
-"""Lesson 53: Member access through pointers.
+"""Lesson 54: Unions and overlapping storage.
 
-Based on chibicc commit f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef.
+Based on chibicc commit 11e3841832697c8ba4a1d68f5daa05045f70a716.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

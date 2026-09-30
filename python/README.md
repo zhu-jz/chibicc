@@ -1,42 +1,44 @@
-# Lesson 53: Member access through pointers
+# Lesson 54: Unions and overlapping storage
 
-Original chibicc commit: [`f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef`](https://github.com/rui314/chibicc/commit/f0a018a7d6f5e3847d7e66e324c5f71a55c8b5ef).
+Original chibicc commit: [`11e3841832697c8ba4a1d68f5daa05045f70a716`](https://github.com/rui314/chibicc/commit/11e3841832697c8ba4a1d68f5daa05045f70a716).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer recognizes `->` as one punctuation token. Postfix parsing rewrites
-`p->field` into a DEREF node for p followed by the existing MEMBER node. This
-is exactly the operation described by `(*p).field`: obtain the pointed-to
-struct, then select its field. Chains such as `p->next->value` and combinations
-with array subscripts work through the same postfix loop.
+`union` shares struct's member parser, tag namespace, scope lookup and member
+access syntax. The layout differs: every member's offset is zero, alignment
+is the maximum member alignment, and size is the largest member size rounded
+up to that alignment. `union {int a; char b[9];}` therefore has size 16 and
+alignment 8 at this stage. An empty union has size 0 and alignment 1.
 
-No code-generation rule is added. Address generation for DEREF evaluates the
-pointer expression; MEMBER then adds the field offset. Reading the selected
-member loads its type, while assigning to it stores through that address.
-Type checking rejects a non-pointer dereference or a member access on an int.
-As before, runtime pointer validity is not checked.
+Members overlap instead of occupying successive regions. On x86-64 Linux,
+storing 515 into the eight-byte int a writes bytes 3, 2, 0, 0, ... in
+little-endian order. Reading b[0] or b[1] observes 3 or 2. This machine-specific
+view is what upstream's new tests demonstrate.
 
-Python's ordinary nested nodes express the same lowering as upstream's C
-nodes. This step introduces no additional Python/C semantic difference.
+The existing MEMBER codegen works for unions without new instructions. Python
+keeps the same Type/Member dataclasses and lists; a shared parser avoids
+repeating the member grammar. Tags become visible only after member parsing,
+and tag-kind validation remains incomplete as in this commit. Aggregate
+copying and aggregate function calling are still not implemented.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){struct t{int a;} x;struct t *p=&x;p->a=42;return x.a;}\n' > /tmp/lesson53.c
-python3 python/main.py -o /tmp/lesson53.s /tmp/lesson53.c
-cat /tmp/lesson53.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson53 /tmp/lesson53.s
-/tmp/lesson53
+printf 'int main(){union {int a;char b[4];} x;x.a=515;return x.b[0]+x.b[1];}\n' > /tmp/lesson54.c
+python3 python/main.py -o /tmp/lesson54.s /tmp/lesson54.c
+cat /tmp/lesson54.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson54 /tmp/lesson54.s
+/tmp/lesson54
 echo $?
 ```
 
-Codegen loads p's address value, adds a's offset (zero here), and stores 42
-through it. The final field load returns 42 in `%rax`, so the shell displays
-42. Tests execute upstream's read/write examples, array/pointer combinations,
-a chain through a pointer field, and invalid types. An instruction comparison
-confirms that `p->a` emits the same code as `(*p).a`; the C struct fixture is
-updated and run with all other upstream C fixtures.
+The int store writes `%rax` to the union's address. Member offsets add zero,
+then char subscripts select bytes and `movsbq` loads them. Adding the bytes
+returns 5; the executable prints nothing and the shell displays status 5.
+Tests inspect overlap, size rounding, nested struct/union layout, global and
+tagged unions, arrow access, and array stride, and run the new upstream union
+fixture together with all existing C fixtures.
 
 ## Tests and attribution
 

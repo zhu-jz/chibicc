@@ -171,8 +171,8 @@ class Parser:
 
     def struct_ref(self, lhs, token):
         add_type(lhs)
-        if lhs.ty.kind != "STRUCT":
-            raise CompileError(lhs.tok, "not a struct")
+        if lhs.ty.kind not in ("STRUCT", "UNION"):
+            raise CompileError(lhs.tok, "not a struct nor a union")
         for member in lhs.ty.members:
             if member.name.text == token.text:
                 return Node("MEMBER", lhs=lhs, member=member, tok=token)
@@ -311,10 +311,12 @@ class Parser:
             return ty_int, position + 1
         if self.tokens[position].text == "struct":
             return self.struct_decl(position + 1)
+        if self.tokens[position].text == "union":
+            return self.union_decl(position + 1)
         raise CompileError(self.tokens[position], "typename expected")
 
-    # struct-decl = identifier? "{" struct-members "}" | identifier
-    def struct_decl(self, position):
+    # struct-union-decl = identifier? "{" struct-members "}" | identifier
+    def struct_union_decl(self, position):
         tag = None
         if self.tokens[position].kind == "IDENT":
             tag = self.tokens[position]
@@ -340,18 +342,31 @@ class Parser:
                 ty, position = self.declarator(position, basety)
                 members.append(Member(ty, ty.name))
             position += 1
-        offset = 0
-        alignment = 1
-        for member in members:
-            offset = align_to(offset, member.ty.align)
-            member.offset = offset
-            offset += member.ty.size
-            alignment = max(alignment, member.ty.align)
-        ty = Type("STRUCT", size=align_to(offset, alignment), align=alignment,
-                  members=members)
+        ty = Type("STRUCT", align=1, members=members)
         if tag is not None:
             self.scopes[-1].tags[tag.text] = ty
         return ty, position + 1
+
+    def struct_decl(self, position):
+        ty, position = self.struct_union_decl(position)
+        ty.kind = "STRUCT"
+        offset = 0
+        for member in ty.members:
+            offset = align_to(offset, member.ty.align)
+            member.offset = offset
+            offset += member.ty.size
+            ty.align = max(ty.align, member.ty.align)
+        ty.size = align_to(offset, ty.align)
+        return ty, position
+
+    def union_decl(self, position):
+        ty, position = self.struct_union_decl(position)
+        ty.kind = "UNION"
+        for member in ty.members:
+            ty.align = max(ty.align, member.ty.align)
+            ty.size = max(ty.size, member.ty.size)
+        ty.size = align_to(ty.size, ty.align)
+        return ty, position
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
     def func_params(self, position, ty):
@@ -425,7 +440,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.tokens[position].text in ("char", "int", "struct"):
+            if self.tokens[position].text in ("char", "int", "struct", "union"):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

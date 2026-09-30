@@ -42,6 +42,20 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unions(self):
+        for source, expected in [
+            ("int main(){union t{int a;char b[4];} x;union t *p=&x;p->a=515;return p->b[0]+p->b[1];}", 5),
+            ("union t{int a;char b[4];};union t g;int main(){g.a=515;return g.b[1];}", 2),
+            ("int main(){union t{int a;};{union t{char a;};}union t x;return sizeof(x);}", 8),
+            ("int main(){union {int a;char b[9];} x[2];char *p=x;char *q=x+1;return q-p;}", 16),
+        ]:
+            self.assert_program_returns(source, expected)
+        ty = parse_body("union {int a;char b[9];} x;").locals[0].ty
+        self.assertEqual((ty.kind, ty.size, ty.align), ("UNION", 16, 8))
+        self.assertEqual([member.offset for member in ty.members], [0, 0])
+        ty = parse_body("struct {char a;union {int b;char c[9];} d;} x;").locals[0].ty
+        self.assertEqual((ty.size, ty.members[1].offset), (24, 8))
+
     def test_member_arrow(self):
         for source, expected in [
             ("int main(){struct t{char a;} x;struct t *y=&x;x.a=3;return y->a;}", 3),

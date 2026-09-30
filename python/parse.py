@@ -123,14 +123,14 @@ class Parser:
         update = Node("ASSIGN", target, operation, tok=token)
         return Node("COMMA", save_address, update, tok=token)
 
-    # assign = equality (assign-op assign)?
+    # assign = bitor (assign-op assign)?
     def assign(self, position):
-        node, position = self.equality(position)
+        node, position = self.bitor(position)
         if self.tokens[position].text == "=":
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             node = Node("ASSIGN", node, rhs, tok=token)
-        elif self.tokens[position].text in ("+=", "-=", "*=", "/=", "%="):
+        elif self.tokens[position].text in ("+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="):
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             if token.text == "+=":
@@ -140,6 +140,33 @@ class Parser:
             else:
                 binary = Node(token.text[0], node, rhs, tok=token)
             node = self.to_assign(binary)
+        return node, position
+
+    # bitor = bitxor ("|" bitxor)*
+    def bitor(self, position):
+        node, position = self.bitxor(position)
+        while self.tokens[position].text == "|":
+            token = self.tokens[position]
+            rhs, position = self.bitxor(position + 1)
+            node = Node("|", node, rhs, tok=token)
+        return node, position
+
+    # bitxor = bitand ("^" bitand)*
+    def bitxor(self, position):
+        node, position = self.bitand(position)
+        while self.tokens[position].text == "^":
+            token = self.tokens[position]
+            rhs, position = self.bitand(position + 1)
+            node = Node("^", node, rhs, tok=token)
+        return node, position
+
+    # bitand = equality ("&" equality)*
+    def bitand(self, position):
+        node, position = self.equality(position)
+        while self.tokens[position].text == "&":
+            token = self.tokens[position]
+            rhs, position = self.equality(position + 1)
+            node = Node("&", node, rhs, tok=token)
         return node, position
 
     # equality = relational (("==" | "!=") relational)*

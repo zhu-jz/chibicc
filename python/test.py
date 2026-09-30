@@ -58,6 +58,21 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_binary_bitwise(self):
+        for source, expected in [
+            ("int main(){return 1|2^3&4;}", 3),
+            ("int main(){return 4&1==0;}", 0),
+            ("int main(){int x=6;x&=3;x|=8;return x^=5;}", 15),
+            ("int main(){int x=42;return *&x & 255;}", 42),
+            ("int main(){return (4294967296|42)/4294967296;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = without_implicit_casts(parse_body("return 1|2^3&4;").body.body[0].lhs)
+        self.assertEqual((node.kind, node.rhs.kind, node.rhs.rhs.kind), ("|", "^", "&"))
+        for spelling, instruction in (("&", "and"), ("|", "or"), ("^", "xor")):
+            self.assertIn(f"  {instruction} %rdi, %rax\n",
+                          compile_program(f"int main(){{return 7{spelling}3;}}").stdout)
+
     def test_remainder(self):
         for source, expected in [
             ("int main(){return 17%6;}", 5),

@@ -1,34 +1,33 @@
-# Lesson 83: Remainder and remainder assignment
+# Lesson 84: Binary bitwise operators
 
-Original chibicc commit: [`daa739817c58baa8dcd0c23bb403d27d5907abfb`](https://github.com/rui314/chibicc/commit/daa739817c58baa8dcd0c23bb403d27d5907abfb).
+Original chibicc commit: [`86440068b43d6f9c93fdb07c1c2279cbab579e73`](https://github.com/rui314/chibicc/commit/86440068b43d6f9c93fdb07c1c2279cbab579e73).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-% joins multiplication/division precedence and undergoes usual arithmetic
-conversion. %= reuses compound-assignment lowering. Signed idiv supplies both a
-quotient in eax/rax and a remainder in edx/rdx; % moves the remainder into rax.
-The emitter chooses cdq/idiv edi for int and cqo/idiv rdi for long.
+Binary &, ^, and | operate on individual bits. New parser levels establish C's
+precedence: equality binds tighter than &, then ^, then |, then assignment.
+Unary & remains address-of. &=, ^=, and |= reuse the one-address-evaluation
+compound-assignment helper. Operand types undergo usual arithmetic conversion.
 
-C division truncates toward zero, so -17%6 is -5. Python's % on ints would give 1,
-but the compiler never uses it to compute runtime expressions: emitted idiv
-preserves the target behavior. Division by zero and signed division overflow
-retain machine exceptions at this stage.
+The original emitter always uses rdi/rax for these bitwise instructions, even
+when the expression type is int; this Python port matches it. Both operands are
+evaluated, unlike short-circuit operators. No Python expression evaluator is used.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=17;return x%%6;}\n' > /tmp/lesson83.c
-python3 python/main.py /tmp/lesson83.c > /tmp/lesson83.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson83 /tmp/lesson83.s
-/tmp/lesson83
+printf 'int main(){int x=15;x^=5;return x;}\n' > /tmp/lesson84.c
+python3 python/main.py /tmp/lesson84.c > /tmp/lesson84.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson84 /tmp/lesson84.s
+/tmp/lesson84
 echo $?
 ```
 
-`idiv %edi` leaves 5 in edx, and `mov %rdx, %rax` selects that result instead of
-the quotient. The shell displays 5. Tests cover operand signs, widths, %=
-results, side-effecting destinations, instruction sequences, actual execution,
-and all updated original programs.
+`xor %rdi, %rax` turns binary 1111 xor 0101 into 1010, decimal 10; the assignment
+stores that result. Main exits with 10. Tests cover operators, compound forms,
+precedence, address-of coexistence, wide values, emitted instructions, real
+execution, and updated upstream fixtures.
 
 ## Tests and attribution
 

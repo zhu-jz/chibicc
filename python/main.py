@@ -1,6 +1,6 @@
-"""Lesson 83: Remainder and remainder assignment.
+"""Lesson 84: Binary bitwise operators.
 
-Based on chibicc commit daa739817c58baa8dcd0c23bb403d27d5907abfb.
+Based on chibicc commit 86440068b43d6f9c93fdb07c1c2279cbab579e73.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

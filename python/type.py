@@ -73,7 +73,7 @@ def add_type(node):
 
     if node.kind == "NUM":
         node.ty = ty_int if -(2**31) <= node.value < 2**31 else ty_long
-    elif node.kind in ("+", "-", "*", "/", "%"):
+    elif node.kind in ("+", "-", "*", "/", "%", "&", "|", "^"):
         node.lhs, node.rhs = usual_arith_conv(node.lhs, node.rhs)
         node.ty = node.lhs.ty
     elif node.kind == "NEG":

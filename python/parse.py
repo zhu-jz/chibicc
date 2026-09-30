@@ -105,6 +105,7 @@ class Parser:
 
     # stmt = "return" expr ";" | "{" compound-stmt | expr-stmt
     #      | "if" "(" expr ")" stmt ("else" stmt)?
+    #      | "for" "(" expr-stmt expr? ";" expr? ")" stmt
     def stmt(self, position):
         if self.tokens[position].text == "return":
             node, position = self.expr(position + 1)
@@ -123,6 +124,24 @@ class Parser:
             if self.tokens[position].text == "else":
                 els, position = self.stmt(position + 1)
             return Node("IF", cond=cond, then=then, els=els), position
+        if self.tokens[position].text == "for":
+            position += 1
+            if self.tokens[position].text != "(":
+                raise CompileError(self.tokens[position].position, "expected '('")
+            init, position = self.expr_stmt(position + 1)
+            cond = None
+            if self.tokens[position].text != ";":
+                cond, position = self.expr(position)
+            if self.tokens[position].text != ";":
+                raise CompileError(self.tokens[position].position, "expected ';'")
+            position += 1
+            inc = None
+            if self.tokens[position].text != ")":
+                inc, position = self.expr(position)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position].position, "expected ')'")
+            then, position = self.stmt(position + 1)
+            return Node("FOR", init=init, cond=cond, inc=inc, then=then), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)

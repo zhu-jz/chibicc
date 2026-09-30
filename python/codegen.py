@@ -86,6 +86,21 @@ class CodeGenerator:
                 self.gen_stmt(node.els)
             self.assembly.append(f".L.end.{label}:")
             return
+        if node.kind == "FOR":
+            self.label_count += 1
+            label = self.label_count
+            self.gen_stmt(node.init)
+            self.assembly.append(f".L.begin.{label}:")
+            if node.cond is not None:
+                self.gen_expr(node.cond)
+                self.assembly.append("  cmp $0, %rax")
+                self.assembly.append(f"  je  .L.end.{label}")
+            self.gen_stmt(node.then)
+            if node.inc is not None:
+                self.gen_expr(node.inc)
+            self.assembly.append(f"  jmp .L.begin.{label}")
+            self.assembly.append(f".L.end.{label}:")
+            return
         if node.kind == "BLOCK":
             for statement in node.body:
                 self.gen_stmt(statement)

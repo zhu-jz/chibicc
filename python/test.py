@@ -31,6 +31,53 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def assert_program_returns(self, source, expected):
+        result = compile_program(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            assembly = Path(directory) / "program.s"
+            executable = Path(directory) / "program"
+            assembly.write_text(result.stdout)
+            linked = subprocess.run(
+                ["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(linked.returncode, 0, linked.stderr)
+            executed = subprocess.run([str(executable)], timeout=5)
+            self.assertEqual(executed.returncode, expected)
+
+    def test_for(self):
+        cases = [
+            ("{ i=0; j=0; for(i=0;i<=10;i=i+1) j=i+j; return j; }", 55),
+            ("{ for(;;) {return 3;} return 5; }", 3),
+            ("{ i=4; for(;i<4;i=i+1) return 9; return i; }", 4),
+            ("{ i=0; for(;i<3;) i=i+1; return i; }", 3),
+            ("{ i=0; for(;;i=i+1) if(i==4) return i; }", 4),
+            ("{ sum=0; for(i=0;i<3;i=i+1) for(j=0;j<2;j=j+1) sum=sum+1; return sum; }", 6),
+            ("{ for(i=0;i<3;i=i+1); return i; }", 3),
+            ("{ format=7; return format; }", 7),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assert_program_returns(source, expected)
+        program = parse_body("for(;;) return 3;")
+        node = program.body.body[0]
+        self.assertEqual(node.init, Node("BLOCK"))
+        self.assertIsNone(node.cond)
+        self.assertIsNone(node.inc)
+        self.assertEqual(CodeGenerator().generate(program) + "\n", PROLOGUE + "  sub $0, %rsp\n"
+                         ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return\n"
+                         "  jmp .L.begin.1\n.L.end.1:\n" + EPILOGUE)
+        for source, position, message in [
+            ("{for 1;}", 5, "expected '('"),
+            ("{for(1 2;3) ;}", 7, "expected ';'"),
+            ("{for(;1 2;) ;}", 8, "expected ';'"),
+            ("{for(;;1 2) ;}", 9, "expected ')'"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, source + "\n" + " " * position + "^ " + message + "\n")
+
     def test_if_tree_and_labels(self):
         program = parse_body("if(1) if(0) return 2; else return 3;")
         outer = program.body.body[0]

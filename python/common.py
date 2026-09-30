@@ -39,6 +39,8 @@ class Node:
     cond: Optional["Node"] = None
     then: Optional["Node"] = None
     els: Optional["Node"] = None
+    init: Optional["Node"] = None
+    inc: Optional["Node"] = None
 
 
 @dataclass

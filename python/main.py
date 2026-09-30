@@ -1,6 +1,6 @@
-"""Lesson 46: Cached token line numbers.
+"""Lesson 47: Assembly source locations.
 
-Based on chibicc commit 6647ad9b843768968db0a331ff7077904c6f58ee.
+Based on chibicc commit 1c91d1943a8ee07034224dd950412c3c87ef3276.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -61,6 +61,8 @@ def main():
         tokens = tokenize(source)
         program = parse(tokens)
         assembly = codegen(program)
+        escaped_filename = filename.replace("\\", "\\\\").replace('"', '\\"')
+        assembly = f'.file 1 "{escaped_filename}"' + ("\n" + assembly if assembly else "")
         write_output(output_path, assembly)
     except CompileError as error:
         if error.position is None:

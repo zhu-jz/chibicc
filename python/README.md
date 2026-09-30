@@ -1,42 +1,41 @@
-# Lesson 46: Cached token line numbers
+# Lesson 47: Assembly source locations
 
-Original chibicc commit: [`6647ad9b843768968db0a331ff7077904c6f58ee`](https://github.com/rui314/chibicc/commit/6647ad9b843768968db0a331ff7077904c6f58ee).
+Original chibicc commit: [`1c91d1943a8ee07034224dd950412c3c87ef3276`](https://github.com/rui314/chibicc/commit/1c91d1943a8ee07034224dd950412c3c87ef3276).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-After tokenization, one scan assigns a one-based `line_no` to every token,
-including EOF. The scan counts newlines inside comments as well as between
-tokens. Parsing and code generation pass the offending token into CompileError,
-which retains its position and cached line number. The driver uses that number
-instead of recounting newlines for a token error.
+Assembly now begins with `.file 1 "filename"`. Before generating each statement
+and expression, codegen emits `.loc 1 line_number` using its token's cached
+line number. The assembler turns these directives into a debug line table.
+A debugger can associate machine instructions with the source file and line;
+these directives do not execute and do not change the returned value.
 
-Lexer failures happen before the completed token list exists, so errors at a
-raw character position still count newlines when formatted. Python keeps one
-exception class for both cases; passing a Token selects cached metadata, an
-integer selects a raw position, and None selects a plain driver error. This
-replaces C's separate error_tok/error_at functions. Metadata does not change
-token equality in the existing syntax tests.
+The Python driver still buffers assembly before writing it. It escapes quotes
+and backslashes in filenames, an intentional improvement over this upstream
+commit's unescaped filename interpolation. Hand-built test nodes without a
+source token emit no location directive. Parsed nodes always have tokens.
 
-No language or assembly behavior changes. A missing variable on line 2 still
-prints the filename, `:2:`, the source line, and a caret at the name. Tests
-verify line numbers through multiline comments, blank lines and EOF, that a
-parser exception carries its token's line number, and that a lexer-side error
-still displays the correct line.
+Instruction snapshots ignore debug directives only; a separate test checks
+exact directives for a multiline function and inspects the linked executable's
+debug line table with readelf, including a filename containing quotes.
 
-## WSL example
+## Assembly and WSL example
 
 ```sh
-printf 'int main(){\n return 42;\n}\n' > /tmp/lesson46.c
-python3 python/main.py -o /tmp/lesson46.s /tmp/lesson46.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson46 /tmp/lesson46.s
-/tmp/lesson46
+printf 'int main(){\n return 42;\n}\n' > /tmp/lesson47.c
+python3 python/main.py -o /tmp/lesson47.s /tmp/lesson47.c
+cat /tmp/lesson47.s
+gcc -Wl,-z,noexecstack -o /tmp/lesson47 /tmp/lesson47.s
+readelf --debug-dump=decodedline /tmp/lesson47
+/tmp/lesson47
 echo $?
 ```
 
-The body still moves 42 into `%rax` and jumps to the epilogue; the shell prints
-42 as its exit status. Replacing 42 with `missing` demonstrates the line-2
-error. Caching source metadata does not add instructions to the executable.
+`.file` identifies the input and `.loc 1 2` attributes the return expression
+to line 2. The instructions still move 42 into `%rax` and return through the
+epilogue. The executable prints nothing; the shell displays status 42.
+GCC invokes the assembler/linker here; Python remains the C-to-assembly compiler.
 
 ## Tests and attribution
 

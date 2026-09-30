@@ -35,7 +35,36 @@ def parse_body(source):
     return parse(tokenize('int main(){' + source + "}"))[0]
 
 
+def instruction_assembly(assembly):
+    """Keep instruction snapshots independent of source-debug metadata."""
+    return "".join(line for line in assembly.splitlines(keepends=True)
+                   if not line.lstrip().startswith((".file ", ".loc ")))
+
+
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_assembly_source_locations(self):
+        source_text = "int main(){\n return 42;\n}\n"
+        result = compile_program(source_text)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith('.file 1 "-"\n'))
+        locations = [line for line in result.stdout.splitlines() if ".loc" in line]
+        self.assertEqual(locations, ["  .loc 1 2"] * 3)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source "quoted".c'
+            assembly = Path(directory) / "program.s"
+            executable = Path(directory) / "program"
+            source.write_text(source_text)
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(assembly), str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            subprocess.run(["gcc", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
+                           capture_output=True, text=True, check=True)
+            lines = subprocess.run(["readelf", "--debug-dump=decodedline", str(executable)],
+                                   capture_output=True, text=True, check=True)
+            self.assertIn('source "quoted".c', lines.stdout)
+            self.assertIn(" 2 ", lines.stdout)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_token_line_numbers(self):
         tokens = tokenize("\nint/*line\nline*/ x; // skip\n\n")
         self.assertEqual([(token.text, token.line_no) for token in tokens],
@@ -111,26 +140,26 @@ class ExpressionCompilerTests(unittest.TestCase):
             source = Path(directory) / "input file.c"
             output = Path(directory) / "output file.s"
             source.write_text("int main(){return 42;}")
-            expected = compile_program(source.read_text()).stdout
+            expected = instruction_assembly(compile_program(source.read_text()).stdout)
             for arguments in [["-o", str(output), str(source)],
                               [str(source), "-o" + str(output)]]:
                 result = subprocess.run([sys.executable, str(COMPILER), *arguments],
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(output.read_text(), expected)
+                self.assertEqual(instruction_assembly(output.read_text()), expected)
             result = subprocess.run([sys.executable, str(COMPILER), "-o", "-", str(source)],
                                     capture_output=True, text=True)
-            self.assertEqual(result.stdout, expected)
+            self.assertEqual(instruction_assembly(result.stdout), expected)
             result = subprocess.run([sys.executable, str(COMPILER), "-o" + str(output), "-"],
                                     input=source.read_text(), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(output.read_text(), expected)
+            self.assertEqual(instruction_assembly(output.read_text()), expected)
             source.write_text("")
             result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(output.read_bytes(), b"")
+            self.assertEqual(output.read_text(), f'.file 1 "{source}"\n')
             source.write_text("int main(){1=2;}")
             output.write_text("keep")
             result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
@@ -159,7 +188,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(COMPILER), str(path)],
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, expected.stdout)
+                self.assertEqual(instruction_assembly(result.stdout), instruction_assembly(expected.stdout))
             path.write_text("int main(){\n return missing;\n}\n")
             result = subprocess.run([sys.executable, str(COMPILER), str(path)],
                                     capture_output=True, text=True)
@@ -453,10 +482,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.rhs.tok.text, "*")
         result = compile_program('int main(){int x; return &x;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
                          "  lea -8(%rbp), %rax\n  jmp .L.return.main\n" + EPILOGUE)
         result = compile_program('int main(){int x; return *&x;}')
-        self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
                          "  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"
                          "  jmp .L.return.main\n" + EPILOGUE)
         for source, position in [('int main(){return &1;}', 19),
@@ -517,7 +546,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIsNone(node.init)
         self.assertIsNone(node.inc)
         expected = CodeGenerator().generate([parse_body("for(;1;) return 3;")])
-        self.assertEqual(CodeGenerator().generate([program]), expected)
+        self.assertEqual(instruction_assembly(CodeGenerator().generate([program])),
+                         instruction_assembly(expected))
         result = compile_program('int main(){while() ;}')
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected an expression", result.stderr)
@@ -561,7 +591,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(node.init, Node("BLOCK"))
         self.assertIsNone(node.cond)
         self.assertIsNone(node.inc)
-        self.assertEqual(CodeGenerator().generate([program]) + "\n", PROLOGUE + "  sub $0, %rsp\n"
+        self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
                          "  jmp .L.begin.1\n.L.end.1:\n" + EPILOGUE)
         for source, position, message in [
@@ -595,12 +625,12 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             with self.subTest(source=source):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n"
                                  "  mov $5, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         # A program containing only null statements does not set a return value.
         result = compile_program('int main(){;;;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_nested_block_tree(self):
         program = parse(tokenize('int main(){ {1;} return 2; }'))[0]
@@ -610,7 +640,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]))
         result = compile_program('int main(){ {1;} return 2; }')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n"
                          "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return.main\n" + EPILOGUE)
 
     def test_function_definitions(self):
@@ -623,7 +653,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(compile_program("{return 1;}").returncode, 1)
         self.assertEqual(compile_program("int main(){} return 3;").returncode, 1)
         self.assertEqual(compile_program("int main(){return 1}").returncode, 1)
-        self.assertEqual(compile_program("").stdout, "")
+        self.assertEqual(compile_program("").stdout, '.file 1 "-"\n')
         self.assertEqual(parse(tokenize("")), [])
 
     def test_return_tree(self):
@@ -675,7 +705,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_tokenization(self):
         self.assertEqual(tokenize("if else ifx elsewhere"), [
@@ -798,7 +828,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 stack_size = 16 if source in ("int a; a=3; a;", "int z; z=5;") else 0
-                self.assertEqual(result.stdout, PROLOGUE + f"  sub ${stack_size}, %rsp\n" + instructions + EPILOGUE)
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + f"  sub ${stack_size}, %rsp\n" + instructions + EPILOGUE)
 
     def test_executable_exit_status(self):
         # All current upstream examples and earlier arithmetic/control regressions.
@@ -1150,7 +1180,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(assignment.rhs.kind, "ASSIGN")
         result = compile_program('int main(){int x; return 7;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
                          "  mov $7, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         self.assertEqual(tokenize("int integer")[0].kind, "KEYWORD")
         self.assertEqual(tokenize("int integer")[1].kind, "IDENT")

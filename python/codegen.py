@@ -55,6 +55,8 @@ class CodeGenerator:
             self.assembly.append("  mov %rax, (%rdi)")
 
     def gen_expr(self, node):
+        if node.tok is not None:
+            self.assembly.append(f"  .loc 1 {node.tok.line_no}")
         if node.kind == "NUM":
             self.assembly.append(f"  mov ${node.value}, %rax")
             return
@@ -121,6 +123,8 @@ class CodeGenerator:
             raise CompileError(node.tok, "invalid expression")
 
     def gen_stmt(self, node):
+        if node.tok is not None:
+            self.assembly.append(f"  .loc 1 {node.tok.line_no}")
         if node.kind == "IF":
             self.label_count += 1
             label = self.label_count

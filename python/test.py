@@ -42,6 +42,26 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_nested_declarators(self):
+        for source, expected in [
+            ("int (main)(){return 42;}", 42),
+            ("int main(){char *(*x[2])[3];return sizeof(x);}", 16),
+            ("int main(){int a[2][3];int (*p)[3]=a;p[1][2]=42;return a[1][2];}", 42),
+            ("int f(int (*p)[3]){return p[0][2];}int main(){int a[3];a[2]=42;return f(a);}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        array = parse_body("char *x[3];").locals[0].ty
+        pointer = parse_body("char (*x)[3];").locals[0].ty
+        self.assertEqual((array.kind, array.size, array.base.kind), ("ARRAY", 24, "PTR"))
+        self.assertEqual((pointer.kind, pointer.size, pointer.base.kind, pointer.base.size),
+                         ("PTR", 8, "ARRAY", 3))
+        ty = parse_body("char (x[3])[4];").locals[0].ty
+        self.assertEqual((ty.array_len, ty.base.array_len, ty.size), (3, 4, 12))
+        self.assertEqual(ty.name.text, "x")
+        result = compile_program("int main(){int (*x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected ')'", result.stderr)
+
     def test_short_type(self):
         for source, expected in [
             ("int main(){short x;return sizeof(x);}", 2),

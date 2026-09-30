@@ -1,6 +1,6 @@
-"""Lesson 58: Two-byte short values.
+"""Lesson 59: Parenthesized type declarators.
 
-Based on chibicc commit 9d48eef58b964551350fe0c1f641a57f5da40529.
+Based on chibicc commit a817b23da3c6f39f22bc57c0a53169978d97d7fa.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

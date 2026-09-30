@@ -401,11 +401,19 @@ class Parser:
             return array_of(ty, token.value), position
         return ty, position
 
-    # declarator = "*"* identifier type-suffix
+    # declarator = "*"* (identifier | "(" declarator ")") type-suffix
     def declarator(self, position, ty):
         while self.tokens[position].text == "*":
             ty = pointer_to(ty)
             position += 1
+        if self.tokens[position].text == "(":
+            start = position + 1
+            _, end = self.declarator(start, Type("DUMMY"))
+            if self.tokens[end].text != ")":
+                raise CompileError(self.tokens[end], "expected ')'")
+            ty, position = self.type_suffix(end + 1, ty)
+            ty, _ = self.declarator(start, ty)
+            return ty, position
         token = self.tokens[position]
         if token.kind != "IDENT":
             raise CompileError(token, "expected a variable name")

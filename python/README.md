@@ -1,43 +1,44 @@
-# Lesson 58: Two-byte short values
+# Lesson 59: Parenthesized type declarators
 
-Original chibicc commit: [`9d48eef58b964551350fe0c1f641a57f5da40529`](https://github.com/rui314/chibicc/commit/9d48eef58b964551350fe0c1f641a57f5da40529).
+Original chibicc commit: [`a817b23da3c6f39f22bc57c0a53169978d97d7fa`](https://github.com/rui314/chibicc/commit/a817b23da3c6f39f22bc57c0a53169978d97d7fa).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Short is now accepted as a type with size/alignment 2. Scalar stores write
-`%ax`, the low sixteen bits of `%rax`. Loads use `movswq` to sign-extend a
-two-byte value into `%rax`. Parameter saves select `%di`, `%si`, `%dx`, `%cx`,
-`%r8w`, or `%r9w` for short arguments. Arrays and pointer arithmetic use the
-two-byte element size; struct fields and locals use two-byte alignment.
+The declarator grammar now accepts parentheses recursively. Stars before a
+name and suffixes after it need the correct grouping: `char *x[3]` is an
+array of three char pointers (24 bytes), whereas `char (*x)[3]` is a pointer
+to an array of three chars (8 bytes). `char (x[3])[4]` describes an array of
+three arrays of four chars, with total size 12.
 
-Thus `short x=32768;` stores bytes representing -32768, and reloading x gives
-a negative sixty-four-bit value. Writing one short must not overwrite an
-adjacent short. Char/int/long and pointer storage widths remain 1/4/8/8.
-Python adds the ordinary Type singleton and instruction cases; no simulated
-Python runtime evaluates the program.
+Following upstream, the parser first reads the inner declarator using a dummy
+type to locate `)`. It then applies the suffix after that parenthesis to the
+real base type, and reparses the inner declarator around that completed type.
+Python returns type/token-index pairs in place of C's output pointer. The
+dummy type is discarded; no variable storage is allocated during these passes.
 
-Literal/comparison/function-call types remain long at this intermediate step,
-and arithmetic conversions are still incomplete. The input range check from
-lesson 57 and the existing compiler limits continue to apply.
+This changes type construction, not expression grouping or codegen. Nested
+declarations do not themselves enable calls through function pointers, and
+this stage's simplified address-of-array and assignment compatibility rules
+still apply.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){short x=42;return x;}\n' > /tmp/lesson58.c
-python3 python/main.py -o /tmp/lesson58.s /tmp/lesson58.c
-cat /tmp/lesson58.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson58 /tmp/lesson58.s
-/tmp/lesson58
+printf 'int main(){int a[2][3];int (*p)[3]=a;p[1][2]=42;return a[1][2];}\n' > /tmp/lesson59.c
+python3 python/main.py -o /tmp/lesson59.s /tmp/lesson59.c
+cat /tmp/lesson59.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson59 /tmp/lesson59.s
+/tmp/lesson59
 echo $?
 ```
 
-x lives at -2(%rbp). `mov %ax, (%rdi)` stores two bytes and
-`movswq (%rax), %rax` loads them for the return. The shell displays status
-42; the executable prints nothing. Tests cover sizeof, truncation and signed
-loads, neighboring values, globals, arrays, struct padding, all six short
-parameters, and explicit assembly widths. Updated upstream function, struct
-and variable fixtures are run with the existing C fixture suite.
+p points to a row of three four-byte ints. The first subscript scales by 12,
+and the second by 4; the existing address arithmetic and int load/store find
+the same element as a[1][2]. The shell displays 42. Tests inspect the two
+pointer/array shapes and nested dimensions, execute pointer-to-array and
+parameter examples, check a parenthesized function name and missing `)`, and
+run all upstream C fixtures with the updated variable examples.
 
 ## Tests and attribution
 

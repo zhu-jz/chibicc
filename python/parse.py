@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
+from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -511,7 +511,9 @@ class Parser:
         if tag is not None and self.tokens[position].text != "{":
             ty = self.find_tag(tag.text)
             if ty is None:
-                raise CompileError(tag, "unknown struct type")
+                ty = struct_type()
+                ty.size = -1
+                self.scopes[-1].tags[tag.text] = ty
             return ty, position
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
@@ -529,14 +531,22 @@ class Parser:
                 ty, position = self.declarator(position, basety)
                 members.append(Member(ty, ty.name))
             position += 1
-        ty = Type("STRUCT", align=1, members=members)
+        ty = struct_type()
+        ty.members = members
         if tag is not None:
+            previous = self.scopes[-1].tags.get(tag.text)
+            if previous is not None:
+                # Preserve references held by earlier pointers and typedefs.
+                previous.__dict__.update(ty.__dict__)
+                return previous, position + 1
             self.scopes[-1].tags[tag.text] = ty
         return ty, position + 1
 
     def struct_decl(self, position):
         ty, position = self.struct_union_decl(position)
         ty.kind = "STRUCT"
+        if ty.size < 0:
+            return ty, position
         offset = 0
         for member in ty.members:
             offset = align_to(offset, member.ty.align)
@@ -549,6 +559,8 @@ class Parser:
     def union_decl(self, position):
         ty, position = self.struct_union_decl(position)
         ty.kind = "UNION"
+        if ty.size < 0:
+            return ty, position
         for member in ty.members:
             ty.align = max(ty.align, member.ty.align)
             ty.size = max(ty.size, member.ty.size)
@@ -612,7 +624,8 @@ class Parser:
             raise CompileError(token, "expected a variable name")
         # Keep the declaration name without mutating the shared integer type.
         ty, position = self.type_suffix(position + 1, ty)
-        ty = copy_type(ty)
+        if ty.kind not in ("STRUCT", "UNION"):
+            ty = copy_type(ty)
         ty.name = token
         return ty, position
 

@@ -58,6 +58,23 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_incomplete_structs(self):
+        for source, expected in [
+            ("int main(){struct T *p;return sizeof(p);}", 8),
+            ("int main(){typedef struct T T;struct T{int x;};return sizeof(T);}", 4),
+            ("struct T{struct T *next;int x;};int main(){struct T a,b;b.x=42;a.next=&b;return a.next->x;}", 42),
+            ("int main(){union T *p;union T{long x;char y;};return sizeof(*p);}", 8),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("struct T *p;struct T{int x;};struct T a;")
+        a, p = function.locals
+        self.assertIs(p.ty.base, a.ty)
+        self.assertEqual((a.ty.size, a.ty.align), (4, 4))
+        result = compile_program("int main(){struct T x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("variable has incomplete type", result.stderr)
+        self.assertIn("  add $8, %rax\n", compile_program("struct T{struct T *next;int x;};int main(){struct T a;return a.x;}").stdout)
+
     def test_array_parameter_decay(self):
         for source, expected in [
             ("int f(int x[]){return x[1];}int main(){int a[2];a[1]=42;return f(a);}", 42),
@@ -647,11 +664,10 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected)
         for source in ["int main(){struct missing x;}",
-                       "int main(){{struct t{int a;};}struct t x;}",
-                       "struct t{struct t *next;};"]:
+                       "int main(){{struct t{int a;};}struct t x;}"]:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("unknown struct type", result.stderr)
+            self.assertIn("variable has incomplete type", result.stderr)
 
     def test_local_alignment(self):
         for source, offsets, stack_size in [

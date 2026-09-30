@@ -1,6 +1,6 @@
-"""Lesson 87: Array parameters become pointers.
+"""Lesson 88: Incomplete structs and unions.
 
-Based on chibicc commit 79632219d0991aae83e1de3c56df7d664205c2b6.
+Based on chibicc commit 61a10551209a0d3770449862152e1b73b584d771.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -41,6 +41,10 @@ def enum_type():
     return Type("ENUM", size=4, align=4)
 
 
+def struct_type():
+    return Type("STRUCT", size=0, align=1)
+
+
 def new_cast(expression, ty):
     add_type(expression)
     return Node("CAST", lhs=expression, ty=copy_type(ty), tok=expression.tok)

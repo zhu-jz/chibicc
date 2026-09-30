@@ -1,34 +1,37 @@
-# Lesson 87: Array parameters become pointers
+# Lesson 88: Incomplete structs and unions
 
-Original chibicc commit: [`79632219d0991aae83e1de3c56df7d664205c2b6`](https://github.com/rui314/chibicc/commit/79632219d0991aae83e1de3c56df7d664205c2b6).
+Original chibicc commit: [`61a10551209a0d3770449862152e1b73b584d771`](https://github.com/rui314/chibicc/commit/61a10551209a0d3770449862152e1b73b584d771).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-In a function parameter list, an array declaration adjusts to a pointer to its
-element type. int x[] and int x[3] both describe int *x, and int *x[] becomes
-int **x. Only the outer array layer adjusts: int x[][3] becomes a pointer to an
-array of three ints, so row indexing still scales by twelve bytes. The parameter
-name is preserved for creating its local stack slot.
+An unknown tagged struct/union creates an incomplete type with size -1. Pointers
+to it are valid; a later definition completes the existing object in the current
+scope. This makes forward references, typedef aliases, and self-referential
+members work. Definitions in an inner scope create distinct types rather than
+changing outer types. Local incomplete objects still produce an error.
 
-Python checks the type kind after parsing the declarator and replaces it with
-a named pointer type, just as the C commit does. Ordinary local arrays keep their
-array types and sizes; this adjustment is specific to parameters.
+Python replaces the fields on the existing Type object, equivalent to C's
+`*old=*new`, so pointers keep seeing that same object. Aggregate declarators now
+retain the shared type rather than copying it for name metadata. This is needed
+for typedef struct T T to see T's completion; builtin types still copy declaration
+names. Strict redefinition/tag-kind validation remains incomplete in this commit.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int x[]){return x[1];}int main(){int a[2];a[1]=42;return f(a);}\n' > /tmp/lesson87.c
-python3 python/main.py /tmp/lesson87.c > /tmp/lesson87.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson87 /tmp/lesson87.s
-/tmp/lesson87
+printf 'struct T{struct T *next;int x;};int main(){struct T a,b;b.x=42;a.next=&b;return a.next->x;}\n' > /tmp/lesson88.c
+python3 python/main.py /tmp/lesson88.c > /tmp/lesson88.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson88 /tmp/lesson88.s
+/tmp/lesson88
 echo $?
 ```
 
-The caller passes a's address in rdi. f saves that eight-byte pointer, scales its
-index by four, and loads a[1]. The shell displays 42. Tests cover incomplete and
-sized parameter arrays, multidimensional arrays, arrays of pointers, sizeof and
-name metadata, pointer-width stores, and updated original function tests.
+next is an eight-byte pointer; x lies at offset eight. Address calculation stores
+b's address in a.next, and the final member load follows that pointer and reads
+b.x. The shell displays 42. Tests cover forward pointer identity, self references,
+union completion, typedef completion, incomplete local errors, sizeof, assembly,
+and updated original struct programs.
 
 ## Tests and attribution
 

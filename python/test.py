@@ -32,6 +32,20 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_subscripts(self):
+        for index, expected in [(0,3),(1,4),(2,5)]:
+            self.assert_program_returns("int main(){int x[3]; *x=3; x[1]=4; x[2]=5;"
+                                        f"return *(x+{index});}}", expected)
+        self.assert_program_returns("int main(){int x[3]; *x=3; x[1]=4; 2[x]=5; return *(x+2);}", 5)
+        for index in range(6):
+            self.assert_program_returns("int main(){int x[2][3]; int *y=x;"
+                                        f"y[{index}]={index}; return x[{index//3}][{index%3}];}}", index)
+        self.assert_program_returns("int main(){int x[2]; int i=0; x[i=1]=9; return x[i];}", 9)
+        a = compile_program("int main(){int x[2]; return x[1];}")
+        b = compile_program("int main(){int x[2]; return *(x+1);}")
+        self.assertEqual(a.stdout, b.stdout)
+        self.assertEqual(compile_program("int main(){int x[2]; return x[1;}").returncode, 1)
+
     def test_arrays_of_arrays(self):
         for index, expression in enumerate(["**x", "*(*x+1)", "*(*x+2)",
                                             "**(x+1)", "*(*(x+1)+1)", "*(*(x+1)+2)"]):

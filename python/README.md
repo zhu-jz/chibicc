@@ -1,39 +1,35 @@
-# Lesson 28: Arrays of arrays
+# Lesson 29: Array subscripts
 
-Original chibicc commit: [`3ce1b2d067164f754dcb4216c193dc98e164b3ce`](https://github.com/rui314/chibicc/commit/3ce1b2d067164f754dcb4216c193dc98e164b3ce).
+Original chibicc commit: [`648646bba704745274fcd4fef3b7029c7f7e0fcd`](https://github.com/rui314/chibicc/commit/648646bba704745274fcd4fef3b7029c7f7e0fcd).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The array suffix recursively parses any following suffix before constructing
-its outer array type. Thus `int x[2][3]` is ARRAY(2, ARRAY(3, INT)), not the
-reverse. With eight-byte ints it occupies 48 bytes; each row occupies 24.
+The grammar gains `postfix = primary ("[" expr "]")*`. Unary operators now
+use postfix as their operand base, giving subscripting higher precedence.
+Each `x[y]` becomes a DEREF node around the existing pointer-addition helper.
+Repeated brackets support multidimensional access without a new node kind.
 
-`x+1` scales its offset by 24 to reach the second row. Dereferencing that
-expression produces an array, so the generator keeps its address. Adding
-one to that row scales by 8, and the final dereference loads an integer.
-No code-generator changes are needed: its array conversion and type-size
-arithmetic already support nesting. Subscripting is still unavailable.
+`x[1][2]` first selects a row, then an element. The generated assembly scales
+the first offset by the row size and the second by the element size, then
+loads or stores through the resulting address. `x[1]` and `*(x+1)` emit exactly
+the same instructions. Because addition handles integer + pointer too,
+`2[x]` is valid and equivalent to `x[2]`.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){int x[2][3]; *(*(x+1)+2)=5; return *(*(x+1)+2);}' > /tmp/lesson28.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson28 /tmp/lesson28.s
-/tmp/lesson28
+python3 python/main.py 'int main(){int x[2][3]; x[1][2]=5; return x[1][2];}' > /tmp/lesson29.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson29 /tmp/lesson29.s
+/tmp/lesson29
 echo $?
 ```
 
 The executable prints nothing; the last command shows **5**. Use an interactive
-shell without `set -e` for nonzero statuses. The generated multiplication
-nodes compute a 24-byte row offset and an eight-byte element offset before
-storing/loading the selected element.
-
-Tests cover every new upstream row/column example, dimension order, inferred
-sizes, scaling, and three-dimensional access. Upstream's permissive assignment
-checks still allow treating a multidimensional array address as `int *` to
-inspect its flat storage. Dimensions are numeric literals and bounds are
-unchecked. No new intentional Python/C difference is introduced.
+shell without `set -e` for nonzero statuses. Tests include every distinct new
+upstream example, reversed subscripts, all row/column positions, assignment
+inside an index, exact equivalence with dereference syntax, and missing brackets.
+Bounds remain unchecked. No new intentional Python/C differences are introduced.
 
 ## Tests and attribution
 

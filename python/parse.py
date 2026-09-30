@@ -113,7 +113,7 @@ class Parser:
             node = Node(operator, node, rhs, tok=token)
         return node, position
 
-    # unary = ("+" | "-" | "*" | "&") unary | primary
+    # unary = ("+" | "-" | "*" | "&") unary | postfix
     def unary(self, position):
         token = self.tokens[position]
         operator = self.tokens[position].text
@@ -128,7 +128,19 @@ class Parser:
         if operator == "*":
             operand, position = self.unary(position + 1)
             return Node("DEREF", lhs=operand, tok=token), position
-        return self.primary(position)
+        return self.postfix(position)
+
+    # postfix = primary ("[" expr "]")*
+    def postfix(self, position):
+        node, position = self.primary(position)
+        while self.tokens[position].text == "[":
+            token = self.tokens[position]
+            index, position = self.expr(position + 1)
+            if self.tokens[position].text != "]":
+                raise CompileError(self.tokens[position].position, "expected ']'")
+            node = Node("DEREF", lhs=new_add(node, index, token), tok=token)
+            position += 1
+        return node, position
 
     # funcall = identifier "(" (assign ("," assign)*)? ")"
     def funcall(self, position):

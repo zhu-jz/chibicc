@@ -1,6 +1,6 @@
-"""Lesson 28: Arrays of arrays.
+"""Lesson 29: Array subscripts.
 
-Based on chibicc commit 3ce1b2d067164f754dcb4216c193dc98e164b3ce.
+Based on chibicc commit 648646bba704745274fcd4fef3b7029c7f7e0fcd.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

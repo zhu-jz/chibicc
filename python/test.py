@@ -42,6 +42,21 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_declarations(self):
+        self.assert_program_returns("int f(int x);int main(){return f(42);}int f(int x){return x;}", 42)
+        self.assert_program_returns("int ret42();int main(){return ret42();}", 42,
+                                    "int ret42(void){return 42;}")
+        program = parse(tokenize("int f(int x);int f(int x){return x;}"))
+        self.assertEqual([obj.is_definition for obj in program], [True, False])
+        self.assertTrue(all(obj.is_function for obj in program))
+        self.assertIsNone(program[1].body)
+        self.assertEqual(program[1].locals, [])
+        assembly = compile_program("int f(int x);int f(int x){return x;}").stdout
+        self.assertEqual(assembly.splitlines().count("f:"), 1)
+        self.assertNotIn("  .data", assembly)
+        self.assertEqual(compile_program("int printf();").stdout, '.file 1 "-"\n')
+        self.assertEqual(compile_program("int f(int); ").returncode, 1)
+
     def test_nested_declarators(self):
         for source, expected in [
             ("int (main)(){return 42;}", 42),
@@ -913,7 +928,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(parse_body(source), Obj("main", body=Node("BLOCK"), is_function=True))
+                self.assertEqual(parse_body(source), Obj("main", body=Node("BLOCK"), is_function=True,
+                                                        is_definition=True))
                 result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")

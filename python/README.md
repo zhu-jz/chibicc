@@ -1,44 +1,44 @@
-# Lesson 59: Parenthesized type declarators
+# Lesson 60: Function declarations
 
-Original chibicc commit: [`a817b23da3c6f39f22bc57c0a53169978d97d7fa`](https://github.com/rui314/chibicc/commit/a817b23da3c6f39f22bc57c0a53169978d97d7fa).
+Original chibicc commit: [`74e3acc296d90d6d16ae70803196e967564fb16a`](https://github.com/rui314/chibicc/commit/74e3acc296d90d6d16ae70803196e967564fb16a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The declarator grammar now accepts parentheses recursively. Stars before a
-name and suffixes after it need the correct grouping: `char *x[3]` is an
-array of three char pointers (24 bytes), whereas `char (*x)[3]` is a pointer
-to an array of three chars (8 bytes). `char (x[3])[4]` describes an array of
-three arrays of four chars, with total size 12.
+A top-level function declarator may now end with `;`, producing a declaration
+without a body: `int f(int x);`. Obj records is_function and is_definition
+separately. Declarations keep their function type and name in global scope
+but allocate no parameter/local objects. A following `{...}` marks a definition,
+and codegen emits a function only for definitions.
 
-Following upstream, the parser first reads the inner declarator using a dummy
-type to locate `)`. It then applies the suffix after that parenthesis to the
-real base type, and reparses the inner declarator around that completed type.
-Python returns type/token-index pairs in place of C's output pointer. The
-dummy type is discarded; no variable storage is allocated during these passes.
+A declaration can precede a definition, or describe a function provided by a
+linked helper or library. Upstream's test header now declares `int printf();`.
+The compiler may retain separate objects for a declaration and a definition,
+but only one body contributes instructions. Python uses the same Obj dataclass
+with an added boolean, following upstream's unified object model.
 
-This changes type construction, not expression grouping or codegen. Nested
-declarations do not themselves enable calls through function pointers, and
-this stage's simplified address-of-array and assignment compatibility rules
-still apply.
+This stage still requires parameter names when parameters are written, so
+`int f(int x);` is accepted but `int f(int);` is not. Calls still default to
+long type and do not yet enforce signatures; declarations do not implement
+full prototype compatibility, indirect calls or aggregate calling rules.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[2][3];int (*p)[3]=a;p[1][2]=42;return a[1][2];}\n' > /tmp/lesson59.c
-python3 python/main.py -o /tmp/lesson59.s /tmp/lesson59.c
-cat /tmp/lesson59.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson59 /tmp/lesson59.s
-/tmp/lesson59
+printf 'int f(int x);int main(){return f(42);}int f(int x){return x;}\n' > /tmp/lesson60.c
+python3 python/main.py -o /tmp/lesson60.s /tmp/lesson60.c
+cat /tmp/lesson60.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson60 /tmp/lesson60.s
+/tmp/lesson60
 echo $?
 ```
 
-p points to a row of three four-byte ints. The first subscript scales by 12,
-and the second by 4; the existing address arithmetic and int load/store find
-the same element as a[1][2]. The shell displays 42. Tests inspect the two
-pointer/array shapes and nested dimensions, execute pointer-to-array and
-parameter examples, check a parenthesized function name and missing `)`, and
-run all upstream C fixtures with the updated variable examples.
+The declaration emits no label or storage. main supplies 42 in `%rdi` and
+calls f; f saves `%edi` into its four-byte parameter slot, reloads it with
+sign extension, and returns. The shell reports status 42. Tests check a
+forward declaration/definition, an external GCC-built helper, the definition
+flag and empty declaration storage, exactly one emitted body, the named
+parameter limit, and the C fixture suite with its updated header.
 
 ## Tests and attribution
 

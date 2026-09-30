@@ -1,6 +1,6 @@
-"""Lesson 59: Parenthesized type declarators.
+"""Lesson 60: Function declarations.
 
-Based on chibicc commit a817b23da3c6f39f22bc57c0a53169978d97d7fa.
+Based on chibicc commit 74e3acc296d90d6d16ae70803196e967564fb16a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

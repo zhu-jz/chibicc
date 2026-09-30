@@ -61,6 +61,7 @@ class Obj:
     ty: Optional[Type] = field(default=None, compare=False)
     is_local: bool = False
     is_function: bool = False
+    is_definition: bool = False
     params: list["Obj"] = field(default_factory=list)
     body: Optional["Node"] = None
     locals: list["Obj"] = field(default_factory=list)

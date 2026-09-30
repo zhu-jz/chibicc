@@ -218,7 +218,7 @@ class CodeGenerator:
                 else:
                     self.assembly.append(f"  .zero {var.ty.size}")
         for function in program:
-            if not function.is_function:
+            if not function.is_function or not function.is_definition:
                 continue
             offset = 0
             for var in function.locals:

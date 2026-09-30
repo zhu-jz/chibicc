@@ -475,6 +475,9 @@ class Parser:
         ty, position = self.declarator(position, basety)
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
+        if self.tokens[position].text == ";":
+            return position + 1
+        function.is_definition = True
         self.locals = []
         self.enter_scope()
         for param in reversed(ty.params):

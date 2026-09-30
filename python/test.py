@@ -10,6 +10,7 @@ from codegen import CodeGenerator
 from common import CompileError, Function, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
+from type import ty_int
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -31,15 +32,53 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_pointer_arithmetic(self):
+        for source, expected in [
+            ("{ x=3; y=5; return *(&x-(-1)); }", 5),
+            ("{ x=3; y=5; *(&y-2+1)=7; return x; }", 7),
+            ("{ x=3; return (&x+2)-&x+3; }", 5),
+            ("{ x=3; y=5; return *(1+&x); }", 5),
+            ("{ x=3; y=5; return &y-&x; }", 1),
+            ("{ x=3; y=5; return &x-&y; }", 255),
+            ("{ x=3; return (&x+3)-(&x+1); }", 2),
+            ("{ x=3; return (&x-2)-&x; }", 254),
+        ]:
+            with self.subTest(source=source):
+                self.assert_program_returns(source, expected)
+        expression = parse_body("return &x+1;").body.body[0].lhs
+        self.assertEqual(expression.ty.kind, "PTR")
+        self.assertIs(expression.ty.base, ty_int)
+        self.assertEqual(expression.rhs.kind, "*")
+        self.assertEqual(expression.rhs.rhs.value, 8)
+        expression = parse_body("return &x-&y;").body.body[0].lhs
+        self.assertIs(expression.ty, ty_int)
+        self.assertEqual(expression.kind, "/")
+        self.assertIs(expression.lhs.ty, ty_int)
+        self.assertEqual(expression.rhs.value, 8)
+        expression = parse_body("return &x-1+2;").body.body[0].lhs
+        self.assertEqual(expression.lhs.ty.kind, "PTR")
+        # Variables still have integer type even when they store an address.
+        program = parse_body("p=&x; return p+1;")
+        expression = program.body.body[1].lhs
+        self.assertIs(expression.ty, ty_int)
+        self.assertEqual(expression.rhs.value, 1)
+        for source, position in [("{return &x+&y;}", 10),
+                                 ("{return 1-&x;}", 9)]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(result.stderr, source + "\n" + " " * position
+                             + "^ invalid operands\n")
+
     def test_address_and_dereference(self):
         for source, expected in [
             ("{ x=3; return *&x; }", 3),
             ("{ x=3; y=&x; z=&y; return **z; }", 3),
-            ("{ x=3; y=5; return *(&x+8); }", 5),
-            ("{ x=3; y=5; return *(&y-8); }", 3),
+            ("{ x=3; y=5; return *(&x+1); }", 5),
+            ("{ x=3; y=5; return *(&y-1); }", 3),
             ("{ x=3; y=&x; *y=5; return x; }", 5),
-            ("{ x=3; y=5; *(&x+8)=7; return y; }", 7),
-            ("{ x=3; y=5; *(&y-8)=7; return x; }", 7),
+            ("{ x=3; y=5; *(&x+1)=7; return y; }", 7),
+            ("{ x=3; y=5; *(&y-1)=7; return x; }", 7),
             ("{ x=1; p=&x; q=&p; **q=9; return x; }", 9),
             ("{ x=1; *&x=7; return x; }", 7),
             ("{ x=3; p=&x; return &*p==p; }", 1),

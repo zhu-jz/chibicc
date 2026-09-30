@@ -3,11 +3,41 @@
 Each grammar function returns a node and the next token index. Python tuples
 replace C's returned node plus output pointer for the remaining tokens.
 
-Based on chibicc commit 863e2b8de25fdf43a4a63b93d0f57718e9edaa47.
+Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Function, Node, Obj
+from type import add_type, is_integer, ty_int
+
+
+def new_add(lhs, rhs, token):
+    add_type(lhs)
+    add_type(rhs)
+    if is_integer(lhs.ty) and is_integer(rhs.ty):
+        return Node("+", lhs, rhs, tok=token)
+    if lhs.ty.base is not None and rhs.ty.base is not None:
+        raise CompileError(token.position, "invalid operands")
+    # Canonicalize integer + pointer to pointer + integer.
+    if lhs.ty.base is None and rhs.ty.base is not None:
+        lhs, rhs = rhs, lhs
+    rhs = Node("*", rhs, Node("NUM", value=8, tok=token), tok=token)
+    return Node("+", lhs, rhs, tok=token)
+
+
+def new_sub(lhs, rhs, token):
+    add_type(lhs)
+    add_type(rhs)
+    if is_integer(lhs.ty) and is_integer(rhs.ty):
+        return Node("-", lhs, rhs, tok=token)
+    if lhs.ty.base is not None and is_integer(rhs.ty):
+        rhs = Node("*", rhs, Node("NUM", value=8, tok=token), tok=token)
+        add_type(rhs)
+        return Node("-", lhs, rhs, tok=token, ty=lhs.ty)
+    if lhs.ty.base is not None and rhs.ty.base is not None:
+        difference = Node("-", lhs, rhs, tok=token, ty=ty_int)
+        return Node("/", difference, Node("NUM", value=8, tok=token), tok=token)
+    raise CompileError(token.position, "invalid operands")
 
 
 class Parser:
@@ -67,7 +97,10 @@ class Parser:
             token = self.tokens[position]
             operator = self.tokens[position].text
             rhs, position = self.mul(position + 1)
-            node = Node(operator, node, rhs, tok=token)
+            if operator == "+":
+                node = new_add(node, rhs, token)
+            else:
+                node = new_sub(node, rhs, token)
         return node, position
 
     # mul = unary (("*" | "/") unary)*
@@ -178,6 +211,7 @@ class Parser:
         statements = []
         while self.tokens[position].text != "}":
             node, position = self.stmt(position)
+            add_type(node)
             statements.append(node)
         return Node("BLOCK", body=statements, tok=token), position + 1
 

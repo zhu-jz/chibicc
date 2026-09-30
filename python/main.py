@@ -1,6 +1,6 @@
-"""Lesson 20: compile address-of and dereference operators.
+"""Lesson 21: scale pointer arithmetic using expression types.
 
-Based on chibicc commit 863e2b8de25fdf43a4a63b93d0f57718e9edaa47.
+Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

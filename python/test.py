@@ -58,6 +58,25 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_functions(self):
+        source = "static int f(){return 42;}int main(){return f();}"
+        self.assert_program_returns(source, 42, "static int f(){return 5;}")
+        assembly = compile_program(source).stdout
+        self.assertIn("  .local f\n", assembly)
+        self.assertNotIn("  .globl f\n", assembly)
+        self.assertIn("  .globl main\n", assembly)
+        prototype = parse(tokenize("int static f();"))[0]
+        self.assertTrue(prototype.is_static)
+        self.assertFalse(prototype.is_definition)
+        for source, message in [
+            ("typedef static int T;", "typedef and static may not be used together"),
+            ("static typedef int T;", "typedef and static may not be used together"),
+            ("int f(static int x);", "storage class specifier is not allowed"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_enum_types(self):
         for source, expected in [
             ("enum E{zero,five=5,six};int main(){enum E x=six;return x;}", 6),

@@ -1,6 +1,6 @@
-"""Lesson 74: Enumerations.
+"""Lesson 75: File-scope static functions.
 
-Based on chibicc commit 48ba2656fecc646ec4eb7f943fa94b02ed9725c7.
+Based on chibicc commit 736232f3d672dae9a1ddae800909204c17fbe37c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

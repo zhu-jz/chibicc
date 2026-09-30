@@ -62,6 +62,7 @@ class Obj:
     is_local: bool = False
     is_function: bool = False
     is_definition: bool = False
+    is_static: bool = False
     params: list["Obj"] = field(default_factory=list)
     body: Optional["Node"] = None
     locals: list["Obj"] = field(default_factory=list)
@@ -81,6 +82,7 @@ class VarScope:
 @dataclass
 class VarAttr:
     is_typedef: bool = False
+    is_static: bool = False
 
 
 @dataclass

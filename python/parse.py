@@ -355,7 +355,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -372,10 +372,15 @@ class Parser:
         specifiers = []
         while self.is_typename(position):
             token = self.tokens[position]
-            if token.text == "typedef":
+            if token.text in ("typedef", "static"):
                 if attr is None:
                     raise CompileError(token, "storage class specifier is not allowed in this context")
-                attr.is_typedef = True
+                if token.text == "typedef":
+                    attr.is_typedef = True
+                else:
+                    attr.is_static = True
+                if attr.is_typedef and attr.is_static:
+                    raise CompileError(token, "typedef and static may not be used together")
                 position += 1
                 continue
             type_def = self.find_typedef(position)
@@ -619,10 +624,11 @@ class Parser:
             raise CompileError(self.tokens[position], "expected ';'")
         return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
-    def function(self, position, basety):
+    def function(self, position, basety, attr):
         ty, position = self.declarator(position, basety)
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
+        function.is_static = attr.is_static
         if self.tokens[position].text == ";":
             return position + 1
         function.is_definition = True
@@ -679,7 +685,7 @@ class Parser:
                 position = self.parse_typedef(position, basety)
                 continue
             if self.is_function(position):
-                position = self.function(position, basety)
+                position = self.function(position, basety, attr)
             else:
                 position = self.global_variable(position, basety)
         return self.globals

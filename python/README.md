@@ -1,35 +1,35 @@
-# Lesson 74: Enumerations
+# Lesson 75: File-scope static functions
 
-Original chibicc commit: [`48ba2656fecc646ec4eb7f943fa94b02ed9725c7`](https://github.com/rui314/chibicc/commit/48ba2656fecc646ec4eb7f943fa94b02ed9725c7).
+Original chibicc commit: [`736232f3d672dae9a1ddae800909204c17fbe37c`](https://github.com/rui314/chibicc/commit/736232f3d672dae9a1ddae800909204c17fbe37c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Enum variables have four-byte size and alignment. Enumerator names enter the
-ordinary identifier scope and become numeric expression nodes without runtime
-storage. Values begin at zero and increment; a numeric token after = resets the
-sequence. Enum tags share the tag namespace with struct/union tags. Tagged enum
-references must already exist and have enum kind.
+A static function gets internal linkage: its assembly symbol is local to the
+object file. Other source files may define a different static function with the
+same name without a link conflict. The parser records the static attribute on
+function declarations and definitions; typedef combined with static is an error.
+Storage classes remain invalid in parameter/type-name/member contexts.
 
-The historical grammar accepts numeric tokens rather than constant expressions:
-negative expressions and trailing commas are not supported yet. Python stores
-counter values as arbitrary-precision ints, so values beyond C int's range are
-not a portable match; this lesson's supported examples stay within signed int.
+At this historical step static affects functions only. Static variable storage
+and complete redeclaration/linkage rules are not implemented yet. Python bool
+fields replace the original C attributes without changing emitted behavior.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'enum E{zero,five=5,six};int main(){enum E x=six;return x;}\n' > /tmp/lesson74.c
-python3 python/main.py /tmp/lesson74.c > /tmp/lesson74.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson74 /tmp/lesson74.s
-/tmp/lesson74
+printf 'static int f(){return 42;}int main(){return f();}\n' > /tmp/lesson75.c
+python3 python/main.py /tmp/lesson75.c > /tmp/lesson75.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson75 /tmp/lesson75.s
+/tmp/lesson75
 echo $?
+nm /tmp/lesson75 | grep ' f$'
 ```
 
-The enumerator six becomes `mov $6, %rax`, then x is stored with eax as a
-four-byte object. The program exits with 6. Tests check numbering, scope and
-shadowing, tag/type errors, sizeof, assembly, executable status, and original C
-tests. Constants allocate no stack slots or global data.
+`.local f` makes f a local symbol (nm prints lowercase t), while `.globl main`
+keeps main externally visible. `call f` still invokes it normally. The program
+returns 42. Tests link another C file containing its own static f, check assembly
+visibility and declaration attributes, exercise errors, and run upstream tests.
 
 ## Tests and attribution
 

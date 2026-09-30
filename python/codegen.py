@@ -263,7 +263,8 @@ class CodeGenerator:
                 var.offset = -offset
             function.stack_size = align_to(offset, 16)
             self.current_fn = function
-            self.assembly.extend([f"  .globl {function.name}", "  .text", f"{function.name}:",
+            directive = ".local" if function.is_static else ".globl"
+            self.assembly.extend([f"  {directive} {function.name}", "  .text", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
             if len(function.params) > len(ARGREG):

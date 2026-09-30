@@ -1,6 +1,6 @@
-"""Lesson 64: Typedef names and scope.
+"""Lesson 65: Sizeof with type names.
 
-Based on chibicc commit a6b82da1ae9eefa44dada0baa885c283823ad59a.
+Based on chibicc commit 67543ea113c5cc2b15881e2bbb85ffd44feaef1f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

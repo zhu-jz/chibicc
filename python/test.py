@@ -42,6 +42,32 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_sizeof_type_names(self):
+        for source, expected in [
+            ("typedef int T;int main(){return sizeof(T);}", 4),
+            ("typedef char T;int main(){long T;return sizeof(T);}", 8),
+            ("int main(){return sizeof(void);}", 1),
+            ("int main(){return sizeof(long long int);}", 8),
+            ("int main(){return sizeof(int(**)[3]);}", 8),
+            ("int main(){return sizeof(int(*[2])[3]);}", 16),
+            ("int main(){return sizeof(int (*)(int x));}", 8),
+        ]:
+            self.assert_program_returns(source, expected)
+        actual = compile_program("int main(){return sizeof(int*[4]);}")
+        expected = compile_program("int main(){return 32;}")
+        self.assertEqual(instruction_assembly(actual.stdout), instruction_assembly(expected.stdout))
+        for source, message in [
+            ("int main(){return sizeof(int[3]);}", None),
+            ("int main(){return sizeof(int[3];}", "expected ')'"),
+            ("int main(){return sizeof(typedef int T);}", "storage class specifier is not allowed in this context"),
+        ]:
+            result = compile_program(source)
+            if message is None:
+                self.assertEqual(result.returncode, 0, result.stderr)
+            else:
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stderr)
+
     def test_typedefs(self):
         for source, expected in [
             ("typedef int Row[3];int main(){Row a[2];Row *p=a;p[1][2]=42;return a[1][2];}", 42),

@@ -1,47 +1,44 @@
-# Lesson 64: Typedef names and scope
+# Lesson 65: Sizeof with type names
 
-Original chibicc commit: [`a6b82da1ae9eefa44dada0baa885c283823ad59a`](https://github.com/rui314/chibicc/commit/a6b82da1ae9eefa44dada0baa885c283823ad59a).
+Original chibicc commit: [`67543ea113c5cc2b15881e2bbb85ffd44feaef1f`](https://github.com/rui314/chibicc/commit/67543ea113c5cc2b15881e2bbb85ffd44feaef1f).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Typedef creates a name for a type: `typedef int T;`, `typedef int Row[3];`, or
-`typedef struct {int a;} S;`. An alias is available wherever a type is parsed,
-including parameters and members. It creates no variable, stack slot, data
-symbol, or executable instruction. Comma-separated aliases and an empty
-`typedef int;` are accepted as in upstream; `typedef t;` defaults to int.
+Sizeof now accepts a parenthesized type name as well as an expression:
+`sizeof(int)`, `sizeof(int[3][4])`, or `sizeof(int(*)[4])`. A type-name consists
+of declaration specifiers followed by an abstract declarator: stars,
+parenthesized groupings, and suffixes, but no variable name. It uses the same
+two-pass grouping technique as named declarators.
 
-Variable scope entries now distinguish an object binding from a type_def
-binding. Lookup stops at the nearest name either way, so a variable can hide
-a typedef. `typedef int t; t t=3;` first uses the alias as the type, then
-registers the second t as a variable. The declaration-specifier parser stops
-after the already-selected type rather than consuming that name a second time.
-Block scope restores an outer alias after the inner binding ends. Struct/union
-tags still have their separate name space.
+After `sizeof (` the parser uses current scope to decide whether the next
+token is a type name. A typedef selects the type branch; a variable hiding
+that typedef selects the expression branch. The resulting size is folded
+into a NUM node. No variable is allocated and no operand is evaluated.
+`sizeof(void)` is 1 here, preserving upstream's GNU-style void-size extension.
 
-VarAttr carries the typedef flag while declaration specifiers are parsed.
-Parameters and struct members pass no attributes and reject typedef there.
-Python dataclasses and lists represent C's scope records; copying a named
-declaration's Type keeps shared aliases' name metadata intact. Function-call
-signature, return-conversion, and aggregate ABI limits remain at this stage.
+Python returns types and token indices instead of C output pointers. The
+abstract parser otherwise follows the original grammar. This does not add
+casts or change the intermediate long type of numeric expressions and calls.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'typedef int T;int main(){T x=42;return x;}\n' > /tmp/lesson64.c
-python3 python/main.py -o /tmp/lesson64.s /tmp/lesson64.c
-cat /tmp/lesson64.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson64 /tmp/lesson64.s
-/tmp/lesson64
+printf 'int main(){return sizeof(int*[4]);}\n' > /tmp/lesson65.c
+python3 python/main.py -o /tmp/lesson65.s /tmp/lesson65.c
+cat /tmp/lesson65.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson65 /tmp/lesson65.s
+/tmp/lesson65
 echo $?
 ```
 
-Only x occupies storage: it is a four-byte int at -4(%rbp). The existing
-`%eax` store and sign-extending int load return 42; the shell displays its
-status. Tests cover all upstream alias cases, arrays and pointer-to-array
-aliases, aliased return/parameter types, shadowing, no typedef storage, and
-invalid alias expressions/contexts. The new upstream typedef fixture runs
-with every other C fixture; the full Python suite is also checked.
+The type describes four eight-byte pointers, so its size is 32. The executable
+body only moves 32 into `%rax` and returns; the shell displays status 32.
+Changing the type to `int(*)[4]` gives one pointer, size 8. Tests cover every
+upstream sizeof-type example, typedef/variable ambiguity, void and long long,
+nested pointer/array and function-pointer types, missing parentheses and
+forbidden typedef storage specifiers. An assembly comparison confirms the
+folded constant, and the new sizeof fixture runs with all C fixtures.
 
 ## Tests and attribution
 

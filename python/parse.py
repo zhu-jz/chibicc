@@ -240,6 +240,13 @@ class Parser:
                 raise CompileError(self.tokens[position], "expected ')'")
             return node, position + 1
 
+        if (token.text == "sizeof" and self.tokens[position + 1].text == "("
+                and self.is_typename(position + 2)):
+            ty, position = self.typename(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            return Node("NUM", value=ty.size, tok=token), position + 1
+
         if token.text == "sizeof":
             operand, position = self.unary(position + 1)
             add_type(operand)
@@ -463,6 +470,25 @@ class Parser:
         ty = copy_type(ty)
         ty.name = token
         return ty, position
+
+    # abstract-declarator = "*"* ("(" abstract-declarator ")")? type-suffix
+    def abstract_declarator(self, position, ty):
+        while self.tokens[position].text == "*":
+            ty = pointer_to(ty)
+            position += 1
+        if self.tokens[position].text == "(":
+            start = position + 1
+            _, end = self.abstract_declarator(start, Type("DUMMY"))
+            if self.tokens[end].text != ")":
+                raise CompileError(self.tokens[end], "expected ')'")
+            ty, position = self.type_suffix(end + 1, ty)
+            ty, _ = self.abstract_declarator(start, ty)
+            return ty, position
+        return self.type_suffix(position, ty)
+
+    def typename(self, position):
+        ty, position = self.declspec(position)
+        return self.abstract_declarator(position, ty)
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"

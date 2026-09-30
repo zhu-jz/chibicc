@@ -1,45 +1,39 @@
-# Lesson 40: Read source files and report line locations
+# Lesson 41: Assembly line-output refactor
 
-Original chibicc commit: [`d9ea59757e2710e34f105e98230f30f578e0e662`](https://github.com/rui314/chibicc/commit/d9ea59757e2710e34f105e98230f30f578e0e662).
+Original chibicc commit: [`7b8528f71c78a01e8ff41a76a83a320d1ef80e93`](https://github.com/rui314/chibicc/commit/7b8528f71c78a01e8ff41a76a83a320d1ef80e93).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The command line now takes a filename, not source text. A filename of `-`
-reads standard input. Input is read completely and a final newline is added
-if missing, matching upstream. In-memory tokenization remains available for
-unit tests; the driver explicitly passes file contents to the tokenizer.
+Upstream adds a `println()` helper and replaces formatted printing calls that
+manually append newlines. The original commit explicitly makes no functional
+change. Python already collects complete lines in `CodeGenerator.assembly`,
+then joins them with `"\n"`; the driver writes the result with its final newline.
+We retain that straightforward equivalent instead of adding another wrapper.
 
-Diagnostics now show `filename:line: source line` followed by a caret and
-message. The driver finds the line containing the error and adds the filename
-prefix width to the caret indentation. Only that line is printed, not the
-whole translation unit. File-opening failures have a plain error message.
+This intentional implementation difference also preserves the existing buffered
+output behavior: a compilation error produces no partial assembly. Each list
+item is an instruction, directive, or label, and line termination is centralized
+at the join rather than repeated throughout the generator.
 
 ## Run it
 
 ```sh
-printf 'int main(){return 42;}\n' > /tmp/lesson40.c
-python3 python/main.py /tmp/lesson40.c > /tmp/lesson40.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson40 /tmp/lesson40.s
-/tmp/lesson40
+printf 'int main(){return 42;}\n' | python3 python/main.py - > /tmp/lesson41.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson41 /tmp/lesson41.s
+/tmp/lesson41
 echo $?
-printf 'int main(){return 42;}\n' | python3 python/main.py -
 ```
 
-The executable prints nothing; `echo $?` shows **42**. Use an interactive shell
-without `set -e` for nonzero statuses. The final pipeline prints the same
-assembly through stdin. Code generation is unchanged in this commit.
+The executable prints nothing; the last command shows **42**. Use an interactive
+shell without `set -e` for nonzero statuses. File and stdin input use the same
+parser and generator. The assembly body still moves 42 into `%rax` and jumps
+to `.L.return.main`, which restores the frame and executes `ret`.
 
-The complete suite now supplies source through stdin. Tests also check files
-with spaces in their names, final-newline normalization, a filename/line/caret
-diagnostic on line 2, missing files, and invalid encoding.
-
-Python uses standard file I/O and explicit driver state instead of C memory
-streams and tokenizer globals. Files are decoded as UTF-8; invalid UTF-8 is
-reported cleanly. Newline bytes are preserved in named files. Python's EOF
-location handling is bounded, avoiding upstream's possible read past its buffer
-when reporting an error exactly at EOF. Carets still count characters rather
-than bytes, with the same simple space indentation used by upstream.
+The exact-assembly regression suite and control-flow tests verify unchanged
+line contents and termination. The compiler's generator is unchanged in this
+port's commit; only lesson documentation and provenance advance. No syntax,
+types, or calling-convention changes are introduced.
 
 ## Tests and attribution
 

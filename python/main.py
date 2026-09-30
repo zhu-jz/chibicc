@@ -1,6 +1,6 @@
-"""Lesson 40: Read source files and report line locations.
+"""Lesson 41: Assembly line-output refactor.
 
-Based on chibicc commit d9ea59757e2710e34f105e98230f30f578e0e662.
+Based on chibicc commit 7b8528f71c78a01e8ff41a76a83a320d1ef80e93.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

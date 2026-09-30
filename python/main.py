@@ -1,6 +1,6 @@
-"""Lesson 41: Assembly line-output refactor.
+"""Lesson 42: Output files and command-line help.
 
-Based on chibicc commit 7b8528f71c78a01e8ff41a76a83a320d1ef80e93.
+Based on chibicc commit a0388bada4016bc0c3be6154c159faf80ce18d01.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -12,17 +12,56 @@ from parse import parse
 from tokenizer import read_file, tokenize
 
 
-def main():
-    if len(sys.argv) != 2:
-        print(f"{sys.argv[0]}: invalid number of arguments", file=sys.stderr)
-        return 1
+def usage(status):
+    print("chibicc (Python): python3 python/main.py [ -o <path> ] <file>", file=sys.stderr)
+    raise SystemExit(status)
 
-    filename = sys.argv[1]
+
+def parse_args(arguments):
+    input_path = None
+    output_path = None
+    position = 0
+    while position < len(arguments):
+        argument = arguments[position]
+        if argument == "--help":
+            usage(0)
+        if argument == "-o":
+            position += 1
+            if position == len(arguments):
+                usage(1)
+            output_path = arguments[position]
+        elif argument.startswith("-o"):
+            output_path = argument[2:]
+        elif argument.startswith("-") and argument != "-":
+            raise CompileError(None, f"unknown argument: {argument}")
+        else:
+            input_path = argument
+        position += 1
+    if input_path is None:
+        raise CompileError(None, "no input files")
+    return input_path, output_path
+
+
+def write_output(path, assembly):
+    text = assembly + ("\n" if assembly else "")
+    if path is None or path == "-":
+        sys.stdout.write(text)
+        return
     try:
+        with open(path, "w", encoding="utf-8", newline="\n") as output_file:
+            output_file.write(text)
+    except OSError as error:
+        raise CompileError(None, f"cannot open output file: {path}: {error.strerror}") from None
+
+
+def main():
+    try:
+        filename, output_path = parse_args(sys.argv[1:])
         source = read_file(filename)
         tokens = tokenize(source)
         program = parse(tokens)
         assembly = codegen(program)
+        write_output(output_path, assembly)
     except CompileError as error:
         if error.position is None:
             print(error, file=sys.stderr)
@@ -39,7 +78,6 @@ def main():
                   file=sys.stderr)
         return 1
 
-    sys.stdout.write(assembly + ("\n" if assembly else ""))
     return 0
 
 

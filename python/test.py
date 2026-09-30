@@ -36,6 +36,48 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_driver_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "input file.c"
+            output = Path(directory) / "output file.s"
+            source.write_text("int main(){return 42;}")
+            expected = compile_program(source.read_text()).stdout
+            for arguments in [["-o", str(output), str(source)],
+                              [str(source), "-o" + str(output)]]:
+                result = subprocess.run([sys.executable, str(COMPILER), *arguments],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(output.read_text(), expected)
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", "-", str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.stdout, expected)
+            result = subprocess.run([sys.executable, str(COMPILER), "-o" + str(output), "-"],
+                                    input=source.read_text(), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output.read_text(), expected)
+            source.write_text("")
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output.read_bytes(), b"")
+            source.write_text("int main(){1=2;}")
+            output.write_text("keep")
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(output.read_text(), "keep")
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", directory, "-"],
+                                    input="int main(){return 0;}", capture_output=True, text=True)
+            self.assertIn("cannot open output file", result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), "--help"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("chibicc", result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), "-o"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("chibicc", result.stderr)
+
     def test_file_input(self):
         source = "int main(){return 42;}"
         expected = compile_program(source)
@@ -998,12 +1040,14 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 self.assertEqual(result.stderr, "-:1: " + expected.replace("\n", "\n" + " " * len("-:1: "), 1))
 
     def test_argument_error_has_no_source_location(self):
-        for arguments in [(), ("1", "2")]:
+        for arguments, expected in [((), "no input files\n"),
+                                    (("--unknown",), "unknown argument: --unknown\n")]:
             with self.subTest(arguments=arguments):
-                result = compile_program(*arguments)
+                result = subprocess.run([sys.executable, str(COMPILER), *arguments],
+                                        capture_output=True, text=True)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, f"{COMPILER}: invalid number of arguments\n")
+                self.assertEqual(result.stderr, expected)
 
     def test_declarations(self):
         for source, expected in [

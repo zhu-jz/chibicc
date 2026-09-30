@@ -1,39 +1,67 @@
-# Lesson 41: Assembly line-output refactor
+# Lesson 42: Output files and command-line help
 
-Original chibicc commit: [`7b8528f71c78a01e8ff41a76a83a320d1ef80e93`](https://github.com/rui314/chibicc/commit/7b8528f71c78a01e8ff41a76a83a320d1ef80e93).
+Original chibicc commit: [`a0388bada4016bc0c3be6154c159faf80ce18d01`](https://github.com/rui314/chibicc/commit/a0388bada4016bc0c3be6154c159faf80ce18d01).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Upstream adds a `println()` helper and replaces formatted printing calls that
-manually append newlines. The original commit explicitly makes no functional
-change. Python already collects complete lines in `CodeGenerator.assembly`,
-then joins them with `"\n"`; the driver writes the result with its final newline.
-We retain that straightforward equivalent instead of adding another wrapper.
+The driver accepts `-o path`, joined `-opath`, and `--help`. Input is still a
+filename, with `-` selecting stdin. Output defaults to stdout; `-o -` also
+selects stdout. Help prints usage to stderr and exits successfully. A missing
+output path prints usage and fails; unknown options and missing input produce
+plain errors.
 
-This intentional implementation difference also preserves the existing buffered
-output behavior: a compilation error produces no partial assembly. Each list
-item is an instruction, directive, or label, and line termination is centralized
-at the join rather than repeated throughout the generator.
+The argument scanner follows upstream's small manual parser: options may appear
+before or after the input, and the last input/output argument wins. It does not
+combine multiple input files. The Python driver selects the output destination
+after generating its assembly string. C instead passes a FILE pointer into the
+generator. This deliberate difference retains buffered output: a compilation
+error neither emits partial assembly nor overwrites an existing output file.
 
-## Run it
+## Run it in WSL
+
+With Python 3 and GCC (`build-essential` on Ubuntu), run from the repository root:
 
 ```sh
-printf 'int main(){return 42;}\n' | python3 python/main.py - > /tmp/lesson41.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson41 /tmp/lesson41.s
-/tmp/lesson41
+printf 'int main(){return 42;}\n' > /tmp/lesson42.c
+python3 python/main.py -o /tmp/lesson42.s /tmp/lesson42.c
+cat /tmp/lesson42.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson42 /tmp/lesson42.s
+/tmp/lesson42
 echo $?
+python3 python/main.py --help
 ```
 
-The executable prints nothing; the last command shows **42**. Use an interactive
-shell without `set -e` for nonzero statuses. File and stdin input use the same
-parser and generator. The assembly body still moves 42 into `%rax` and jumps
-to `.L.return.main`, which restores the frame and executes `ret`.
+The executable prints nothing; `echo $?` immediately afterward displays **42**.
+Use an interactive shell without `set -e` for nonzero statuses. `-o` writes
+assembly; GCC assembles and links it into an executable. The body contains
+`mov $42,%rax` and a jump to `.L.return.main`; cleanup restores `%rbp` and
+executes `ret`. No machine-code or assembly-generation change is needed for
+this original driver commit.
 
-The exact-assembly regression suite and control-flow tests verify unchanged
-line contents and termination. The compiler's generator is unchanged in this
-port's commit; only lesson documentation and provenance advance. No syntax,
-types, or calling-convention changes are introduced.
+Stdin and joined output forms also work:
+
+```sh
+printf 'int main(){return 42;}\n' | python3 python/main.py -o/tmp/lesson42.s -
+python3 python/main.py -o - /tmp/lesson42.c
+```
+
+## Tests and current limits
+
+Driver tests cover both upstream checks (output creation for empty input and
+help), separated/joined options, paths with spaces, stdin/stdout destinations,
+empty output, invalid options, output errors, and preserving output on compile
+failure. The full suite retains assembly, diagnostic, and executable checks.
+
+The current compiler supports functions with up to six parameters/arguments,
+int/char variables, pointers, arrays, string literals and escapes, arithmetic,
+comparisons, assignments, returns, if/else, for/while, sizeof expressions, and
+GNU statement expressions. Ints and pointers still occupy eight bytes, chars
+one. Globals have no general initializer syntax. Function signatures and
+assignment conversions are incomplete, names still use function-wide scope,
+and calls do not yet adjust for temporary-stack alignment. Bounds and runtime
+memory accesses are unchecked. Decimal tokens are checked to fit 0 through
+2147483647. Input files use UTF-8 and diagnostics count characters.
 
 ## Tests and attribution
 

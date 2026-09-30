@@ -58,6 +58,22 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_array_parameter_decay(self):
+        for source, expected in [
+            ("int f(int x[]){return x[1];}int main(){int a[2];a[1]=42;return f(a);}", 42),
+            ("int f(int x[3]){return sizeof(x);}int main(){int a[3];return f(a);}", 8),
+            ("int f(int x[][3]){return x[1][2];}int main(){int a[2][3];a[1][2]=42;return f(a);}", 42),
+            ("int f(int *x[]){return *x[0];}int main(){int x=42;int *a[1];a[0]=&x;return f(a);}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse(tokenize("int f(int x[][3]){return 0;}"))[0]
+        param = function.params[0]
+        self.assertEqual((param.ty.kind, param.ty.size, param.ty.base.kind, param.ty.base.array_len),
+                         ("PTR", 8, "ARRAY", 3))
+        self.assertEqual(param.ty.name.text, "x")
+        assembly = compile_program("int f(int x[]){return x[0];}").stdout
+        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+
     def test_incomplete_arrays(self):
         self.assert_program_returns("int main(){return sizeof(int(*)[][10]);}", 8)
         self.assert_program_returns("int main(){int a[2];a[1]=42;int (*p)[]=a;return (*p)[1];}", 42)

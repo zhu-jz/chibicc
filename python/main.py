@@ -1,6 +1,6 @@
-"""Lesson 86: Incomplete array types.
+"""Lesson 87: Array parameters become pointers.
 
-Based on chibicc commit 29ed294906ebc271c32a755e1aefc360df4d3863.
+Based on chibicc commit 79632219d0991aae83e1de3c56df7d664205c2b6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

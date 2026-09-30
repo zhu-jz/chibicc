@@ -565,6 +565,10 @@ class Parser:
                 position += 1
             basety, position = self.declspec(position)
             param, position = self.declarator(position, basety)
+            if param.kind == "ARRAY":
+                name = param.name
+                param = pointer_to(param.base)
+                param.name = name
             params.append(copy_type(param))
         ty = func_type(ty)
         ty.params = params

@@ -1,34 +1,34 @@
-# Lesson 86: Incomplete array types
+# Lesson 87: Array parameters become pointers
 
-Original chibicc commit: [`29ed294906ebc271c32a755e1aefc360df4d3863`](https://github.com/rui314/chibicc/commit/29ed294906ebc271c32a755e1aefc360df4d3863).
+Original chibicc commit: [`79632219d0991aae83e1de3c56df7d664205c2b6`](https://github.com/rui314/chibicc/commit/79632219d0991aae83e1de3c56df7d664205c2b6).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-An empty [] creates an incomplete array type with length -1 and negative size.
-A pointer to that type is still complete and eight bytes wide. Recursive suffix
-parsing handles a pointer such as int(*)[][10]. Local object declarations reject
-negative-sized types because stack storage needs a known size. The Member model
-also gains a token field for diagnostics, matching the original structural change.
+In a function parameter list, an array declaration adjusts to a pointer to its
+element type. int x[] and int x[3] both describe int *x, and int *x[] becomes
+int **x. Only the outer array layer adjusts: int x[][3] becomes a pointer to an
+array of three ints, so row indexing still scales by twelve bytes. The parameter
+name is preserved for creating its local stack slot.
 
-Python uses the same negative sentinel rather than a separate incomplete flag.
-This commit does not complete arrays from initializers or fully diagnose global
-incomplete definitions/sizeof on incomplete types; those historical limits remain.
+Python checks the type kind after parsing the declarator and replaces it with
+a named pointer type, just as the C commit does. Ordinary local arrays keep their
+array types and sizes; this adjustment is specific to parameters.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return sizeof(int(*)[][10]);}\n' > /tmp/lesson86.c
-python3 python/main.py /tmp/lesson86.c > /tmp/lesson86.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson86 /tmp/lesson86.s
-/tmp/lesson86
+printf 'int f(int x[]){return x[1];}int main(){int a[2];a[1]=42;return f(a);}\n' > /tmp/lesson87.c
+python3 python/main.py /tmp/lesson87.c > /tmp/lesson87.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson87 /tmp/lesson87.s
+/tmp/lesson87
 echo $?
 ```
 
-sizeof measures the pointer, so the emitter uses `mov $8, %rax` without allocating
-or accessing the incomplete array. The shell displays 8. Tests inspect nested
-type metadata, dereference a pointer to an incomplete array with a known valid
-object, check local errors and assembly, and run updated original sizeof tests.
+The caller passes a's address in rdi. f saves that eight-byte pointer, scales its
+index by four, and loads a[1]. The shell displays 42. Tests cover incomplete and
+sized parameter arrays, multidimensional arrays, arrays of pointers, sizeof and
+name metadata, pointer-width stores, and updated original function tests.
 
 ## Tests and attribution
 

@@ -58,6 +58,24 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_break_statements(self):
+        for source, expected in [
+            ("int main(){int i=0;for(;;i++){if(i==42)break;}return i;}", 42),
+            ("int main(){int i=0;while(1){if(i++==3)break;}return i;}", 4),
+            ("int main(){int i=0;for(;i<10;i++){while(1)break;if(i==3)break;}return i;}", 3),
+            ("int main(){int i=0;for(;;i++){break;}return i;}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("while(1)break;")
+        loop = function.body.body[0]
+        self.assertEqual(loop.then.unique_label, loop.brk_label)
+        assembly = compile_program("int main(){while(1)break;}").stdout
+        self.assertIn(f"  jmp {loop.brk_label}\n", assembly)
+        self.assertIn(f"  je {loop.brk_label}\n", assembly)
+        result = compile_program("int main(){break;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("stray break", result.stderr)
+
     def test_typedef_label_names(self):
         self.assert_program_returns("typedef int T;int main(){goto T;return 1;T:;T x=42;return x;}", 42)
         self.assert_program_returns("int main(){typedef int T;goto T;T:return sizeof(T);}", 4)
@@ -1325,7 +1343,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
-                         "  jmp .L.begin.1\n.L.end.1:\n" + EPILOGUE)
+                         "  jmp .L.begin.1\n.L..0:\n" + EPILOGUE)
         for source, position, message in [
             ('int main(){for 1;}', 15, "expected '('"),
             ('int main(){for(1 2;3) ;}', 17, "expected ';'"),

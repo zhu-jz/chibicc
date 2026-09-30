@@ -1,6 +1,6 @@
-"""Lesson 90: Labels may share typedef names.
+"""Lesson 91: Break statements.
 
-Based on chibicc commit a4be55b333c9f712c334aac81e7ef4e076c2bc9b.
+Based on chibicc commit b3047f2317b74f19fb44dfe5e577d586d93dfa3c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

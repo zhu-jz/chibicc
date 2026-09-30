@@ -50,9 +50,15 @@ class Parser:
         self.current_fn = None
         self.gotos = []
         self.labels = []
+        self.brk_label = None
 
     def enter_scope(self):
         self.scopes.append(Scope())
+
+    def new_unique_name(self):
+        name = f".L..{self.unique_id}"
+        self.unique_id += 1
+        return name
 
     def leave_scope(self):
         self.scopes.pop()
@@ -419,6 +425,8 @@ class Parser:
             if self.tokens[position].text != "(":
                 raise CompileError(self.tokens[position], "expected '('")
             self.enter_scope()
+            previous_break = self.brk_label
+            self.brk_label = break_label = self.new_unique_name()
             position += 1
             if self.is_typename(position):
                 basety, position = self.declspec(position)
@@ -438,7 +446,9 @@ class Parser:
                 raise CompileError(self.tokens[position], "expected ')'")
             then, position = self.stmt(position + 1)
             self.leave_scope()
-            return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token), position
+            self.brk_label = previous_break
+            return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token,
+                        brk_label=break_label), position
         if self.tokens[position].text == "while":
             position += 1
             if self.tokens[position].text != "(":
@@ -446,8 +456,11 @@ class Parser:
             cond, position = self.expr(position + 1)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
+            previous_break = self.brk_label
+            self.brk_label = break_label = self.new_unique_name()
             then, position = self.stmt(position + 1)
-            return Node("FOR", cond=cond, then=then, tok=token), position
+            self.brk_label = previous_break
+            return Node("FOR", cond=cond, then=then, tok=token, brk_label=break_label), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
         if token.text == "goto":
@@ -466,6 +479,12 @@ class Parser:
             node = Node("LABEL", lhs=statement, label=token.text, unique_label=unique, tok=token)
             self.labels.insert(0, node)
             return node, position
+        if token.text == "break":
+            if self.brk_label is None:
+                raise CompileError(token, "stray break")
+            if self.tokens[position + 1].text != ";":
+                raise CompileError(self.tokens[position + 1], "expected ';'")
+            return Node("GOTO", unique_label=self.brk_label, tok=token), position + 2
         return self.expr_stmt(position)
 
     def is_typename(self, position):

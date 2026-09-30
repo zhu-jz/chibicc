@@ -237,12 +237,12 @@ class CodeGenerator:
             if node.cond is not None:
                 self.gen_expr(node.cond)
                 self.assembly.append("  cmp $0, %rax")
-                self.assembly.append(f"  je  .L.end.{label}")
+                self.assembly.append(f"  je {node.brk_label}")
             self.gen_stmt(node.then)
             if node.inc is not None:
                 self.gen_expr(node.inc)
             self.assembly.append(f"  jmp .L.begin.{label}")
-            self.assembly.append(f".L.end.{label}:")
+            self.assembly.append(f"{node.brk_label}:")
             return
         if node.kind == "BLOCK":
             for statement in node.body:

@@ -1,33 +1,35 @@
-# Lesson 90: Labels may share typedef names
+# Lesson 91: Break statements
 
-Original chibicc commit: [`a4be55b333c9f712c334aac81e7ef4e076c2bc9b`](https://github.com/rui314/chibicc/commit/a4be55b333c9f712c334aac81e7ef4e076c2bc9b).
+Original chibicc commit: [`b3047f2317b74f19fb44dfe5e577d586d93dfa3c`](https://github.com/rui314/chibicc/commit/b3047f2317b74f19fb44dfe5e577d586d93dfa3c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A compound statement checks for a following colon before interpreting a known
-type name as a declaration. Thus a typedef named T can coexist with the label
-T:. The statement parser recognizes the label, while later `T x;` still uses the
-typedef. This is a parsing ambiguity fix: labels have a separate namespace.
-No type-system or code-generation change is needed.
+Each for/while loop receives a parser-generated exit label. The parser saves the
+outer break target while reading an inner loop and restores it afterward, so
+break exits the innermost loop. It becomes a GOTO node with an already-resolved
+label and needs no user-label lookup. A break outside a loop reports `stray break`.
+Normal loop-condition failure jumps to the same exit label.
 
-Python checks the next token by list index; C checks tok->next. Tests preserve
-the shared label name and verify both declaration parsing and executable results.
+Python stores the current target on the parser and the final target on the loop
+node. Anonymous labels share the existing parser counter with strings and user
+labels; the emitter's begin-label counter remains separate. Continue statements
+and switches are not part of this original commit.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'typedef int T;int main(){goto T;T:return 42;}\n' > /tmp/lesson90.c
-python3 python/main.py /tmp/lesson90.c > /tmp/lesson90.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson90 /tmp/lesson90.s
-/tmp/lesson90
+printf 'int main(){int i=0;for(;;i++){if(i==42)break;}return i;}\n' > /tmp/lesson91.c
+python3 python/main.py /tmp/lesson91.c > /tmp/lesson91.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson91 /tmp/lesson91.s
+/tmp/lesson91
 echo $?
 ```
 
-The typedef emits no instructions. goto emits a jump to the unique assembly label
-for T:, and the return loads 42. The shell displays 42. Tests exercise global and
-local typedefs, continued use of the typedef after the label, tree/assembly label
-matching, prior goto behavior, and the updated upstream control tests.
+The break emits `jmp .L..N` to the label after the loop's back edge, skipping the
+increment. Main returns 42. Tests cover infinite/conditional loops, nested target
+restoration, skipped increments, stray breaks, tree and assembly target matching,
+prior loop snapshots, and all updated original programs.
 
 ## Tests and attribution
 

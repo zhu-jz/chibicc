@@ -1,39 +1,41 @@
-# Lesson 31: Unified variable and function objects
+# Lesson 32: Global variables
 
-Original chibicc commit: [`0b7663481d0513067e0c0af04765b8578ae2a498`](https://github.com/rui314/chibicc/commit/0b7663481d0513067e0c0af04765b8578ae2a498).
+Original chibicc commit: [`a4d3223a7215712b86076fad8aaf179d8f768b14`](https://github.com/rui314/chibicc/commit/a4d3223a7215712b86076fad8aaf179d8f768b14).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Upstream merges its Function and variable structures into Obj, without a
-language change. The Python port follows: Obj holds a name/type, local and
-function flags, a local offset, and optional function body/parameters/locals.
-The separate Function dataclass is removed.
+Top-level declarations can now create int/pointer/array globals. Lookahead
+parses a declarator to distinguish a function type from a variable type.
+Variable lookup checks function locals first, then existing global objects.
+Global initializers and forward variable references are not supported yet.
 
-Local construction marks `is_local`; function construction creates a global
-object and marks `is_function`. Top-level objects are prepended, so their
-emission order is reversed, matching upstream's linked-list behavior. Local
-objects still belong to individual function frames. Code generation skips
-non-function objects and explicitly selects `.text` before each function.
+The generator emits globals first in `.data`, with `.globl`, a symbol label,
+and `.zero size`. This reserves zero-filled storage. Global address calculation
+uses `lea x(%rip),%rax`, while locals use frame-relative offsets. Existing
+load/store and array logic works for either address. Functions are emitted
+in `.text` as before.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int helper(){return 3;} int main(){return helper();}' > /tmp/lesson31.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson31 /tmp/lesson31.s
-/tmp/lesson31
+python3 python/main.py 'int x; int main(){x=3; return x;}' > /tmp/lesson32.s
+cat /tmp/lesson32.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson32 /tmp/lesson32.s
+/tmp/lesson32
 echo $?
 ```
 
 The executable prints nothing; the last command shows **3**. Use an interactive
-shell without `set -e` for nonzero statuses. Assembly emits main first here,
-then helper; calls are resolved regardless of emission order. Function-specific
-return labels and frame cleanup are unchanged.
+shell without `set -e` for nonzero statuses. The body calculates x's global
+address, stores 3 there, and loads it again for the return value. An untouched
+global returns zero, unlike an uninitialized stack local.
 
-Tests verify unified objects, flags, object order, `.text`, calls, parameters,
-and exact assembly. No global-variable syntax is added in this commit.
-Python lists replace the original object linked lists; no new behavioral
-Python/C differences are introduced.
+Tests cover all upstream globals and array positions, sizes, zero initialization,
+updates across functions, local shadowing, data directives, address instructions,
+and unsupported initializers/forward references. Function headers now need a
+function declarator to select the function branch. Python lists replace global
+linked lists; no new intentional Python/C behavior is introduced.
 
 ## Tests and attribution
 

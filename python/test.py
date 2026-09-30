@@ -32,6 +32,27 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_variables(self):
+        for source, expected in [
+            ("int x; int main(){return x;}",0),
+            ("int x; int main(){x=3; return x;}",3),
+            ("int x; int y; int main(){x=3; y=4; return x+y;}",7),
+            ("int x,y; int main(){x=3; y=4; return x+y;}",7),
+            ("int x; int main(){return sizeof(x);}",8),
+            ("int x[4]; int main(){return sizeof(x);}",32),
+            ("int x; int f(){x=9; return 0;} int main(){f(); return x;}",9),
+            ("int x; int main(){int x=3; return x;}",3),
+        ]:
+            self.assert_program_returns(source, expected)
+        for index in range(4):
+            self.assert_program_returns("int x[4]; int main(){x[0]=0;x[1]=1;x[2]=2;x[3]=3;"
+                                        f"return x[{index}];}}", index)
+        assembly = compile_program("int x; int main(){return x;}").stdout
+        self.assertIn("  .data\n  .globl x\nx:\n  .zero 8\n", assembly)
+        self.assertIn("  lea x(%rip), %rax\n", assembly)
+        self.assertEqual(compile_program("int x=3; int main(){return x;}").returncode, 1)
+        self.assertEqual(compile_program("int main(){return x;} int x;").returncode, 1)
+
     def test_unified_objects(self):
         objects = parse(tokenize("int a(){int x;return 3;} int main(){return a();}"))
         self.assertEqual([obj.name for obj in objects], ["main", "a"])

@@ -28,7 +28,10 @@ class CodeGenerator:
 
     def gen_addr(self, node):
         if node.kind == "VAR":
-            self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            if node.var.is_local:
+                self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            else:
+                self.assembly.append(f"  lea {node.var.name}(%rip), %rax")
             return
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
@@ -150,6 +153,10 @@ class CodeGenerator:
 
     def generate(self, program):
         self.assembly = []
+        for var in program:
+            if not var.is_function:
+                self.assembly.extend(["  .data", f"  .globl {var.name}", f"{var.name}:",
+                                      f"  .zero {var.ty.size}"])
         for function in program:
             if not function.is_function:
                 continue

@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Node, Obj
+from common import CompileError, Node, Obj, Type
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_int
 
 
@@ -58,6 +58,9 @@ class Parser:
 
     def find_var(self, name):
         for var in self.locals:
+            if var.name == name:
+                return var
+        for var in self.globals:
             if var.name == name:
                 return var
         return None
@@ -357,12 +360,33 @@ class Parser:
         function.locals = self.locals
         return position
 
-    # program = function-definition*
+    def global_variable(self, position, basety):
+        first = True
+        while self.tokens[position].text != ";":
+            if not first:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position].position, "expected ','")
+                position += 1
+            first = False
+            ty, position = self.declarator(position, basety)
+            self.new_gvar(ty.name.text, ty)
+        return position + 1
+
+    def is_function(self, position):
+        if self.tokens[position].text == ";":
+            return False
+        ty, _ = self.declarator(position, Type("INT"))
+        return ty.kind == "FUNC"
+
+    # program = (function-definition | global-variable)*
     def parse(self):
         position = 0
         while self.tokens[position].kind != "EOF":
             basety, position = self.declspec(position)
-            position = self.function(position, basety)
+            if self.is_function(position):
+                position = self.function(position, basety)
+            else:
+                position = self.global_variable(position, basety)
         return self.globals
 
 

@@ -1,6 +1,6 @@
-"""Lesson 31: Unified variable and function objects.
+"""Lesson 32: Global variables.
 
-Based on chibicc commit 0b7663481d0513067e0c0af04765b8578ae2a498.
+Based on chibicc commit a4d3223a7215712b86076fad8aaf179d8f768b14.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -218,6 +218,9 @@ class Parser:
         if operator == "*":
             operand, position = self.cast(position + 1)
             return Node("DEREF", lhs=operand, tok=token), position
+        if operator == "!":
+            operand, position = self.cast(position + 1)
+            return Node("NOT", lhs=operand, tok=token), position
         if operator in ("++", "--"):
             operand, position = self.unary(position + 1)
             one = Node("NUM", value=1, tok=token)

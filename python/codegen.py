@@ -154,6 +154,10 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.cast(node.lhs.ty, node.ty)
             return
+        if node.kind == "NOT":
+            self.gen_expr(node.lhs)
+            self.assembly.extend(("  cmp $0, %rax", "  sete %al", "  movzx %al, %rax"))
+            return
 
         # Save the right result, compute the left, then restore the right.
         self.gen_expr(node.rhs)

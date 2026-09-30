@@ -1,35 +1,33 @@
-# Lesson 80: Integer literal bases
+# Lesson 81: Logical negation
 
-Original chibicc commit: [`7df934d2b63727d67d1c054975893930fa6aff44`](https://github.com/rui314/chibicc/commit/7df934d2b63727d67d1c054975893930fa6aff44).
+Original chibicc commit: [`6b88bcb306ef80b65d7f99c081ba83283b4ffac5`](https://github.com/rui314/chibicc/commit/6b88bcb306ef80b65d7f99c081ba83283b4ffac5).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Integer tokens recognize decimal, a leading zero for octal, 0x/0X for hexadecimal,
-and 0b/0B for binary. The reader consumes valid digits and reports `invalid digit`
-at a following ASCII letter or digit that cannot belong to the literal. All
-spellings become ordinary numeric nodes; assembly depends on the value rather
-than the source base. Binary literals follow this compiler's extension to C.
+Unary ! evaluates its operand and returns int 1 for zero or int 0 for nonzero.
+It parses at unary precedence and has a NOT node. The emitter compares rax with
+zero, then materializes the equality flag as an integer. Pointers and longs use
+the same zero test. No Python truth-value evaluation implements compiled logic.
 
-Python's int(text, base) only converts a validated token; it does not evaluate C
-expressions. We retain the earlier explicit signed-64-bit range error rather
-than copying strtoul's platform overflow/wrap behavior. Integer suffixes remain
-unsupported in this commit.
+This original commit compares the full rax even for int operands; together with
+the still-incomplete long-to-int cast, that can expose leftover upper bits.
+The historical emitter is preserved rather than changing conversion semantics.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return 0x2a;}\n' > /tmp/lesson80.c
-python3 python/main.py /tmp/lesson80.c > /tmp/lesson80.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson80 /tmp/lesson80.s
-/tmp/lesson80
+printf 'int main(){return !0;}\n' > /tmp/lesson81.c
+python3 python/main.py /tmp/lesson81.c > /tmp/lesson81.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson81 /tmp/lesson81.s
+/tmp/lesson81
 echo $?
 ```
 
-0x2a becomes `mov $42, %rax`, exactly like decimal 42. The shell displays the
-exit status 42. Tests cover every base and uppercase prefix, token spelling,
-invalid digit positions, assembly, executable statuses, and the original literal
-test program alongside the existing fixtures.
+`cmp $0, %rax` sets flags, `sete %al` writes 1 when equal, and
+`movzx %al, %rax` clears the remaining bits. Main returns 1. Tests cover zero,
+nonzero, repeated negation, pointers, large longs, result type/sizeof, assembly,
+executable statuses, and all updated original fixture programs.
 
 ## Tests and attribution
 

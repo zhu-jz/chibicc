@@ -1,6 +1,6 @@
-"""Lesson 80: Integer literal bases.
+"""Lesson 81: Logical negation.
 
-Based on chibicc commit 7df934d2b63727d67d1c054975893930fa6aff44.
+Based on chibicc commit 6b88bcb306ef80b65d7f99c081ba83283b4ffac5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

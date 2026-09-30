@@ -58,6 +58,16 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_logical_not(self):
+        for expression, expected in [("!0", 1), ("!42", 0), ("!!42", 1),
+                                     ("!(long)4294967296", 0), ("sizeof(!(char)0)", 4)]:
+            self.assert_program_returns(f"int main(){{return {expression};}}", expected)
+        self.assert_program_returns("int main(){int x;return !&x;}", 0)
+        node = parse_body("return !0;").body.body[0].lhs.lhs
+        self.assertEqual((node.kind, node.ty.kind), ("NOT", "INT"))
+        self.assertIn("  cmp $0, %rax\n  sete %al\n  movzx %al, %rax\n",
+                      compile_program("int main(){return !0;}").stdout)
+
     def test_integer_bases(self):
         for spelling, value in [("0777", 511), ("0xbeef", 48879), ("0XBEEF", 48879),
                                 ("0b101111", 47), ("0B101111", 47), ("0", 0), ("42", 42)]:

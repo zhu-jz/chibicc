@@ -55,6 +55,8 @@ def add_type(node):
         node.ty = ty_int
     elif node.kind == "VAR":
         node.ty = node.var.ty
+    elif node.kind == "COMMA":
+        node.ty = node.rhs.ty
     elif node.kind == "ADDR":
         if node.lhs.ty.kind == "ARRAY":
             node.ty = pointer_to(node.lhs.ty.base)

@@ -1,41 +1,44 @@
-# Lesson 47: Assembly source locations
+# Lesson 48: Comma expressions and generalized lvalues
 
-Original chibicc commit: [`1c91d1943a8ee07034224dd950412c3c87ef3276`](https://github.com/rui314/chibicc/commit/1c91d1943a8ee07034224dd950412c3c87ef3276).
+Original chibicc commit: [`e6307ad374eeecd6474286b1b6fda5b3dda89d9a`](https://github.com/rui314/chibicc/commit/e6307ad374eeecd6474286b1b6fda5b3dda89d9a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Assembly now begins with `.file 1 "filename"`. Before generating each statement
-and expression, codegen emits `.loc 1 line_number` using its token's cached
-line number. The assembler turns these directives into a debug line table.
-A debugger can associate machine instructions with the source file and line;
-these directives do not execute and do not change the returned value.
+`expr` now accepts a comma after an assignment expression. It recursively
+parses the remainder into a COMMA node. A comma expression evaluates its left
+operand for side effects, then its right operand; its value and type come from
+the right. This follows upstream's right-recursive grammar. Function arguments
+and declaration initializers still parse `assign`, so separator commas stay
+separators unless parentheses explicitly create a comma expression.
 
-The Python driver still buffers assembly before writing it. It escapes quotes
-and backslashes in filenames, an intentional improvement over this upstream
-commit's unescaped filename interpolation. Hand-built test nodes without a
-source token emit no location directive. Parsed nodes always have tokens.
-
-Instruction snapshots ignore debug directives only; a separate test checks
-exact directives for a multiline function and inspects the linked executable's
-debug line table with readelf, including a filename containing quotes.
+The address generator also handles COMMA: evaluate the left operand, then
+compute the right operand's address. Thus `(i=5,j)=6` sets i to 5 and j to 6.
+This generalized-lvalue behavior is a deprecated GNU extension intentionally
+preserved from this commit, rather than standard C behavior. A numeric right
+operand still cannot be an lvalue. The Python tree stores two ordinary child
+references instead of C pointers.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){\n return 42;\n}\n' > /tmp/lesson47.c
-python3 python/main.py -o /tmp/lesson47.s /tmp/lesson47.c
-cat /tmp/lesson47.s
-gcc -Wl,-z,noexecstack -o /tmp/lesson47 /tmp/lesson47.s
-readelf --debug-dump=decodedline /tmp/lesson47
-/tmp/lesson47
+printf 'int main(){int i=2,j=3; (i=5,j)=6; return i+j;}\n' > /tmp/lesson48.c
+python3 python/main.py -o /tmp/lesson48.s /tmp/lesson48.c
+cat /tmp/lesson48.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson48 /tmp/lesson48.s
+/tmp/lesson48
 echo $?
 ```
 
-`.file` identifies the input and `.loc 1 2` attributes the return expression
-to line 2. The instructions still move 42 into `%rax` and return through the
-epilogue. The executable prints nothing; the shell displays status 42.
-GCC invokes the assembler/linker here; Python remains the C-to-assembly compiler.
+The comma needs no special machine instruction. Codegen emits the store of 5
+to i, then j's address and the store of 6. The return expression loads both
+variables and adds them in `%rax`; the shell displays status 11. `.file` and
+`.loc` still describe source positions and do not execute.
+
+Tests include all three upstream examples, left-to-right side effects,
+parenthesized call arguments, pointer results, sizeof's right-operand type,
+and rejecting a numeric lvalue. The C control fixture is updated to this
+original commit; the entire upstream C fixture suite is also run.
 
 ## Tests and attribution
 

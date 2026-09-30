@@ -37,6 +37,10 @@ class CodeGenerator:
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
             return
+        if node.kind == "COMMA":
+            self.gen_expr(node.lhs)
+            self.gen_addr(node.rhs)
+            return
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
@@ -95,6 +99,10 @@ class CodeGenerator:
         if node.kind == "STMT_EXPR":
             for statement in node.body:
                 self.gen_stmt(statement)
+            return
+        if node.kind == "COMMA":
+            self.gen_expr(node.lhs)
+            self.gen_expr(node.rhs)
             return
 
         # Save the right result, compute the left, then restore the right.

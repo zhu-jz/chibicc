@@ -1,6 +1,6 @@
-"""Lesson 47: Assembly source locations.
+"""Lesson 48: Comma expressions and generalized lvalues.
 
-Based on chibicc commit 1c91d1943a8ee07034224dd950412c3c87ef3276.
+Based on chibicc commit e6307ad374eeecd6474286b1b6fda5b3dda89d9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -42,6 +42,25 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_comma_operator(self):
+        for source, expected in [
+            ("int main(){return (1,2,3);}", 3),
+            ("int main(){int i=2,j=3;(i=5,j)=6;return i;}", 5),
+            ("int main(){int i=2,j=3;(i=5,j)=6;return j;}", 6),
+            ("int main(){int x=0;return (x=1,x=x+2,x);}", 3),
+            ("int main(){int i=0,j=2;*(i=5,&j)=6;return i+j;}", 11),
+            ("int main(){char x;return sizeof(1,x);}", 1),
+            ("int main(){int x=(1,2);return x;}", 2),
+            ("int pair(int a,int b){return a+b;}int main(){int x=0;return pair((x=1,7),x);}", 8),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = parse_body("return 1,2,3;").body.body[0].lhs
+        self.assertEqual((node.kind, node.rhs.kind), ("COMMA", "COMMA"))
+        self.assertIs(node.ty, ty_int)
+        result = compile_program("int main(){(1,2)=3;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not an lvalue", result.stderr)
+
     def test_assembly_source_locations(self):
         source_text = "int main(){\n return 42;\n}\n"
         result = compile_program(source_text)

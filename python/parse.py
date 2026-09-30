@@ -80,9 +80,14 @@ class Parser:
         return None
 
     # Each parser function returns (node, next unconsumed token index).
-    # expr = assign
+    # expr = assign ("," expr)?
     def expr(self, position):
-        return self.assign(position)
+        node, position = self.assign(position)
+        if self.tokens[position].text == ",":
+            token = self.tokens[position]
+            rhs, position = self.expr(position + 1)
+            node = Node("COMMA", node, rhs, tok=token)
+        return node, position
 
     # assign = equality ("=" assign)?
     def assign(self, position):

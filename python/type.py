@@ -1,10 +1,10 @@
 """Annotate expression nodes with integer or pointer types.
 
-Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
+Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import Type
+from common import CompileError, Type
 
 
 ty_int = Type("INT")
@@ -30,12 +30,13 @@ def add_type(node):
 
     if node.kind in ("+", "-", "*", "/", "NEG", "ASSIGN"):
         node.ty = node.lhs.ty
-    elif node.kind in ("==", "!=", "<", "<=", "VAR", "NUM"):
+    elif node.kind in ("==", "!=", "<", "<=", "NUM"):
         node.ty = ty_int
+    elif node.kind == "VAR":
+        node.ty = node.var.ty
     elif node.kind == "ADDR":
         node.ty = pointer_to(node.lhs.ty)
     elif node.kind == "DEREF":
-        if node.lhs.ty.kind == "PTR":
-            node.ty = node.lhs.ty.base
-        else:
-            node.ty = ty_int
+        if node.lhs.ty.kind != "PTR":
+            raise CompileError(node.tok.position, "invalid pointer dereference")
+        node.ty = node.lhs.ty.base

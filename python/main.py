@@ -1,6 +1,6 @@
-"""Lesson 21: scale pointer arithmetic using expression types.
+"""Lesson 22: compile declared integer and pointer variables.
 
-Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
+Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

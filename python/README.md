@@ -1,72 +1,89 @@
-# Lesson 21: pointer arithmetic and expression types
+# Lesson 22: declared integer and pointer variables
 
 This educational Python port implements original chibicc commit
-[`a6bc4ab101c20b6398fd6bbfe124665bb7db5d25`](https://github.com/rui314/chibicc/commit/a6bc4ab101c20b6398fd6bbfe124665bb7db5d25),
-“Make pointer arithmetic work.” Earlier lessons remain in Git history.
+[`b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb`](https://github.com/rui314/chibicc/commit/b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb),
+“Add keyword "int" and make variable definition mandatory.”
+Earlier lessons remain in Git history.
 
 ## What changed
 
-Pointer addition and subtraction now count elements rather than bytes:
+Variables must now be declared before use:
 
 ```c
-{ x=3; y=5; return *(&x+1); }
+{ int x; x=3; return x; }
+{ int x=3; return x; }
+{ int x=3, y=5; return x+y; }
 ```
 
-This returns 5. x is at -16(%rbp), y is at -8(%rbp), and each local slot is
-eight bytes. Adding one element to x's address therefore reaches y. The
-previous lesson used `&x+8`; that would now advance eight elements.
+The first two return 3; the last returns 8. The old `{x=3; return x;}`
+now reports “undefined variable” at the first x.
 
-The supported cases are:
+A declaration supplies each variable's type. Prefix stars create pointers:
 
-| Operands | Result |
-| --- | --- |
-| integer + integer, integer - integer | ordinary integer arithmetic |
-| pointer + integer, integer + pointer | pointer, with the integer multiplied by 8 |
-| pointer - integer | pointer, with the integer multiplied by 8 |
-| pointer - pointer | integer element distance: byte difference divided by 8 |
-| pointer + pointer, integer - pointer | compile error: invalid operands |
+```c
+{ int x=3; int *p=&x; int **q=&p; return **q; }
+```
 
-For example, `{x=3; return (&x+2)-&x+3;}` returns 5: advancing two
-elements and subtracting the original address produces 2, then adding 3
-produces 5.
+This returns 3. p points to an integer, and q points to a pointer to an
+integer. Each declarator starts from the base type independently:
+in `int *p, x;`, p is a pointer and x is an integer.
 
-## Type annotation and tree rewriting
+Pointer variables now participate in scaled arithmetic:
 
-A `Type` contains a kind, `INT` or `PTR`, and an optional `base` type for
-pointers. Nodes have an optional `ty` field. The new `python/type.py` module
-walks child nodes before assigning the enclosing expression's type.
+```c
+{ int x=3; int y=5; int *p=&x; return *(p+1); }
+```
 
-Numbers and variables are integers. Address-of produces a pointer to its
-operand's type. Dereferencing a pointer uses its base type. Comparisons
-produce integers. Arithmetic and assignment generally inherit the left
-operand's type.
+This returns 5. Unlike the previous lesson's implicitly integer variables,
+p carries a pointer type, so adding 1 advances eight bytes.
 
-The parser's new `new_add()` and `new_sub()` helpers first annotate their
-operands, then rewrite pointer operations:
+Dereferencing an integer is now rejected at the `*` token:
+`{return *1;}` reports “invalid pointer dereference.”
+
+## Parser and initialization
+
+The block grammar now accepts declarations as well as statements:
 
 ```text
-&x + 1       -> ADD(ADDR(x), MUL(1, 8))
-&x - 1       -> SUB(ADDR(x), MUL(1, 8))
-(&x+2) - &x  -> DIV(SUB(ADD(ADDR(x), MUL(2, 8)), ADDR(x)), 8)
+declspec = "int"
+declarator = "*"* identifier
+declaration = declspec (declarator ("=" assign)?
+                       ("," declarator ("=" assign)?)*)? ";"
+compound-stmt = (declaration | stmt)* "}"
 ```
 
-Integer + pointer is rearranged to pointer + integer before scaling.
-Pointer subtraction explicitly sets the inner difference's type to integer,
-so it does not get interpreted again as pointer arithmetic. Pointer -
-integer explicitly retains the pointer type for subsequent operations.
-The completed statements are also annotated as their containing block is
-parsed.
+`declspec()` reads the base type. `declarator()` reads any stars and the
+name. `declaration()` creates a typed local object, then optionally parses
+an initializer. The local is registered before parsing its initializer,
+and later names in the same declaration can refer to earlier ones.
+
+Initializers become ordinary assignment expression statements inside a
+`BLOCK` node. Thus `int x=3;` reuses the same store instructions as
+`x=3;`. A declaration without an initializer creates storage but emits no
+initialization. `int;` is accepted as an empty declaration, matching upstream.
+
+A variable reference now looks up an existing local and fails if none exists.
+Type annotation reads each variable's declared type instead of assuming INT.
 
 ## Read the assembly
 
-Code generation is unchanged: its existing multiply, add, subtract, and
-signed divide instructions handle the rewritten trees. For `*(&x+1)`, the
-generator computes `1*8`, saves that result, calculates x's address with
-`lea`, adds the saved offset, then loads through the resulting address.
+For `{int x=3; int *p=&x; *p=5; return x;}`, p is at -8(%rbp) and x at
+-16(%rbp). Both slots remain eight bytes, including `int` in this lesson.
 
-Pointer difference computes a byte difference in `%rax`, then uses the
-existing `cqo` and `idiv %rdi` sequence with divisor 8. The result is an
-element count. Negative differences therefore work too.
+The declaration `int *p=&x;` generates this store:
+
+```asm
+  lea -8(%rbp), %rax
+  push %rax
+  lea -16(%rbp), %rax
+  pop %rdi
+  mov %rax, (%rdi)
+```
+
+The first address is p's destination slot; the second is x's address.
+The temporary stack preserves the destination while evaluating the
+initializer. The final `mov` stores x's address into p. Declaration syntax
+and type checks happen during compilation; no new code generator is needed.
 
 ## Run it in WSL
 
@@ -74,40 +91,51 @@ With Python 3 and GCC (`build-essential` on Ubuntu), run from the repository
 root on x86-64 Linux:
 
 ```sh
-python3 python/main.py '{x=3; y=5; return *(&x+1);}' > /tmp/chibicc-python-lesson21.s
-cat /tmp/chibicc-python-lesson21.s
-gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson21 /tmp/chibicc-python-lesson21.s
-/tmp/chibicc-python-lesson21
+python3 python/main.py '{int x=3; int *p=&x; *p=5; return x;}' > /tmp/chibicc-python-lesson22.s
+cat /tmp/chibicc-python-lesson22.s
+gcc -static -Wl,-z,noexecstack -o /tmp/chibicc-python-lesson22 /tmp/chibicc-python-lesson22.s
+/tmp/chibicc-python-lesson22
 echo $?
 ```
 
 The executable prints nothing; `echo $?` immediately afterward prints **5**.
 Use an ordinary interactive shell: `set -e` stops on a nonzero status.
 
-## Current limits, Python/C differences, and tests
+## Current limits and Python/C differences
 
-This is a small expression type system, not full C type checking. Variables
-still have integer type even when assigned addresses: `p=&x; p+1;` performs
-ordinary integer addition. Use address expressions such as `&x+1` for the
-scaled arithmetic taught here. Dereferencing an integer still receives
-integer type, matching upstream's permissive behavior.
+Declarations are recognized inside blocks. They are not accepted directly
+as an if/while body or in a for initializer; use a block or declare the
+variable before the loop. Only int and pointers are supported.
 
-All slots and dereference loads remain eight bytes. Accessing neighbouring
-locals relies on this compiler's layout; arbitrary memory accesses are
-unchecked. Numeric tokens remain limited to 0 through 2147483647.
+Locals still share one function-wide list. A name declared inside a nested
+block remains visible afterward, and a later redeclaration hides the older
+object for subsequent references. This follows the current original commit,
+which has no block scope yet. Uninitialized locals and arbitrary pointer
+accesses remain unchecked. Assignment type compatibility is also unchecked.
 
-Python type objects replace C structs and pointers. Type and source metadata
-are excluded from structural node equality and checked separately in tests.
-Python's Unicode whitespace and character-based diagnostic positions remain.
+The original C declarator writes a name into a type object, including its
+shared integer type. Python creates a separate outer type object for each
+declarator, preserving its name without mutating the shared integer type.
+This intentional metadata difference does not change generated assembly.
+
+Python uses lists, dataclasses, tuples, and `None` in place of C lists,
+structs, output pointers, and null pointers. Unicode whitespace and
+character-based diagnostic positions remain. Decimal tokens still range
+from 0 through 2147483647. Process exit statuses retain only eight bits.
+
+## Tests
 
 ```sh
 python3 python/test.py
 ```
 
-Tests update the previous byte-offset examples to element offsets, retain
-upstream's new negative-offset and pointer-difference examples, and check
-integer + pointer, negative differences, chained arithmetic, inferred types,
-rewritten trees, invalid operand diagnostics, and earlier executable cases.
+The suite includes every current upstream executable example and earlier
+arithmetic/control-flow regressions updated to explicit declarations. It
+checks comma-separated declarations, initialization order, pointer chains,
+scaled arithmetic on pointer variables, local layout, empty declarations,
+current name visibility, keyword boundaries, invalid declarations, undefined
+variables, invalid dereferences, exact assembly, and diagnostic carets.
+Executables run with a timeout; temporary assembly and binaries are cleaned up.
 
 The implementation remains in `python/` on `python-lessons`; original C
 files are intact. Original chibicc: Copyright (c) 2019 Rui Ueyama, MIT

@@ -1,6 +1,6 @@
 """Shared token, tree, and error types.
 
-Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
+Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -26,12 +26,14 @@ class CompileError(Exception):
 class Type:
     kind: str
     base: Optional["Type"] = None
+    name: Optional[Token] = field(default=None, compare=False)
 
 
 @dataclass
 class Obj:
     name: str
     offset: int = 0
+    ty: Optional[Type] = field(default=None, compare=False)
 
 
 @dataclass

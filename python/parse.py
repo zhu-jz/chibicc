@@ -3,12 +3,12 @@
 Each grammar function returns a node and the next token index. Python tuples
 replace C's returned node plus output pointer for the remaining tokens.
 
-Based on chibicc commit a6bc4ab101c20b6398fd6bbfe124665bb7db5d25.
+Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Function, Node, Obj
-from type import add_type, is_integer, ty_int
+from common import CompileError, Function, Node, Obj, Type
+from type import add_type, is_integer, pointer_to, ty_int
 
 
 def new_add(lhs, rhs, token):
@@ -142,8 +142,7 @@ class Parser:
         if token.kind == "IDENT":
             var = self.find_var(token.text)
             if var is None:
-                var = Obj(token.text)
-                self.locals.insert(0, var)
+                raise CompileError(token.position, "undefined variable")
             return Node("VAR", var=var, tok=token), position + 1
 
         if token.kind == "NUM":
@@ -205,12 +204,56 @@ class Parser:
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
 
-    # compound-stmt = stmt* "}"
+    # declspec = "int"
+    def declspec(self, position):
+        if self.tokens[position].text != "int":
+            raise CompileError(self.tokens[position].position, "expected 'int'")
+        return ty_int, position + 1
+
+    # declarator = "*"* identifier
+    def declarator(self, position, ty):
+        while self.tokens[position].text == "*":
+            ty = pointer_to(ty)
+            position += 1
+        token = self.tokens[position]
+        if token.kind != "IDENT":
+            raise CompileError(token.position, "expected a variable name")
+        # Keep the declaration name without mutating the shared integer type.
+        return Type(ty.kind, ty.base, token), position + 1
+
+    # declaration = declspec (declarator ("=" assign)?
+    #                        ("," declarator ("=" assign)?)*)? ";"
+    def declaration(self, position):
+        basety, position = self.declspec(position)
+        statements = []
+        first = True
+        while self.tokens[position].text != ";":
+            if not first:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position].position, "expected ','")
+                position += 1
+            first = False
+            ty, position = self.declarator(position, basety)
+            var = Obj(ty.name.text, ty=ty)
+            self.locals.insert(0, var)
+            if self.tokens[position].text != "=":
+                continue
+            lhs = Node("VAR", var=var, tok=ty.name)
+            rhs, position = self.assign(position + 1)
+            token = self.tokens[position]
+            assignment = Node("ASSIGN", lhs, rhs, tok=token)
+            statements.append(Node("EXPR_STMT", lhs=assignment, tok=token))
+        return Node("BLOCK", body=statements, tok=self.tokens[position]), position + 1
+
+    # compound-stmt = (declaration | stmt)* "}"
     def compound_stmt(self, position):
         token = self.tokens[position]
         statements = []
         while self.tokens[position].text != "}":
-            node, position = self.stmt(position)
+            if self.tokens[position].text == "int":
+                node, position = self.declaration(position)
+            else:
+                node, position = self.stmt(position)
             add_type(node)
             statements.append(node)
         return Node("BLOCK", body=statements, tok=token), position + 1

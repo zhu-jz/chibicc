@@ -9,11 +9,12 @@ from dataclasses import replace
 from common import CompileError, Type
 
 
+ty_char = Type("CHAR", size=1)
 ty_int = Type("INT", size=8)
 
 
 def is_integer(ty):
-    return ty.kind == "INT"
+    return ty.kind in ("CHAR", "INT")
 
 
 def copy_type(ty):

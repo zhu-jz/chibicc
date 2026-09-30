@@ -1,41 +1,37 @@
-# Lesson 32: Global variables
+# Lesson 33: Signed char values
 
-Original chibicc commit: [`a4d3223a7215712b86076fad8aaf179d8f768b14`](https://github.com/rui314/chibicc/commit/a4d3223a7215712b86076fad8aaf179d8f768b14).
+Original chibicc commit: [`be38d63d1b9cd236ef3ec884eedad8112bb6e6f9`](https://github.com/rui314/chibicc/commit/be38d63d1b9cd236ef3ec884eedad8112bb6e6f9).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Top-level declarations can now create int/pointer/array globals. Lookahead
-parses a declarator to distinguish a function type from a variable type.
-Variable lookup checks function locals first, then existing global objects.
-Global initializers and forward variable references are not supported yet.
+The new `char` type occupies one byte; int and pointers remain eight bytes.
+Declarations, parameters, arrays, globals, and pointer arithmetic use its size.
+A char store emits `mov %al,(%rdi)`, writing only the low byte. A char load emits
+`movsbq (%rax),%rax`, sign-extending that byte, so storing 255 and reading it
+produces -1. Arrays of chars advance one byte per element.
 
-The generator emits globals first in `.data`, with `.globl`, a symbol label,
-and `.zero size`. This reserves zero-filled storage. Global address calculation
-uses `lea x(%rip),%rax`, while locals use frame-relative offsets. Existing
-load/store and array logic works for either address. Functions are emitted
-in `.text` as before.
+Char parameters are saved with `%dil`, `%sil`, `%dl`, `%cl`, `%r8b`, and `%r9b`.
+Calls still pass register values in their 64-bit forms; the callee selects the
+appropriate store width. Locals use consecutive sized slots, with the total
+frame aligned to 16 bytes; individual mixed slots may be unaligned on x86-64.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int x; int main(){x=3; return x;}' > /tmp/lesson32.s
-cat /tmp/lesson32.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson32 /tmp/lesson32.s
-/tmp/lesson32
+python3 python/main.py 'int main(){char x=255; return x<0;}' > /tmp/lesson33.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson33 /tmp/lesson33.s
+/tmp/lesson33
 echo $?
 ```
 
-The executable prints nothing; the last command shows **3**. Use an interactive
-shell without `set -e` for nonzero statuses. The body calculates x's global
-address, stores 3 there, and loads it again for the return value. An untouched
-global returns zero, unlike an uninitialized stack local.
-
-Tests cover all upstream globals and array positions, sizes, zero initialization,
-updates across functions, local shadowing, data directives, address instructions,
-and unsupported initializers/forward references. Function headers now need a
-function declarator to select the function branch. Python lists replace global
-linked lists; no new intentional Python/C behavior is introduced.
+The executable prints nothing; the last command shows **1**. Use an interactive
+shell without `set -e` for nonzero statuses. Tests cover all upstream char
+examples, signed loads, byte truncation, neighbouring storage, arrays, globals,
+and all six char parameter registers. This stage has no full integer promotion
+or assignment conversion system: storing truncates, but an assignment expression
+can still retain its untruncated register value. These limits follow upstream.
+Python does not simulate byte arithmetic; emitted instructions perform it.
 
 ## Tests and attribution
 

@@ -32,6 +32,25 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_char(self):
+        for source, expected in [
+            ("int main(){char x=1;return x;}",1),
+            ("int main(){char x=1;char y=2;return x;}",1),
+            ("int main(){char x=1;char y=2;return y;}",2),
+            ("int main(){char x;return sizeof(x);}",1),
+            ("int main(){char x[10];return sizeof(x);}",10),
+            ("int main(){return sub_char(7,3,3);} int sub_char(char a,char b,char c){return a-b-c;}",1),
+            ("int main(){char x=255;return x<0;}",1),
+            ("int main(){char x=1;int y=513;x=257;return y==513;}",1),
+            ("int main(){char a[3];a[1]=7;return a[1];}",7),
+            ("char x;int main(){x=255;return x<0;}",1),
+            ("int f(char a,char b,char c,char d,char e,char f){return a+2*b+3*c+4*d+5*e+6*f;} int main(){return f(1,2,3,4,5,6);}",91),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){char x=1;return x;}").stdout
+        self.assertIn("  mov %al, (%rdi)\n", assembly)
+        self.assertIn("  movsbq (%rax), %rax\n", assembly)
+
     def test_global_variables(self):
         for source, expected in [
             ("int x; int main(){return x;}",0),

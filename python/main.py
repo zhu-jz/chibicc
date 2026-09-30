@@ -1,6 +1,6 @@
-"""Lesson 32: Global variables.
+"""Lesson 33: Signed char values.
 
-Based on chibicc commit a4d3223a7215712b86076fad8aaf179d8f768b14.
+Based on chibicc commit be38d63d1b9cd236ef3ec884eedad8112bb6e6f9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

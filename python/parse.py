@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Node, Obj, Type
-from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_int
+from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int
 
 
 def new_add(lhs, rhs, token):
@@ -251,8 +251,10 @@ class Parser:
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
 
-    # declspec = "int"
+    # declspec = "char" | "int"
     def declspec(self, position):
+        if self.tokens[position].text == "char":
+            return ty_char, position + 1
         if self.tokens[position].text != "int":
             raise CompileError(self.tokens[position].position, "expected 'int'")
         return ty_int, position + 1
@@ -328,7 +330,7 @@ class Parser:
         token = self.tokens[position]
         statements = []
         while self.tokens[position].text != "}":
-            if self.tokens[position].text == "int":
+            if self.tokens[position].text in ("char", "int"):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

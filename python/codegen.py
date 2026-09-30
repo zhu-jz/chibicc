@@ -9,6 +9,7 @@ from common import CompileError
 
 
 ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
+ARGREG8 = ("%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b")
 
 
 class CodeGenerator:
@@ -39,12 +40,19 @@ class CodeGenerator:
         raise CompileError(node.tok.position, "not an lvalue")
 
     def load(self, ty):
-        if ty.kind != "ARRAY":
+        if ty.kind == "ARRAY":
+            return
+        if ty.size == 1:
+            self.assembly.append("  movsbq (%rax), %rax")
+        else:
             self.assembly.append("  mov (%rax), %rax")
 
-    def store(self):
+    def store(self, ty):
         self.pop("%rdi")
-        self.assembly.append("  mov %rax, (%rdi)")
+        if ty.size == 1:
+            self.assembly.append("  mov %al, (%rdi)")
+        else:
+            self.assembly.append("  mov %rax, (%rdi)")
 
     def gen_expr(self, node):
         if node.kind == "NUM":
@@ -69,7 +77,7 @@ class CodeGenerator:
             self.gen_addr(node.lhs)
             self.push()
             self.gen_expr(node.rhs)
-            self.store()
+            self.store(node.ty)
             return
         if node.kind == "FUNCALL":
             if len(node.args) > len(ARGREG):
@@ -173,7 +181,8 @@ class CodeGenerator:
                 raise CompileError(function.params[6].ty.name.position,
                                    "at most 6 parameters are supported")
             for index, var in enumerate(function.params):
-                self.assembly.append(f"  mov {ARGREG[index]}, {var.offset}(%rbp)")
+                register = ARGREG8[index] if var.ty.size == 1 else ARGREG[index]
+                self.assembly.append(f"  mov {register}, {var.offset}(%rbp)")
             self.gen_stmt(function.body)
             assert self.depth == 0
             self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",

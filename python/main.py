@@ -1,6 +1,6 @@
-"""Lesson 34: String literals.
+"""Lesson 35: Formatting utility refactor.
 
-Based on chibicc commit 4cedda2dbeca6bd81d2bd00032f7cff46e0a985e.
+Based on chibicc commit 35a0bcd366163168bf3337975130f62fc1c30235.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

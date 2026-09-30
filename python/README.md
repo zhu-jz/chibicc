@@ -1,42 +1,37 @@
-# Lesson 34: String literals
+# Lesson 35: Formatting utility refactor
 
-Original chibicc commit: [`4cedda2dbeca6bd81d2bd00032f7cff46e0a985e`](https://github.com/rui314/chibicc/commit/4cedda2dbeca6bd81d2bd00032f7cff46e0a985e).
+Original chibicc commit: [`35a0bcd366163168bf3337975130f62fc1c30235`](https://github.com/rui314/chibicc/commit/35a0bcd366163168bf3337975130f62fc1c30235).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Quoted text becomes a STR token with raw source text, byte contents including
-one terminating zero, and a char-array type. The parser creates an anonymous
-global named `.L..0`, `.L..1`, etc., and returns a variable node referring to it.
-The generator emits `.byte` entries instead of `.zero` for initialized data.
+Upstream adds a printf-style `format()` utility implemented with a memory
+stream, and uses it to generate anonymous names instead of writing into a
+fixed-size C buffer. It introduces no language or assembly change.
 
-`"abc"` occupies four bytes: 97, 98, 99, 0. Array conversion leaves its address
-in `%rax`; subscripting adds a byte offset and uses the signed char load.
-`sizeof("abc")` is 4. Empty strings still have their terminating byte.
-Unclosed strings and raw newlines inside them are errors. Escape decoding is
-not supported in this original step.
+The Python port already uses `f".L..{self.unique_id}"`, which constructs a
+string of the required length directly. We retain that straightforward
+standard-language operation. An extra utility wrapping it would add no value.
+This is an intentional Python/C implementation difference: Python does not
+need C allocation, varargs, or stream management to format a name.
+
+Each literal still gets a distinct global name, byte data, and a RIP-relative
+address. The existing string tests and a two-literal name/data check verify
+that behavior. The compiler files and generated assembly remain unchanged.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return "abc"[1];}' > /tmp/lesson34.s
-cat /tmp/lesson34.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson34 /tmp/lesson34.s
-/tmp/lesson34
+python3 python/main.py 'int main(){return "abc"[1];}' > /tmp/lesson35.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson35 /tmp/lesson35.s
+/tmp/lesson35
 echo $?
 ```
 
-The executable prints nothing; the last command shows **98**, the byte for b.
-Use an interactive shell without `set -e` for nonzero statuses. Tests include
-all upstream strings, terminators, sizes, data bytes, addressing, UTF-8 size,
-and unclosed strings.
-
-Python encodes literal text as UTF-8, matching bytes supplied through a UTF-8
-Linux command line. Byte values are printed unsigned (0–255), whereas upstream
-may print signed C chars; these `.byte` values assemble to the same bits.
-Diagnostics still count Python characters. Anonymous counters belong to a
-parser instance rather than a C static variable. Strings remain writable data,
-matching upstream's current emission; no string pooling or new syntax is added.
+The executable prints nothing; the last command shows **98**. Use an interactive
+shell without `set -e` for nonzero statuses. The assembly retains `.byte` data,
+`lea .L..0(%rip),%rax`, a byte-offset calculation, and a signed char load.
+String escapes remain unsupported at this exact stage.
 
 ## Tests and attribution
 

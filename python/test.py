@@ -58,6 +58,14 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bitwise_not(self):
+        for expression, expected in [("~0", 255), ("~-1", 0), ("~~42", 42),
+                                     ("~(long)0==-1", 1), ("sizeof(~(char)0)", 1)]:
+            self.assert_program_returns(f"int main(){{return {expression};}}", expected)
+        node = parse_body("return ~(short)1;").body.body[0].lhs.lhs
+        self.assertEqual((node.kind, node.ty.kind), ("BITNOT", "SHORT"))
+        self.assertIn("  not %rax\n", compile_program("int main(){return ~0;}").stdout)
+
     def test_logical_not(self):
         for expression, expected in [("!0", 1), ("!42", 0), ("!!42", 1),
                                      ("!(long)4294967296", 0), ("sizeof(!(char)0)", 4)]:

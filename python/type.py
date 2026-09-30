@@ -92,6 +92,8 @@ def add_type(node):
         node.ty = ty_long
     elif node.kind == "NOT":
         node.ty = ty_int
+    elif node.kind == "BITNOT":
+        node.ty = node.lhs.ty
     elif node.kind == "VAR":
         node.ty = node.var.ty
     elif node.kind == "COMMA":

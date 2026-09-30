@@ -1,33 +1,33 @@
-# Lesson 81: Logical negation
+# Lesson 82: Bitwise complement
 
-Original chibicc commit: [`6b88bcb306ef80b65d7f99c081ba83283b4ffac5`](https://github.com/rui314/chibicc/commit/6b88bcb306ef80b65d7f99c081ba83283b4ffac5).
+Original chibicc commit: [`46a96d6862e4c1317ff48df69391fd98a1ae5e3d`](https://github.com/rui314/chibicc/commit/46a96d6862e4c1317ff48df69391fd98a1ae5e3d).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Unary ! evaluates its operand and returns int 1 for zero or int 0 for nonzero.
-It parses at unary precedence and has a NOT node. The emitter compares rax with
-zero, then materializes the equality flag as an integer. Pointers and longs use
-the same zero test. No Python truth-value evaluation implements compiled logic.
+Unary ~ creates a BITNOT node and emits `not %rax`, flipping each bit of the
+register. Thus ~0 is -1 and ~-1 is zero. Logical ! checks zero; bitwise ~ changes
+the integer representation. The parser gives it unary precedence.
 
-This original commit compares the full rax even for int operands; together with
-the still-incomplete long-to-int cast, that can expose leftover upper bits.
-The historical emitter is preserved rather than changing conversion semantics.
+This original commit retains the operand's type instead of applying C's full
+integer promotion rules: sizeof(~(char)0) is still 1 here. It also always emits a
+64-bit not. Python preserves those stages and emits assembly rather than using
+Python's own arbitrary-precision bitwise complement for runtime computation.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return !0;}\n' > /tmp/lesson81.c
-python3 python/main.py /tmp/lesson81.c > /tmp/lesson81.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson81 /tmp/lesson81.s
-/tmp/lesson81
+printf 'int main(){return ~0;}\n' > /tmp/lesson82.c
+python3 python/main.py /tmp/lesson82.c > /tmp/lesson82.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson82 /tmp/lesson82.s
+/tmp/lesson82
 echo $?
 ```
 
-`cmp $0, %rax` sets flags, `sete %al` writes 1 when equal, and
-`movzx %al, %rax` clears the remaining bits. Main returns 1. Tests cover zero,
-nonzero, repeated negation, pointers, large longs, result type/sizeof, assembly,
-executable statuses, and all updated original fixture programs.
+`mov $0, %rax` followed by `not %rax` produces all one bits (-1). The shell shows
+255 because process exit statuses retain only the low eight bits. Tests check
+both signs, repeated complement, long values, historical sizeof/type behavior,
+assembly, real execution, and updated original programs.
 
 ## Tests and attribution
 

@@ -1,6 +1,6 @@
-"""Lesson 81: Logical negation.
+"""Lesson 82: Bitwise complement.
 
-Based on chibicc commit 6b88bcb306ef80b65d7f99c081ba83283b4ffac5.
+Based on chibicc commit 46a96d6862e4c1317ff48df69391fd98a1ae5e3d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

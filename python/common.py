@@ -14,6 +14,8 @@ class Token:
     text: str
     position: int  # Character index in the original input, including whitespace.
     value: int = 0  # Used only for number tokens.
+    ty: Optional["Type"] = field(default=None, compare=False)
+    str: bytes = b""  # String bytes, including the terminating zero.
 
 
 class CompileError(Exception):
@@ -44,6 +46,7 @@ class Obj:
     body: Optional["Node"] = None
     locals: list["Obj"] = field(default_factory=list)
     stack_size: int = 0
+    init_data: Optional[bytes] = None
 
 
 @dataclass

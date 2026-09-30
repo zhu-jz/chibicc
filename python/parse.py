@@ -45,6 +45,7 @@ class Parser:
         self.tokens = tokens
         self.locals = []
         self.globals = []
+        self.unique_id = 0
 
     def new_lvar(self, name, ty):
         var = Obj(name, ty=ty, is_local=True)
@@ -54,6 +55,12 @@ class Parser:
     def new_gvar(self, name, ty):
         var = Obj(name, ty=ty)
         self.globals.insert(0, var)
+        return var
+
+    def new_string_literal(self, data, ty):
+        var = self.new_gvar(f".L..{self.unique_id}", ty)
+        self.unique_id += 1
+        var.init_data = data
         return var
 
     def find_var(self, name):
@@ -190,6 +197,10 @@ class Parser:
             var = self.find_var(token.text)
             if var is None:
                 raise CompileError(token.position, "undefined variable")
+            return Node("VAR", var=var, tok=token), position + 1
+
+        if token.kind == "STR":
+            var = self.new_string_literal(token.str, token.ty)
             return Node("VAR", var=var, tok=token), position + 1
 
         if token.kind == "NUM":

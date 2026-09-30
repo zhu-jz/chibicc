@@ -32,6 +32,23 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_string_literals(self):
+        for body, expected in [('return ""[0];',0), ('return sizeof("");',1),
+                               ('return "abc"[0];',97), ('return "abc"[1];',98),
+                               ('return "abc"[2];',99), ('return "abc"[3];',0),
+                               ('return sizeof("abc");',4), ('return sizeof("é");',3)]:
+            self.assert_program_returns("int main(){"+body+"}", expected)
+        token = tokenize('"abc"')[0]
+        self.assertEqual(token.str, b"abc\0")
+        self.assertEqual(token.ty.size, 4)
+        assembly = compile_program('int main(){return "abc"[0];}').stdout
+        self.assertIn("  .byte 97\n  .byte 98\n  .byte 99\n  .byte 0\n", assembly)
+        self.assertIn("  lea .L..0(%rip), %rax", assembly)
+        for source in ['int main(){return "abc;}', 'int main(){return "a\nb"[0];}']:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("unclosed string literal", result.stderr)
+
     def test_char(self):
         for source, expected in [
             ("int main(){char x=1;return x;}",1),

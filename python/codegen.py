@@ -163,8 +163,12 @@ class CodeGenerator:
         self.assembly = []
         for var in program:
             if not var.is_function:
-                self.assembly.extend(["  .data", f"  .globl {var.name}", f"{var.name}:",
-                                      f"  .zero {var.ty.size}"])
+                self.assembly.extend(["  .data", f"  .globl {var.name}", f"{var.name}:"])
+                if var.init_data is not None:
+                    for value in var.init_data:
+                        self.assembly.append(f"  .byte {value}")
+                else:
+                    self.assembly.append(f"  .zero {var.ty.size}")
         for function in program:
             if not function.is_function:
                 continue

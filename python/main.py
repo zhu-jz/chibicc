@@ -1,6 +1,6 @@
-"""Lesson 33: Signed char values.
+"""Lesson 34: String literals.
 
-Based on chibicc commit be38d63d1b9cd236ef3ec884eedad8112bb6e6f9.
+Based on chibicc commit 4cedda2dbeca6bd81d2bd00032f7cff46e0a985e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

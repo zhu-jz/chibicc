@@ -7,6 +7,21 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 import string
 
 from common import CompileError, Token
+from type import array_of, ty_char
+
+
+def read_string_literal(source, start):
+    position = start + 1
+    while position < len(source) and source[position] != '"':
+        if source[position] == "\n":
+            raise CompileError(start, "unclosed string literal")
+        position += 1
+    if position == len(source):
+        raise CompileError(start, "unclosed string literal")
+    data = source[start + 1:position].encode("utf-8") + b"\0"
+    token = Token("STR", source[start:position + 1], start,
+                  ty=array_of(ty_char, len(data)), str=data)
+    return token, position + 1
 
 
 def is_ident1(character):
@@ -40,6 +55,11 @@ def tokenize(source):
             if value > 2**31 - 1:
                 raise CompileError(start, "integer must fit in a signed 32-bit immediate")
             tokens.append(Token("NUM", text, start, value))
+            continue
+
+        if character == '"':
+            token, position = read_string_literal(source, position)
+            tokens.append(token)
             continue
 
         if is_ident1(character):

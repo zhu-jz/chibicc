@@ -1,6 +1,6 @@
-"""Lesson 26: Function parameters.
+"""Lesson 27: One-dimensional arrays.
 
-Based on chibicc commit aacc0cfec24e0aef1e884ac8b657e182a33a7b1c.
+Based on chibicc commit 8b6395d0f2be4024bd7e7921157a6496951eb162.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

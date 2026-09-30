@@ -1,46 +1,41 @@
-# Lesson 26: Function parameters
+# Lesson 27: One-dimensional arrays
 
-Original chibicc commit: [`aacc0cfec24e0aef1e884ac8b657e182a33a7b1c`](https://github.com/rui314/chibicc/commit/aacc0cfec24e0aef1e884ac8b657e182a33a7b1c).
+Original chibicc commit: [`8b6395d0f2be4024bd7e7921157a6496951eb162`](https://github.com/rui314/chibicc/commit/8b6395d0f2be4024bd7e7921157a6496951eb162).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Definitions now accept named int/pointer parameters:
+`int x[3];` creates an ARRAY type with element type int, length 3, and size
+24 bytes. Types now carry sizes; integers and pointers are still eight bytes.
+Local offsets sum each variable's size and the frame rounds up to 16 bytes.
 
-```c
-int main(){return sub2(4,3);}
-int sub2(int x,int y){return x-y;}
-```
+Evaluating an array leaves its address in `%rax`, without a `mov (%rax),%rax`
+load. This implements array-to-pointer conversion. Dereference loads a scalar
+but leaves an array address unchanged. Whole-array assignment is rejected.
+Pointer arithmetic now scales by the base type's size instead of a hardcoded 8.
 
-Function types keep parameter types in source order. The parser creates local
-objects for them before parsing the body. Function.params keeps those objects
-in argument order; Function.locals also includes later body declarations.
-A shallow type copy preserves each parameter name without copying pointer bases.
-Type annotation now visits call arguments too, rejecting invalid dereferences
-inside them.
-
-The prologue saves argument registers into their assigned stack slots. For
-sub2 without other locals this is `mov %rdi, -8(%rbp)` followed by
-`mov %rsi, -16(%rbp)`. Parameter reads and assignments then reuse ordinary
-local-variable code. Each recursive call gets a separate stack frame.
+There is no subscript syntax yet; access elements using `*(x+1)`. Array lengths
+must be numeric tokens. At this stage `&x` for an array is typed as a pointer
+to its element, matching upstream's simplified behavior.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return sub2(4,3);} int sub2(int x,int y){return x-y;}' > /tmp/lesson26.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson26 /tmp/lesson26.s
-/tmp/lesson26
+python3 python/main.py 'int main(){int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1);}' > /tmp/lesson27.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson27 /tmp/lesson27.s
+/tmp/lesson27
 echo $?
 ```
 
-The executable prints nothing; the last command shows **1**. Use an interactive
-shell without `set -e` for nonzero statuses. Tests cover upstream add/sub/fib,
-all six register positions, pointer parameters, local offsets, and argument
-annotation. Python replaces upstream's recursive list construction with lists
-in source order. It reports unsupported parameter counts above six instead
-of indexing outside a C register array. Signature compatibility, prototypes,
-block scopes, and temporary-stack call alignment remain unsupported at this stage.
-All local slots are still eight bytes.
+The last command shows **4**; the executable prints nothing. Use an interactive
+shell without `set -e` for nonzero statuses. For this array the generator uses
+`lea -24(%rbp),%rax`, adds an eight-byte element offset, and loads the selected
+value. A 32-byte frame holds its 24 bytes of storage.
+
+Tests cover all upstream array examples, arrays of pointers, address conversion,
+frame size/offsets, invalid sizes, and array assignment. Python's size arithmetic
+does not overflow a C int, but emitted frame/immediate sizes still must be
+representable by the assembler. Bounds and memory accesses are unchecked.
 
 ## Tests and attribution
 

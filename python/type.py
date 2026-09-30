@@ -9,7 +9,7 @@ from dataclasses import replace
 from common import CompileError, Type
 
 
-ty_int = Type("INT")
+ty_int = Type("INT", size=8)
 
 
 def is_integer(ty):
@@ -21,11 +21,15 @@ def copy_type(ty):
 
 
 def pointer_to(base):
-    return Type("PTR", base)
+    return Type("PTR", base, size=8)
 
 
 def func_type(return_ty):
     return Type("FUNC", return_ty=return_ty)
+
+
+def array_of(base, length):
+    return Type("ARRAY", base, size=base.size * length, array_len=length)
 
 
 def add_type(node):
@@ -40,15 +44,22 @@ def add_type(node):
     for arg in node.args:
         add_type(arg)
 
-    if node.kind in ("+", "-", "*", "/", "NEG", "ASSIGN"):
+    if node.kind in ("+", "-", "*", "/", "NEG"):
+        node.ty = node.lhs.ty
+    elif node.kind == "ASSIGN":
+        if node.lhs.ty.kind == "ARRAY":
+            raise CompileError(node.lhs.tok.position, "not an lvalue")
         node.ty = node.lhs.ty
     elif node.kind in ("==", "!=", "<", "<=", "NUM", "FUNCALL"):
         node.ty = ty_int
     elif node.kind == "VAR":
         node.ty = node.var.ty
     elif node.kind == "ADDR":
-        node.ty = pointer_to(node.lhs.ty)
+        if node.lhs.ty.kind == "ARRAY":
+            node.ty = pointer_to(node.lhs.ty.base)
+        else:
+            node.ty = pointer_to(node.lhs.ty)
     elif node.kind == "DEREF":
-        if node.lhs.ty.kind != "PTR":
+        if node.lhs.ty.base is None:
             raise CompileError(node.tok.position, "invalid pointer dereference")
         node.ty = node.lhs.ty.base

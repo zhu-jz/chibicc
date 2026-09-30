@@ -29,6 +29,8 @@ class Type:
     name: Optional[Token] = field(default=None, compare=False)
     return_ty: Optional["Type"] = None
     params: list["Type"] = field(default_factory=list)
+    size: int = 0
+    array_len: int = 0
 
 
 @dataclass

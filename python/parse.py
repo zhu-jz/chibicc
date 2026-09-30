@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Function, Node, Obj, Type
-from type import add_type, copy_type, func_type, is_integer, pointer_to, ty_int
+from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_int
 
 
 def new_add(lhs, rhs, token):
@@ -21,7 +21,7 @@ def new_add(lhs, rhs, token):
     # Canonicalize integer + pointer to pointer + integer.
     if lhs.ty.base is None and rhs.ty.base is not None:
         lhs, rhs = rhs, lhs
-    rhs = Node("*", rhs, Node("NUM", value=8, tok=token), tok=token)
+    rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
     return Node("+", lhs, rhs, tok=token)
 
 
@@ -31,12 +31,12 @@ def new_sub(lhs, rhs, token):
     if is_integer(lhs.ty) and is_integer(rhs.ty):
         return Node("-", lhs, rhs, tok=token)
     if lhs.ty.base is not None and is_integer(rhs.ty):
-        rhs = Node("*", rhs, Node("NUM", value=8, tok=token), tok=token)
+        rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
         add_type(rhs)
         return Node("-", lhs, rhs, tok=token, ty=lhs.ty)
     if lhs.ty.base is not None and rhs.ty.base is not None:
         difference = Node("-", lhs, rhs, tok=token, ty=ty_int)
-        return Node("/", difference, Node("NUM", value=8, tok=token), tok=token)
+        return Node("/", difference, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
     raise CompileError(token.position, "invalid operands")
 
 
@@ -226,22 +226,32 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected 'int'")
         return ty_int, position + 1
 
-    # type-suffix = ("(" (declspec declarator ("," declspec declarator)*)? ")")?
+    # func-params = (declspec declarator ("," declspec declarator)*)? ")"
+    def func_params(self, position, ty):
+        params = []
+        while self.tokens[position].text != ")":
+            if params:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position].position, "expected ','")
+                position += 1
+            basety, position = self.declspec(position)
+            param, position = self.declarator(position, basety)
+            params.append(copy_type(param))
+        ty = func_type(ty)
+        ty.params = params
+        return ty, position + 1
+
+    # type-suffix = "(" func-params | "[" number "]" | empty
     def type_suffix(self, position, ty):
         if self.tokens[position].text == "(":
-            position += 1
-            params = []
-            while self.tokens[position].text != ")":
-                if params:
-                    if self.tokens[position].text != ",":
-                        raise CompileError(self.tokens[position].position, "expected ','")
-                    position += 1
-                basety, position = self.declspec(position)
-                param, position = self.declarator(position, basety)
-                params.append(copy_type(param))
-            ty = func_type(ty)
-            ty.params = params
-            return ty, position + 1
+            return self.func_params(position + 1, ty)
+        if self.tokens[position].text == "[":
+            token = self.tokens[position + 1]
+            if token.kind != "NUM":
+                raise CompileError(token.position, "expected a number")
+            if self.tokens[position + 2].text != "]":
+                raise CompileError(self.tokens[position + 2].position, "expected ']'")
+            return array_of(ty, token.value), position + 3
         return ty, position
 
     # declarator = "*"* identifier type-suffix

@@ -32,6 +32,22 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_one_dimensional_arrays(self):
+        self.assert_program_returns("int main(){int x[2]; int *y=&x; *y=3; return *x;}", 3)
+        for offset, expected in [(0,3),(1,4),(2,5)]:
+            self.assert_program_returns("int main(){int x[3]; *x=3; *(x+1)=4; *(x+2)=5;"
+                                        f"return *(x+{offset});}}", expected)
+        self.assert_program_returns("int main(){int *x[2]; int a=7; *x=&a; return **x;}", 7)
+        function = parse(tokenize("int main(){int x[3]; return x;}"))[0]
+        assembly = CodeGenerator().generate([function])
+        self.assertEqual(function.locals[0].ty.size, 24)
+        self.assertEqual(function.locals[0].offset, -24)
+        self.assertEqual(function.stack_size, 32)
+        self.assertIn("  lea -24(%rbp), %rax\n  jmp .L.return.main", assembly)
+        for source in ["int main(){int x[2]; x=3;}", "int main(){int x[a];}",
+                       "int main(){int x[2;}"]:
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_function_parameters(self):
         for source, expected in [
             ("int main(){return add2(3,4);} int add2(int x,int y){return x+y;}", 7),

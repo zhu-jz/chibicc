@@ -35,6 +35,14 @@ class CodeGenerator:
             return
         raise CompileError(node.tok.position, "not an lvalue")
 
+    def load(self, ty):
+        if ty.kind != "ARRAY":
+            self.assembly.append("  mov (%rax), %rax")
+
+    def store(self):
+        self.pop("%rdi")
+        self.assembly.append("  mov %rax, (%rdi)")
+
     def gen_expr(self, node):
         if node.kind == "NUM":
             self.assembly.append(f"  mov ${node.value}, %rax")
@@ -45,11 +53,11 @@ class CodeGenerator:
             return
         if node.kind == "VAR":
             self.gen_addr(node)
-            self.assembly.append("  mov (%rax), %rax")
+            self.load(node.ty)
             return
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
-            self.assembly.append("  mov (%rax), %rax")
+            self.load(node.ty)
             return
         if node.kind == "ADDR":
             self.gen_addr(node.lhs)
@@ -58,8 +66,7 @@ class CodeGenerator:
             self.gen_addr(node.lhs)
             self.push()
             self.gen_expr(node.rhs)
-            self.pop("%rdi")
-            self.assembly.append("  mov %rax, (%rdi)")
+            self.store()
             return
         if node.kind == "FUNCALL":
             if len(node.args) > len(ARGREG):
@@ -146,7 +153,7 @@ class CodeGenerator:
         for function in program:
             offset = 0
             for var in function.locals:
-                offset += 8
+                offset += var.ty.size
                 var.offset = -offset
             function.stack_size = (offset + 15) // 16 * 16
             self.current_fn = function

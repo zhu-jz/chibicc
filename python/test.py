@@ -32,6 +32,22 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_statement_expressions(self):
+        for body, expected in [
+            ("return ({0;});",0), ("return ({0;1;2;});",2),
+            ("({0;return 1;2;}); return 3;",1),
+            ("return ({1;})+({2;})+({3;});",6),
+            ("return ({int x=3;x;});",3),
+            ("int x=3; return *({int *p=&x;p;});",3),
+            ("return ({char x=7;sizeof(x);});",1),
+        ]:
+            self.assert_program_returns("int main(){"+body+"}", expected)
+        for source in ["int main(){return ({});}", "int main(){return ({int x;});}",
+                       "int main(){return ({return 1;});}"]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("statement expression returning void", result.stderr)
+
     def test_hex_string_escapes(self):
         for spelling, expected in [(r"\x00",0),(r"\x77",119),(r"\xA5",165),
                                    (r"\x00ff",255),(r"\x41Z",65),(r"\x1234",52)]:

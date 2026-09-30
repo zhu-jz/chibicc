@@ -180,6 +180,11 @@ class Parser:
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
+        if token.text == "(" and self.tokens[position + 1].text == "{":
+            block, position = self.compound_stmt(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position].position, "expected ')'")
+            return Node("STMT_EXPR", body=block.body, tok=token), position + 1
         if token.text == "(":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ")":

@@ -1,6 +1,6 @@
-"""Lesson 38: Hexadecimal string escapes.
+"""Lesson 39: GNU statement expressions.
 
-Based on chibicc commit c2cc1d3c4500caa34da5e68eb62b7474caf96fe2.
+Based on chibicc commit 9dae23461eb6250865f4ee727a0e727a6a4e03ba.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

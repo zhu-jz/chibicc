@@ -64,3 +64,9 @@ def add_type(node):
         if node.lhs.ty.base is None:
             raise CompileError(node.tok.position, "invalid pointer dereference")
         node.ty = node.lhs.ty.base
+    elif node.kind == "STMT_EXPR":
+        if node.body and node.body[-1].kind == "EXPR_STMT":
+            node.ty = node.body[-1].lhs.ty
+        else:
+            raise CompileError(node.tok.position,
+                               "statement expression returning void is not supported")

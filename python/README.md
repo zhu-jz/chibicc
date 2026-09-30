@@ -1,35 +1,41 @@
-# Lesson 38: Hexadecimal string escapes
+# Lesson 39: GNU statement expressions
 
-Original chibicc commit: [`c2cc1d3c4500caa34da5e68eb62b7474caf96fe2`](https://github.com/rui314/chibicc/commit/c2cc1d3c4500caa34da5e68eb62b7474caf96fe2).
+Original chibicc commit: [`9dae23461eb6250865f4ee727a0e727a6a4e03ba`](https://github.com/rui314/chibicc/commit/9dae23461eb6250865f4ee727a0e727a6a4e03ba).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`\x` requires at least one hexadecimal digit and consumes all consecutive
-hexadecimal digits. Both letter cases are accepted. `\x00ff` produces one byte
-255, while `\x41Z` produces byte 65 followed by Z. This differs from the
-three-digit maximum for octal escapes.
+A parenthesized block `({ statements; })` can now appear as an expression.
+The parser creates STMT_EXPR with the block's statement list. Type annotation
+requires its last statement to be an expression statement and uses that
+expression's type. Empty blocks or a final declaration/return are rejected
+because statement expressions returning void are not supported at this stage.
 
-The tokenizer uses standard-library `string.hexdigits` and `int(digit,16)`
-instead of C's isxdigit and a manual digit helper. It reports an invalid escape
-at the first character after x if no digits follow. Decoded values are masked
-to eight bits before storing. Python's accumulator does not overflow a signed
-C int, so long sequences have defined final-byte truncation in this port.
+Code generation executes each statement using the existing statement generator.
+The final expression leaves its result in `%rax`, ready for enclosing arithmetic,
+assignment, calls, or dereference. A return inside the block still jumps to the
+containing function's cleanup label; it does not return merely from the block.
+Locals still use the existing function-wide name list, matching upstream's
+current scope behavior.
 
 ## Run it
 
 ```sh
-python3 python/main.py 'int main(){return "\x77"[0];}' > /tmp/lesson38.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson38 /tmp/lesson38.s
-/tmp/lesson38
+python3 python/main.py 'int main(){return ({int x=3; x=x+2; x;});}' > /tmp/lesson39.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson39 /tmp/lesson39.s
+/tmp/lesson39
 echo $?
 ```
 
-The executable prints nothing; the last command shows **119**. Use an interactive
-shell without `set -e` for nonzero statuses. Assembly stores `.byte 119` plus
-its terminator and performs the normal signed byte load. Tests cover every
-upstream hex example, mixed case, stopping at a non-hex character, decoded
-size, truncation, invalid empty sequences, and earlier escape forms.
+The executable prints nothing; the last command shows **5**. Use an interactive
+shell without `set -e` for nonzero statuses. The emitted assignments store into
+x's stack slot; the final load places its value in `%rax` before main returns.
+This syntax is a GNU C extension rather than standard C.
+
+Tests cover all upstream examples, arithmetic combinations, a return escaping
+the block, declarations, pointer-valued blocks, sizeof, and unsupported
+valueless blocks. Python uses its list's final element where C walks to the
+last linked-list node. No new intentional behavioral difference is introduced.
 
 ## Tests and attribution
 

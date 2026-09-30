@@ -90,6 +90,10 @@ class CodeGenerator:
             self.assembly.append("  mov $0, %rax")
             self.assembly.append(f"  call {node.funcname}")
             return
+        if node.kind == "STMT_EXPR":
+            for statement in node.body:
+                self.gen_stmt(statement)
+            return
 
         # Save the right result, compute the left, then restore the right.
         self.gen_expr(node.rhs)

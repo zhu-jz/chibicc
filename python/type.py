@@ -90,7 +90,7 @@ def add_type(node):
         node.ty = ty_int
     elif node.kind == "FUNCALL":
         node.ty = ty_long
-    elif node.kind == "NOT":
+    elif node.kind in ("NOT", "LOGAND", "LOGOR"):
         node.ty = ty_int
     elif node.kind == "BITNOT":
         node.ty = node.lhs.ty

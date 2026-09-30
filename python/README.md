@@ -1,33 +1,35 @@
-# Lesson 84: Binary bitwise operators
+# Lesson 85: Short-circuit logical operators
 
-Original chibicc commit: [`86440068b43d6f9c93fdb07c1c2279cbab579e73`](https://github.com/rui314/chibicc/commit/86440068b43d6f9c93fdb07c1c2279cbab579e73).
+Original chibicc commit: [`f30f78175c1fd50c8cdd132ca804573ae0d18453`](https://github.com/rui314/chibicc/commit/f30f78175c1fd50c8cdd132ca804573ae0d18453).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Binary &, ^, and | operate on individual bits. New parser levels establish C's
-precedence: equality binds tighter than &, then ^, then |, then assignment.
-Unary & remains address-of. &=, ^=, and |= reuse the one-address-evaluation
-compound-assignment helper. Operand types undergo usual arithmetic conversion.
+&& and || produce int 0 or 1 and evaluate left to right. && skips its right
+operand when the left is zero; || skips it when the left is nonzero. The parser
+places && below bitwise | and above ||, with assignment lower still. Separate
+LOGAND/LOGOR nodes emit conditional jumps instead of the normal binary push/pop
+sequence, preserving side effects and avoiding unwanted evaluation.
 
-The original emitter always uses rdi/rax for these bitwise instructions, even
-when the expression type is int; this Python port matches it. Both operands are
-evaluated, unlike short-circuit operators. No Python expression evaluator is used.
+Python's shared label counter supplies unique assembly labels, as C's counter
+does. The original still compares full rax for truth tests; this step preserves
+that limitation with narrow expressions whose upper bits are stale.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=15;x^=5;return x;}\n' > /tmp/lesson84.c
-python3 python/main.py /tmp/lesson84.c > /tmp/lesson84.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson84 /tmp/lesson84.s
-/tmp/lesson84
+printf 'int main(){int x=42;0&&++x;return x;}\n' > /tmp/lesson85.c
+python3 python/main.py /tmp/lesson85.c > /tmp/lesson85.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson85 /tmp/lesson85.s
+/tmp/lesson85
 echo $?
 ```
 
-`xor %rdi, %rax` turns binary 1111 xor 0101 into 1010, decimal 10; the assignment
-stores that result. Main exits with 10. Tests cover operators, compound forms,
-precedence, address-of coexistence, wide values, emitted instructions, real
-execution, and updated upstream fixtures.
+A zero comparison branches to `.L.false.N` before the increment instructions.
+The program returns 42 because ++x is skipped. || instead branches on nonzero
+to `.L.true.N`. Tests cover skipped and evaluated effects, guarded null-pointer
+dereferences, normalized results, precedence, label uniqueness, and upstream
+programs. Both operands are parsed and typed even when one is skipped at runtime.
 
 ## Tests and attribution
 

@@ -1,6 +1,6 @@
-"""Lesson 84: Binary bitwise operators.
+"""Lesson 85: Short-circuit logical operators.
 
-Based on chibicc commit 86440068b43d6f9c93fdb07c1c2279cbab579e73.
+Based on chibicc commit f30f78175c1fd50c8cdd132ca804573ae0d18453.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

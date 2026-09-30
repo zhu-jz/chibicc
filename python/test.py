@@ -58,6 +58,22 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_logical_short_circuit(self):
+        for source, expected in [
+            ("int main(){int x=42;0&&++x;return x;}", 42),
+            ("int main(){int x=42;1||++x;return x;}", 42),
+            ("int main(){int x=0;1&&++x;0||++x;return x;}", 2),
+            ("int main(){int *p=0;return p&&*p;}", 0),
+            ("int main(){return 1||0&&0;}", 1),
+            ("int main(){return 3&&5;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){return (1&&2)||(0&&3);}").stdout
+        labels = [line for line in assembly.splitlines() if line.startswith(".L.") and line.endswith(":")]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertIn("  je .L.false.", assembly)
+        self.assertIn("  jne .L.true.", assembly)
+
     def test_binary_bitwise(self):
         for source, expected in [
             ("int main(){return 1|2^3&4;}", 3),

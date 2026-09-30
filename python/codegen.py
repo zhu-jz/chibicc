@@ -162,6 +162,20 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.assembly.append("  not %rax")
             return
+        if node.kind in ("LOGAND", "LOGOR"):
+            self.label_count += 1
+            label = self.label_count
+            is_and = node.kind == "LOGAND"
+            branch = "je" if is_and else "jne"
+            destination = f".L.false.{label}" if is_and else f".L.true.{label}"
+            self.gen_expr(node.lhs)
+            self.assembly.extend(("  cmp $0, %rax", f"  {branch} {destination}"))
+            self.gen_expr(node.rhs)
+            self.assembly.extend(("  cmp $0, %rax", f"  {branch} {destination}",
+                                  f"  mov ${1 if is_and else 0}, %rax", f"  jmp .L.end.{label}",
+                                  f"{destination}:", f"  mov ${0 if is_and else 1}, %rax",
+                                  f".L.end.{label}:"))
+            return
 
         # Save the right result, compute the left, then restore the right.
         self.gen_expr(node.rhs)

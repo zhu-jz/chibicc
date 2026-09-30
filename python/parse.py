@@ -123,9 +123,9 @@ class Parser:
         update = Node("ASSIGN", target, operation, tok=token)
         return Node("COMMA", save_address, update, tok=token)
 
-    # assign = bitor (assign-op assign)?
+    # assign = logor (assign-op assign)?
     def assign(self, position):
-        node, position = self.bitor(position)
+        node, position = self.logor(position)
         if self.tokens[position].text == "=":
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
@@ -140,6 +140,24 @@ class Parser:
             else:
                 binary = Node(token.text[0], node, rhs, tok=token)
             node = self.to_assign(binary)
+        return node, position
+
+    # logor = logand ("||" logand)*
+    def logor(self, position):
+        node, position = self.logand(position)
+        while self.tokens[position].text == "||":
+            token = self.tokens[position]
+            rhs, position = self.logand(position + 1)
+            node = Node("LOGOR", node, rhs, tok=token)
+        return node, position
+
+    # logand = bitor ("&&" bitor)*
+    def logand(self, position):
+        node, position = self.bitor(position)
+        while self.tokens[position].text == "&&":
+            token = self.tokens[position]
+            rhs, position = self.bitor(position + 1)
+            node = Node("LOGAND", node, rhs, tok=token)
         return node, position
 
     # bitor = bitxor ("|" bitxor)*

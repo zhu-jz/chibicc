@@ -18,7 +18,7 @@ ty_long = Type("LONG", size=8, align=8)
 
 
 def is_integer(ty):
-    return ty.kind in ("BOOL", "CHAR", "SHORT", "INT", "LONG")
+    return ty.kind in ("BOOL", "CHAR", "SHORT", "INT", "LONG", "ENUM")
 
 
 def copy_type(ty):
@@ -35,6 +35,10 @@ def func_type(return_ty):
 
 def array_of(base, length):
     return Type("ARRAY", base, size=base.size * length, array_len=length, align=base.align)
+
+
+def enum_type():
+    return Type("ENUM", size=4, align=4)
 
 
 def new_cast(expression, ty):

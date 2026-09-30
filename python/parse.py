@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
+from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -283,8 +283,10 @@ class Parser:
             if self.tokens[position + 1].text == "(":
                 return self.funcall(position)
             binding = self.find_var(token.text)
-            if binding is None or binding.var is None:
+            if binding is None or (binding.var is None and binding.enum_ty is None):
                 raise CompileError(token, "undefined variable")
+            if binding.var is None:
+                return Node("NUM", value=binding.enum_val, tok=token), position + 1
             return Node("VAR", var=binding.var, tok=token), position + 1
 
         if token.kind == "STR":
@@ -353,7 +355,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -377,13 +379,15 @@ class Parser:
                 position += 1
                 continue
             type_def = self.find_typedef(position)
-            if token.text in ("struct", "union") or type_def is not None:
+            if token.text in ("struct", "union", "enum") or type_def is not None:
                 if specifiers:
                     break
                 if token.text == "struct":
                     ty, position = self.struct_decl(position + 1)
                 elif token.text == "union":
                     ty, position = self.union_decl(position + 1)
+                elif token.text == "enum":
+                    ty, position = self.enum_specifier(position + 1)
                 else:
                     ty = type_def
                     position += 1
@@ -518,6 +522,48 @@ class Parser:
     def typename(self, position):
         ty, position = self.declspec(position)
         return self.abstract_declarator(position, ty)
+
+    def enum_specifier(self, position):
+        ty = enum_type()
+        tag = None
+        if self.tokens[position].kind == "IDENT":
+            tag = self.tokens[position]
+            position += 1
+        if tag is not None and self.tokens[position].text != "{":
+            ty = self.find_tag(tag.text)
+            if ty is None:
+                raise CompileError(tag, "unknown enum type")
+            if ty.kind != "ENUM":
+                raise CompileError(tag, "not an enum tag")
+            return ty, position
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position], "expected '{'")
+        position += 1
+        value = 0
+        first = True
+        while self.tokens[position].text != "}":
+            if not first:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            first = False
+            token = self.tokens[position]
+            if token.kind != "IDENT":
+                raise CompileError(token, "expected a variable name")
+            position += 1
+            if self.tokens[position].text == "=":
+                number = self.tokens[position + 1]
+                if number.kind != "NUM":
+                    raise CompileError(number, "expected a number")
+                value = number.value
+                position += 2
+            binding = self.push_scope(token.text)
+            binding.enum_ty = ty
+            binding.enum_val = value
+            value += 1
+        if tag is not None:
+            self.scopes[-1].tags[tag.text] = ty
+        return ty, position + 1
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"

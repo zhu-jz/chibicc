@@ -1,6 +1,6 @@
-"""Lesson 73: Character literals.
+"""Lesson 74: Enumerations.
 
-Based on chibicc commit aa0accc75e9358d313fef0a6d4005103e2ce25f5.
+Based on chibicc commit 48ba2656fecc646ec4eb7f943fa94b02ed9725c7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

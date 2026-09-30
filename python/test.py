@@ -58,6 +58,29 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_enum_types(self):
+        for source, expected in [
+            ("enum E{zero,five=5,six};int main(){enum E x=six;return x;}", 6),
+            ("int main(){enum {a=3,b,c=1,d};return b+d;}", 6),
+            ("enum E{a=5};int main(){{enum E{a=9};}return a;}", 5),
+            ("enum {a=5};int main(){int a=42;return a;}", 42),
+            ("int main(){enum {a} x;return sizeof(x);}", 4),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse(tokenize("enum {answer=42};int main(){return answer;}"))[0]
+        self.assertEqual(function.locals, [])
+        self.assertIn("  mov $42, %rax\n", compile_program("enum {answer=42};int main(){return answer;}").stdout)
+        for source, message in [
+            ("enum Missing x;", "unknown enum type"),
+            ("struct E{int a;};enum E x;", "not an enum tag"),
+            ("enum {a=-1};", "expected a number"),
+            ("enum {a,};", "expected a variable name"),
+            ("int main(){{enum {a};}return a;}", "undefined variable"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_character_literals(self):
         for spelling, value in [("'a'", 97), (r"'\n'", 10), (r"'\x80'", -128),
                                 (r"'\377'", -1), (r"'\''", 39), ("'ab'", 97)]:

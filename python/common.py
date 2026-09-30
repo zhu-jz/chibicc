@@ -74,6 +74,8 @@ class VarScope:
     name: str
     var: Optional[Obj] = None
     type_def: Optional[Type] = None
+    enum_ty: Optional[Type] = None
+    enum_val: int = 0
 
 
 @dataclass

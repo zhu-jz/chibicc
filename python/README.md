@@ -1,35 +1,35 @@
-# Lesson 73: Character literals
+# Lesson 74: Enumerations
 
-Original chibicc commit: [`aa0accc75e9358d313fef0a6d4005103e2ce25f5`](https://github.com/rui314/chibicc/commit/aa0accc75e9358d313fef0a6d4005103e2ce25f5).
+Original chibicc commit: [`48ba2656fecc646ec4eb7f943fa94b02ed9725c7`](https://github.com/rui314/chibicc/commit/48ba2656fecc646ec4eb7f943fa94b02ed9725c7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer converts single-quoted characters into NUM tokens. It reuses the
-string escape reader for named, octal, and hexadecimal escapes. Values are
-interpreted as signed bytes on this x86-64 target, so '\x80' is -128. Character
-literals have int type, not char type. The parser and assembly emitter already
-understand numeric nodes and need no change.
+Enum variables have four-byte size and alignment. Enumerator names enter the
+ordinary identifier scope and become numeric expression nodes without runtime
+storage. Values begin at zero and increment; a numeric token after = resets the
+sequence. Enum tags share the tag namespace with struct/union tags. Tagged enum
+references must already exist and have enum kind.
 
-This historical reader uses the first byte and searches for the next closing
-quote; it does not yet validate multiple-character literals. Thus 'ab' yields
-97. Python explicitly maps UTF-8's first byte to a signed value rather than
-relying on C's platform-dependent signed char. EOF checks raise CompileError
-instead of reading beyond a string buffer.
+The historical grammar accepts numeric tokens rather than constant expressions:
+negative expressions and trailing commas are not supported yet. Python stores
+counter values as arbitrary-precision ints, so values beyond C int's range are
+not a portable match; this lesson's supported examples stay within signed int.
 
 ## Assembly and WSL example
 
 ```sh
-printf "int main(){return 'a';}\n" > /tmp/lesson73.c
-python3 python/main.py /tmp/lesson73.c > /tmp/lesson73.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson73 /tmp/lesson73.s
-/tmp/lesson73
+printf 'enum E{zero,five=5,six};int main(){enum E x=six;return x;}\n' > /tmp/lesson74.c
+python3 python/main.py /tmp/lesson74.c > /tmp/lesson74.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson74 /tmp/lesson74.s
+/tmp/lesson74
 echo $?
 ```
 
-The literal becomes `mov $97, %rax`. Main returns 97, displayed by the shell.
-Tests check escaped values, signedness, int sizeof, original token spelling,
-malformed input, emitted assembly, executable status, and all original fixtures.
+The enumerator six becomes `mov $6, %rax`, then x is stored with eax as a
+four-byte object. The program exits with 6. Tests check numbering, scope and
+shadowing, tag/type errors, sizeof, assembly, executable status, and original C
+tests. Constants allocate no stack slots or global data.
 
 ## Tests and attribution
 

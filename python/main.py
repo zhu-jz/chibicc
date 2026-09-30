@@ -1,6 +1,6 @@
-"""Lesson 45: Tests written in C.
+"""Lesson 46: Cached token line numbers.
 
-Based on chibicc commit cd832a311e56bda981c9c957ba45f1bc1f6cc737.
+Based on chibicc commit 6647ad9b843768968db0a331ff7077904c6f58ee.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -71,7 +71,7 @@ def main():
             line_end = source.find("\n", position)
             if line_end == -1:
                 line_end = len(source)
-            line_number = source.count("\n", 0, line_start) + 1
+            line_number = error.line_no or source.count("\n", 0, line_start) + 1
             prefix = f"{filename}:{line_number}: "
             print(prefix + source[line_start:line_end], file=sys.stderr)
             print(" " * (len(prefix) + position - line_start) + "^ " + str(error),

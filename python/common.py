@@ -16,12 +16,18 @@ class Token:
     value: int = 0  # Used only for number tokens.
     ty: Optional["Type"] = field(default=None, compare=False)
     str: bytes = b""  # String bytes, including the terminating zero.
+    line_no: int = field(default=0, compare=False)
 
 
 class CompileError(Exception):
     def __init__(self, position, message):
         super().__init__(message)
-        self.position = position
+        if isinstance(position, Token):
+            self.position = position.position
+            self.line_no = position.line_no or None
+        else:
+            self.position = position
+            self.line_no = None
 
 
 @dataclass

@@ -37,7 +37,7 @@ class CodeGenerator:
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
             return
-        raise CompileError(node.tok.position, "not an lvalue")
+        raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
         if ty.kind == "ARRAY":
@@ -81,7 +81,7 @@ class CodeGenerator:
             return
         if node.kind == "FUNCALL":
             if len(node.args) > len(ARGREG):
-                raise CompileError(node.tok.position, "at most 6 arguments are supported")
+                raise CompileError(node.tok, "at most 6 arguments are supported")
             for arg in node.args:
                 self.gen_expr(arg)
                 self.push()
@@ -118,7 +118,7 @@ class CodeGenerator:
             self.assembly.append(f"  {instructions[node.kind]} %al")
             self.assembly.append("  movzb %al, %rax")
         else:
-            raise CompileError(node.tok.position, "invalid expression")
+            raise CompileError(node.tok, "invalid expression")
 
     def gen_stmt(self, node):
         if node.kind == "IF":
@@ -161,7 +161,7 @@ class CodeGenerator:
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
             return
-        raise CompileError(node.tok.position, "invalid statement")
+        raise CompileError(node.tok, "invalid statement")
 
     def generate(self, program):
         self.assembly = []
@@ -186,7 +186,7 @@ class CodeGenerator:
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
             if len(function.params) > len(ARGREG):
-                raise CompileError(function.params[6].ty.name.position,
+                raise CompileError(function.params[6].ty.name,
                                    "at most 6 parameters are supported")
             for index, var in enumerate(function.params):
                 register = ARGREG8[index] if var.ty.size == 1 else ARGREG[index]

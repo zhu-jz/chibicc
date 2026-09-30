@@ -17,7 +17,7 @@ def new_add(lhs, rhs, token):
     if is_integer(lhs.ty) and is_integer(rhs.ty):
         return Node("+", lhs, rhs, tok=token)
     if lhs.ty.base is not None and rhs.ty.base is not None:
-        raise CompileError(token.position, "invalid operands")
+        raise CompileError(token, "invalid operands")
     # Canonicalize integer + pointer to pointer + integer.
     if lhs.ty.base is None and rhs.ty.base is not None:
         lhs, rhs = rhs, lhs
@@ -37,7 +37,7 @@ def new_sub(lhs, rhs, token):
     if lhs.ty.base is not None and rhs.ty.base is not None:
         difference = Node("-", lhs, rhs, tok=token, ty=ty_int)
         return Node("/", difference, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
-    raise CompileError(token.position, "invalid operands")
+    raise CompileError(token, "invalid operands")
 
 
 class Parser:
@@ -165,7 +165,7 @@ class Parser:
             token = self.tokens[position]
             index, position = self.expr(position + 1)
             if self.tokens[position].text != "]":
-                raise CompileError(self.tokens[position].position, "expected ']'")
+                raise CompileError(self.tokens[position], "expected ']'")
             node = Node("DEREF", lhs=new_add(node, index, token), tok=token)
             position += 1
         return node, position
@@ -178,7 +178,7 @@ class Parser:
         while self.tokens[position].text != ")":
             if args:
                 if self.tokens[position].text != ",":
-                    raise CompileError(self.tokens[position].position, "expected ','")
+                    raise CompileError(self.tokens[position], "expected ','")
                 position += 1
             arg, position = self.assign(position)
             args.append(arg)
@@ -190,12 +190,12 @@ class Parser:
         if token.text == "(" and self.tokens[position + 1].text == "{":
             block, position = self.compound_stmt(position + 2)
             if self.tokens[position].text != ")":
-                raise CompileError(self.tokens[position].position, "expected ')'")
+                raise CompileError(self.tokens[position], "expected ')'")
             return Node("STMT_EXPR", body=block.body, tok=token), position + 1
         if token.text == "(":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ")":
-                raise CompileError(self.tokens[position].position, "expected ')'")
+                raise CompileError(self.tokens[position], "expected ')'")
             return node, position + 1
 
         if token.text == "sizeof":
@@ -208,7 +208,7 @@ class Parser:
                 return self.funcall(position)
             var = self.find_var(token.text)
             if var is None:
-                raise CompileError(token.position, "undefined variable")
+                raise CompileError(token, "undefined variable")
             return Node("VAR", var=var, tok=token), position + 1
 
         if token.kind == "STR":
@@ -218,7 +218,7 @@ class Parser:
         if token.kind == "NUM":
             return Node("NUM", value=token.value, tok=token), position + 1
 
-        raise CompileError(token.position, "expected an expression")
+        raise CompileError(token, "expected an expression")
 
     # stmt = "return" expr ";" | "{" compound-stmt | expr-stmt
     #      | "if" "(" expr ")" stmt ("else" stmt)?
@@ -229,15 +229,15 @@ class Parser:
         if self.tokens[position].text == "return":
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
-                raise CompileError(self.tokens[position].position, "expected ';'")
+                raise CompileError(self.tokens[position], "expected ';'")
             return Node("RETURN", lhs=node, tok=token), position + 1
         if self.tokens[position].text == "if":
             position += 1
             if self.tokens[position].text != "(":
-                raise CompileError(self.tokens[position].position, "expected '('")
+                raise CompileError(self.tokens[position], "expected '('")
             cond, position = self.expr(position + 1)
             if self.tokens[position].text != ")":
-                raise CompileError(self.tokens[position].position, "expected ')'")
+                raise CompileError(self.tokens[position], "expected ')'")
             then, position = self.stmt(position + 1)
             els = None
             if self.tokens[position].text == "else":
@@ -246,28 +246,28 @@ class Parser:
         if self.tokens[position].text == "for":
             position += 1
             if self.tokens[position].text != "(":
-                raise CompileError(self.tokens[position].position, "expected '('")
+                raise CompileError(self.tokens[position], "expected '('")
             init, position = self.expr_stmt(position + 1)
             cond = None
             if self.tokens[position].text != ";":
                 cond, position = self.expr(position)
             if self.tokens[position].text != ";":
-                raise CompileError(self.tokens[position].position, "expected ';'")
+                raise CompileError(self.tokens[position], "expected ';'")
             position += 1
             inc = None
             if self.tokens[position].text != ")":
                 inc, position = self.expr(position)
             if self.tokens[position].text != ")":
-                raise CompileError(self.tokens[position].position, "expected ')'")
+                raise CompileError(self.tokens[position], "expected ')'")
             then, position = self.stmt(position + 1)
             return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token), position
         if self.tokens[position].text == "while":
             position += 1
             if self.tokens[position].text != "(":
-                raise CompileError(self.tokens[position].position, "expected '('")
+                raise CompileError(self.tokens[position], "expected '('")
             cond, position = self.expr(position + 1)
             if self.tokens[position].text != ")":
-                raise CompileError(self.tokens[position].position, "expected ')'")
+                raise CompileError(self.tokens[position], "expected ')'")
             then, position = self.stmt(position + 1)
             return Node("FOR", cond=cond, then=then, tok=token), position
         if self.tokens[position].text == "{":
@@ -279,7 +279,7 @@ class Parser:
         if self.tokens[position].text == "char":
             return ty_char, position + 1
         if self.tokens[position].text != "int":
-            raise CompileError(self.tokens[position].position, "expected 'int'")
+            raise CompileError(self.tokens[position], "expected 'int'")
         return ty_int, position + 1
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
@@ -288,7 +288,7 @@ class Parser:
         while self.tokens[position].text != ")":
             if params:
                 if self.tokens[position].text != ",":
-                    raise CompileError(self.tokens[position].position, "expected ','")
+                    raise CompileError(self.tokens[position], "expected ','")
                 position += 1
             basety, position = self.declspec(position)
             param, position = self.declarator(position, basety)
@@ -304,9 +304,9 @@ class Parser:
         if self.tokens[position].text == "[":
             token = self.tokens[position + 1]
             if token.kind != "NUM":
-                raise CompileError(token.position, "expected a number")
+                raise CompileError(token, "expected a number")
             if self.tokens[position + 2].text != "]":
-                raise CompileError(self.tokens[position + 2].position, "expected ']'")
+                raise CompileError(self.tokens[position + 2], "expected ']'")
             ty, position = self.type_suffix(position + 3, ty)
             return array_of(ty, token.value), position
         return ty, position
@@ -318,7 +318,7 @@ class Parser:
             position += 1
         token = self.tokens[position]
         if token.kind != "IDENT":
-            raise CompileError(token.position, "expected a variable name")
+            raise CompileError(token, "expected a variable name")
         # Keep the declaration name without mutating the shared integer type.
         ty, position = self.type_suffix(position + 1, ty)
         ty = copy_type(ty)
@@ -334,7 +334,7 @@ class Parser:
         while self.tokens[position].text != ";":
             if not first:
                 if self.tokens[position].text != ",":
-                    raise CompileError(self.tokens[position].position, "expected ','")
+                    raise CompileError(self.tokens[position], "expected ','")
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
@@ -370,7 +370,7 @@ class Parser:
             return Node("BLOCK", tok=token), position + 1
         node, position = self.expr(position)
         if self.tokens[position].text != ";":
-            raise CompileError(self.tokens[position].position, "expected ';'")
+            raise CompileError(self.tokens[position], "expected ';'")
         return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
     def function(self, position, basety):
@@ -383,7 +383,7 @@ class Parser:
             self.new_lvar(param.name.text, param)
         function.params = self.locals.copy()
         if self.tokens[position].text != "{":
-            raise CompileError(self.tokens[position].position, "expected '{'")
+            raise CompileError(self.tokens[position], "expected '{'")
         function.body, position = self.compound_stmt(position + 1)
         function.locals = self.locals
         self.leave_scope()
@@ -394,7 +394,7 @@ class Parser:
         while self.tokens[position].text != ";":
             if not first:
                 if self.tokens[position].text != ",":
-                    raise CompileError(self.tokens[position].position, "expected ','")
+                    raise CompileError(self.tokens[position], "expected ','")
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)

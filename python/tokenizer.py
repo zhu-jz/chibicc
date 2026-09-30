@@ -89,6 +89,17 @@ def is_ident2(character):
     return is_ident1(character) or "0" <= character <= "9"
 
 
+def add_line_numbers(source, tokens):
+    line_no = 1
+    position = 0
+    for token in tokens:
+        while position < token.position:
+            if source[position] == "\n":
+                line_no += 1
+            position += 1
+        token.line_no = line_no
+
+
 def tokenize(source):
     tokens = []
     position = 0
@@ -152,6 +163,7 @@ def tokenize(source):
         raise CompileError(position, "invalid token")
 
     tokens.append(Token("EOF", "", position))
+    add_line_numbers(source, tokens)
     for token in tokens:
         if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char"):
             token.kind = "KEYWORD"

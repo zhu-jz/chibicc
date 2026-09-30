@@ -49,7 +49,7 @@ def add_type(node):
         node.ty = node.lhs.ty
     elif node.kind == "ASSIGN":
         if node.lhs.ty.kind == "ARRAY":
-            raise CompileError(node.lhs.tok.position, "not an lvalue")
+            raise CompileError(node.lhs.tok, "not an lvalue")
         node.ty = node.lhs.ty
     elif node.kind in ("==", "!=", "<", "<=", "NUM", "FUNCALL"):
         node.ty = ty_int
@@ -62,11 +62,11 @@ def add_type(node):
             node.ty = pointer_to(node.lhs.ty)
     elif node.kind == "DEREF":
         if node.lhs.ty.base is None:
-            raise CompileError(node.tok.position, "invalid pointer dereference")
+            raise CompileError(node.tok, "invalid pointer dereference")
         node.ty = node.lhs.ty.base
     elif node.kind == "STMT_EXPR":
         if node.body and node.body[-1].kind == "EXPR_STMT":
             node.ty = node.body[-1].lhs.ty
         else:
-            raise CompileError(node.tok.position,
+            raise CompileError(node.tok,
                                "statement expression returning void is not supported")

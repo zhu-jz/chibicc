@@ -36,6 +36,19 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_token_line_numbers(self):
+        tokens = tokenize("\nint/*line\nline*/ x; // skip\n\n")
+        self.assertEqual([(token.text, token.line_no) for token in tokens],
+                         [("int", 2), ("x", 3), (";", 3), ("", 5)])
+        with self.assertRaises(CompileError) as caught:
+            parse(tokenize("int main(){\n return missing;\n}"))
+        self.assertEqual(caught.exception.line_no, 2)
+        error = CompileError(3, "lexical error")
+        self.assertIsNone(error.line_no)
+        result = compile_program("int main(){\n Ω\n}")
+        self.assertIn("-:2:  Ω\n", result.stderr)
+        self.assertIn("^ invalid token", result.stderr)
+
     def test_upstream_c_programs(self):
         fixtures = Path(__file__).with_name("test")
         with tempfile.TemporaryDirectory() as directory:

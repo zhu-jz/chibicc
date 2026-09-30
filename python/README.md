@@ -1,46 +1,42 @@
-# Lesson 45: Tests written in C
+# Lesson 46: Cached token line numbers
 
-Original chibicc commit: [`cd832a311e56bda981c9c957ba45f1bc1f6cc737`](https://github.com/rui314/chibicc/commit/cd832a311e56bda981c9c957ba45f1bc1f6cc737).
+Original chibicc commit: [`6647ad9b843768968db0a331ff7077904c6f58ee`](https://github.com/rui314/chibicc/commit/6647ad9b843768968db0a331ff7077904c6f58ee).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Upstream moves tests into C programs grouped by arithmetic, control flow,
-functions, pointers, strings, and variables. This commit changes no compiler
-behavior. Matching snapshots are now in `python/test/`, alongside `test.h`'s
-ASSERT macro and the small assertion helper `common`. The existing Python
-assembly and diagnostic tests remain useful and are retained.
+After tokenization, one scan assigns a one-based `line_no` to every token,
+including EOF. The scan counts newlines inside comments as well as between
+tokens. Parsing and code generation pass the offending token into CompileError,
+which retains its position and cached line number. The driver uses that number
+instead of recounting newlines for a token error.
 
-`test_upstream_c_programs` asks GCC to preprocess each test, feeding the result
-to our Python compiler through stdin. GCC expands `ASSERT(expected, expr)`
-into `assert(expected, expr, "expr")`, including macro stringification. Our
-compiler emits the test program's assembly. GCC then assembles/links it with
-the helper, and the harness executes it with a timeout. This compiler still
-has no preprocessor: GCC preprocessing is test preparation only, following
-upstream's test workflow. The original C compiler is never invoked.
+Lexer failures happen before the completed token list exists, so errors at a
+raw character position still count newlines when formatted. Python keeps one
+exception class for both cases; passing a Token selects cached metadata, an
+integer selects a raw position, and None selects a plain driver error. This
+replaces C's separate error_tok/error_at functions. Metadata does not change
+token equality in the existing syntax tests.
 
-The helper compares full integer results and prints each assertion. This
-avoids relying only on the operating system's eight-bit exit status and lets
-one executable check many expressions. MIT attribution applies to these
-upstream test snapshots as well as the port.
+No language or assembly behavior changes. A missing variable on line 2 still
+prints the filename, `:2:`, the source line, and a caret at the name. Tests
+verify line numbers through multiline comments, blank lines and EOF, that a
+parser exception carries its token's line number, and that a lexer-side error
+still displays the correct line.
 
-## Run and understand the assembly
+## WSL example
 
 ```sh
-python3 python/test.py ExpressionCompilerTests.test_upstream_c_programs
-printf 'int main(){return 42;}\n' > /tmp/lesson45.c
-python3 python/main.py -o /tmp/lesson45.s /tmp/lesson45.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson45 /tmp/lesson45.s
-/tmp/lesson45
+printf 'int main(){\n return 42;\n}\n' > /tmp/lesson46.c
+python3 python/main.py -o /tmp/lesson46.s /tmp/lesson46.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson46 /tmp/lesson46.s
+/tmp/lesson46
 echo $?
 ```
 
-The compiler's instructions are unchanged: the example moves 42 into `%rax`
-and returns through the shared epilogue, so the shell displays 42. The test
-programs also move call arguments into `%rdi`, `%rsi`, and `%rdx`, then execute
-`call assert`. Their output comes from the linked helper's printf, not from
-the compiler. Upstream's six C programs must all finish with status zero and
-print their final `OK`.
+The body still moves 42 into `%rax` and jumps to the epilogue; the shell prints
+42 as its exit status. Replacing 42 with `missing` demonstrates the line-2
+error. Caching source metadata does not add instructions to the executable.
 
 ## Tests and attribution
 

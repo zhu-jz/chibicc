@@ -1,6 +1,6 @@
-"""Lesson 71: Function argument conversions.
+"""Lesson 72: _Bool values and conversions.
 
-Based on chibicc commit fdc80bc6b5faa058b88d838332c71b7101712896.
+Based on chibicc commit 44bba965cbe3827be2b68651e541b33fa040bb72.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

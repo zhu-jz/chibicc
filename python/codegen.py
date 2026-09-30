@@ -6,6 +6,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 
 
 from common import CompileError, align_to
+from type import is_integer
 
 
 ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
@@ -85,8 +86,16 @@ class CodeGenerator:
         else:
             self.assembly.append("  mov %rax, (%rdi)")
 
+    def cmp_zero(self, ty):
+        register = "%eax" if is_integer(ty) and ty.size <= 4 else "%rax"
+        self.assembly.append(f"  cmp $0, {register}")
+
     def cast(self, from_ty, to_ty):
         if to_ty.kind == "VOID":
+            return
+        if to_ty.kind == "BOOL":
+            self.cmp_zero(from_ty)
+            self.assembly.extend(("  setne %al", "  movzx %al, %eax"))
             return
         type_ids = {"CHAR": 0, "SHORT": 1, "INT": 2}
         source = type_ids.get(from_ty.kind, 3)

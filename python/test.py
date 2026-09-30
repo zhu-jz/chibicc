@@ -58,6 +58,23 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bool_type(self):
+        for source, expected in [
+            ("int main(){_Bool x=256;return x;}", 1),
+            ("int main(){return (_Bool)0;}", 0),
+            ("int main(){return (_Bool)(char)256;}", 0),
+            ("int main(){return (_Bool)4294967296;}", 1),
+            ("int main(){int x;return (_Bool)&x;}", 1),
+            ("_Bool f(_Bool x){return x+1;}int main(){return f(0);}", 1),
+            ("int main(){_Bool x;return sizeof(x)+sizeof(x+1);}", 5),
+        ]:
+            self.assert_program_returns(source, expected)
+        for value, register in ((256, "%eax"), (4294967296, "%rax")):
+            assembly = compile_program(f"int main(){{return (_Bool){value};}}").stdout
+            self.assertIn(f"  cmp $0, {register}\n", assembly)
+            self.assertIn("  setne %al\n  movzx %al, %eax\n", assembly)
+        self.assertEqual(tokenize("_Bool")[0].kind, "KEYWORD")
+
     def test_argument_conversions(self):
         for source, expected in [
             ("int f(long a,long b){return a/b;}int main(){return f(-10,2)==-5;}", 1),

@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_char, ty_short, ty_int, ty_long
+from type import add_type, array_of, copy_type, func_type, is_integer, new_cast, pointer_to, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -352,14 +352,15 @@ class Parser:
         return self.expr_stmt(position)
 
     def is_typename(self, position):
-        return self.tokens[position].text in ("void", "char", "short", "int", "long",
+        return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
                                               "struct", "union", "typedef") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
     def declspec(self, position, attr=None):
         combinations = {
-            ("void",): ty_void, ("char",): ty_char,
+            ("void",): ty_void,
+            ("_Bool",): ty_bool, ("char",): ty_char,
             ("short",): ty_short, ("int", "short"): ty_short,
             ("int",): ty_int,
             ("long",): ty_long, ("int", "long"): ty_long,

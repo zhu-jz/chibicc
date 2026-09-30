@@ -42,6 +42,23 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_four_byte_ints(self):
+        for source, expected in [
+            ("int main(){int x;int *p=&x;return sizeof(x)+sizeof(p);}", 12),
+            ("int main(){int x=2147483647+1;return x<0;}", 1),
+            ("int main(){int x=65536*65536;return x;}", 0),
+            ("int main(){int x=7;int y=9;x=11;return y;}", 9),
+            ("int f(int x){return x<0;}int main(){return f(-1);}", 1),
+            ("int f(char c,int x,int *p,int y,char d,int z){return c+x+*p+y+d+z;}int main(){int v=7;return f(1,2,&v,3,4,5);}", 22),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assert_program_returns("int main(){int a[2];a[0]=3;a[1]=4;return sum(a);}", 7,
+                                    "int sum(int *a){return a[0]+a[1];}")
+        assembly = compile_program("int main(){int x=42;return x;}").stdout
+        self.assertIn("  mov %eax, (%rdi)\n", assembly)
+        self.assertIn("  movsxd (%rax), %rax\n", assembly)
+        self.assertEqual((ty_int.size, ty_int.align), (4, 4))
+
     def test_aggregate_assignment(self):
         for source, expected in [
             ("int main(){struct t{int a,b;} x,y,z;x.a=3;x.b=7;z=y=x;return z.a+y.b;}", 10),
@@ -61,15 +78,15 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, expected in [
             ("int main(){union t{int a;char b[4];} x;union t *p=&x;p->a=515;return p->b[0]+p->b[1];}", 5),
             ("union t{int a;char b[4];};union t g;int main(){g.a=515;return g.b[1];}", 2),
-            ("int main(){union t{int a;};{union t{char a;};}union t x;return sizeof(x);}", 8),
-            ("int main(){union {int a;char b[9];} x[2];char *p=x;char *q=x+1;return q-p;}", 16),
+            ("int main(){union t{int a;};{union t{char a;};}union t x;return sizeof(x);}", 4),
+            ("int main(){union {int a;char b[9];} x[2];char *p=x;char *q=x+1;return q-p;}", 12),
         ]:
             self.assert_program_returns(source, expected)
         ty = parse_body("union {int a;char b[9];} x;").locals[0].ty
-        self.assertEqual((ty.kind, ty.size, ty.align), ("UNION", 16, 8))
+        self.assertEqual((ty.kind, ty.size, ty.align), ("UNION", 12, 4))
         self.assertEqual([member.offset for member in ty.members], [0, 0])
         ty = parse_body("struct {char a;union {int b;char c[9];} d;} x;").locals[0].ty
-        self.assertEqual((ty.size, ty.members[1].offset), (24, 8))
+        self.assertEqual((ty.size, ty.members[1].offset), (16, 4))
 
     def test_member_arrow(self):
         for source, expected in [
@@ -94,7 +111,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, expected in [
             ("struct t{int a;};struct t g;int main(){g.a=5;return g.a;}", 5),
             ("int main(){struct t{int a;};{struct t{char a;};struct t x;return sizeof(x);}}", 1),
-            ("int main(){struct t{int a;};{struct t{char a;};}struct t x;return sizeof(x);}", 8),
+            ("int main(){struct t{int a;};{struct t{char a;};}struct t x;return sizeof(x);}", 4),
             ("int main(){struct t{int a;};int t=3;struct t x;x.a=4;return t+x.a;}", 7),
         ]:
             self.assert_program_returns(source, expected)
@@ -107,9 +124,9 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_local_alignment(self):
         for source, offsets, stack_size in [
-            ("int x;char y;", [-1, -16], 16),
-            ("char x;int y;", [-8, -9], 16),
-            ("struct {char a;int b;} x;char y;", [-1, -24], 32),
+            ("int x;char y;", [-1, -8], 16),
+            ("char x;int y;", [-4, -5], 16),
+            ("struct {char a;int b;} x;char y;", [-1, -12], 16),
         ]:
             program = parse_body(source)
             CodeGenerator().generate([program])
@@ -117,23 +134,23 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assertEqual(program.stack_size, stack_size)
             for var in program.locals:
                 self.assertEqual(var.offset % var.ty.align, 0)
-        self.assert_program_returns("int main(){int x;int y;char z;char *a=&y;char *b=&z;return b-a;}", 15)
+        self.assert_program_returns("int main(){int x;int y;char z;char *a=&y;char *b=&z;return b-a;}", 7)
         self.assert_program_returns("int main(){int x;char y;int z;char *a=&y;char *b=&z;return b-a;}", 1)
 
     def test_struct_alignment(self):
         for declaration, size, alignment, offsets in [
-            ("struct {char a;int b;char c;} x;", 24, 8, [0, 8, 16]),
+            ("struct {char a;int b;char c;} x;", 12, 4, [0, 4, 8]),
             ("struct {char a;char b;} x;", 2, 1, [0, 1]),
             ("struct {} x;", 0, 1, []),
-            ("struct {char a;struct {char b;int c;} d;} x;", 24, 8, [0, 8]),
+            ("struct {char a;struct {char b;int c;} d;} x;", 12, 4, [0, 4]),
         ]:
             ty = parse_body(declaration).locals[0].ty
             self.assertEqual((ty.size, ty.align), (size, alignment))
             self.assertEqual([member.offset for member in ty.members], offsets)
-        self.assert_program_returns("int main(){struct {char a;int b;} x;char *p=&x;char *q=&x.b;return q-p;}", 8)
-        self.assert_program_returns("int main(){struct {char a;int b;} x[2];char *p=x;char *q=x+1;return q-p;}", 16)
+        self.assert_program_returns("int main(){struct {char a;int b;} x;char *p=&x;char *q=&x.b;return q-p;}", 4)
+        self.assert_program_returns("int main(){struct {char a;int b;} x[2];char *p=x;char *q=x+1;return q-p;}", 8)
         ty = parse_body("struct {char a;int b;} x[2];").locals[0].ty
-        self.assertEqual((ty.size, ty.align), (32, 8))
+        self.assertEqual((ty.size, ty.align), (16, 4))
 
     def test_struct_members(self):
         for source, expected in [
@@ -145,10 +162,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         program = parse_body("struct {char a;int b;} x;return sizeof(x);")
         ty = program.locals[0].ty
-        self.assertEqual(ty.size, 16)
-        self.assertEqual([member.offset for member in ty.members], [0, 8])
+        self.assertEqual(ty.size, 8)
+        self.assertEqual([member.offset for member in ty.members], [0, 4])
         assembly = compile_program("int main(){struct {char a;int b;} x;x.b=42;return x.b;}")
-        self.assertIn("  add $8, %rax\n", assembly.stdout)
+        self.assertIn("  add $4, %rax\n", assembly.stdout)
         for source, message in [
             ("int main(){int x;return x.a;}", "not a struct"),
             ("int main(){struct {int x;} a;return a.y;}", "no such member"),
@@ -429,8 +446,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int x; int main(){x=3; return x;}",3),
             ("int x; int y; int main(){x=3; y=4; return x+y;}",7),
             ("int x,y; int main(){x=3; y=4; return x+y;}",7),
-            ("int x; int main(){return sizeof(x);}",8),
-            ("int x[4]; int main(){return sizeof(x);}",32),
+            ("int x; int main(){return sizeof(x);}",4),
+            ("int x[4]; int main(){return sizeof(x);}",16),
             ("int x; int f(){x=9; return 0;} int main(){f(); return x;}",9),
             ("int x; int main(){int x=3; return x;}",3),
         ]:
@@ -439,7 +456,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns("int x[4]; int main(){x[0]=0;x[1]=1;x[2]=2;x[3]=3;"
                                         f"return x[{index}];}}", index)
         assembly = compile_program("int x; int main(){return x;}").stdout
-        self.assertIn("  .data\n  .globl x\nx:\n  .zero 8\n", assembly)
+        self.assertIn("  .data\n  .globl x\nx:\n  .zero 4\n", assembly)
         self.assertIn("  lea x(%rip), %rax\n", assembly)
         self.assertEqual(compile_program("int x=3; int main(){return x;}").returncode, 1)
         self.assertEqual(compile_program("int main(){return x;} int x;").returncode, 1)
@@ -456,17 +473,17 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_sizeof(self):
         for body, expected in [
-            ("int x; return sizeof(x);",8), ("int x; return sizeof x;",8),
-            ("int *x; return sizeof(x);",8), ("int x[4]; return sizeof(x);",32),
-            ("int x[3][4]; return sizeof(x);",96),
-            ("int x[3][4]; return sizeof(*x);",32),
-            ("int x[3][4]; return sizeof(**x);",8),
-            ("int x[3][4]; return sizeof(**x)+1;",9),
-            ("int x[3][4]; return sizeof **x+1;",9),
-            ("int x[3][4]; return sizeof(**x+1);",8),
-            ("int x=1; return sizeof(x=2);",8),
+            ("int x; return sizeof(x);",4), ("int x; return sizeof x;",4),
+            ("int *x; return sizeof(x);",8), ("int x[4]; return sizeof(x);",16),
+            ("int x[3][4]; return sizeof(x);",48),
+            ("int x[3][4]; return sizeof(*x);",16),
+            ("int x[3][4]; return sizeof(**x);",4),
+            ("int x[3][4]; return sizeof(**x)+1;",5),
+            ("int x[3][4]; return sizeof **x+1;",5),
+            ("int x[3][4]; return sizeof(**x+1);",4),
+            ("int x=1; return sizeof(x=2);",4),
             ("int x=1; sizeof(x=2); return x;",1),
-            ("return sizeof missing();",8),
+            ("return sizeof missing();",4),
         ]:
             self.assert_program_returns("int main(){"+body+"}", expected)
         assembly = compile_program("int main(){return sizeof missing();}").stdout
@@ -495,8 +512,8 @@ class ExpressionCompilerTests(unittest.TestCase):
                                         f"*(y+{index})={index}; return {expression};}}", index)
         function = parse(tokenize("int main(){int x[2][3]; return x+1;}"))[0]
         ty = function.locals[0].ty
-        self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,48,3,24))
-        self.assertEqual(function.body.body[-1].lhs.rhs.rhs.value, 24)
+        self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,24,3,12))
+        self.assertEqual(function.body.body[-1].lhs.rhs.rhs.value, 12)
         self.assert_program_returns("int main(){int x[2][3][4]; *(*(*(x+1)+2)+3)=9; return *(*(*(x+1)+2)+3);}", 9)
 
     def test_one_dimensional_arrays(self):
@@ -507,10 +524,10 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assert_program_returns("int main(){int *x[2]; int a=7; *x=&a; return **x;}", 7)
         function = parse(tokenize("int main(){int x[3]; return x;}"))[0]
         assembly = CodeGenerator().generate([function])
-        self.assertEqual(function.locals[0].ty.size, 24)
-        self.assertEqual(function.locals[0].offset, -24)
-        self.assertEqual(function.stack_size, 32)
-        self.assertIn("  lea -24(%rbp), %rax\n  jmp .L.return.main", assembly)
+        self.assertEqual(function.locals[0].ty.size, 12)
+        self.assertEqual(function.locals[0].offset, -12)
+        self.assertEqual(function.stack_size, 16)
+        self.assertIn("  lea -12(%rbp), %rax\n  jmp .L.return.main", assembly)
         for source in ["int main(){int x[2]; x=3;}", "int main(){int x[a];}",
                        "int main(){int x[2;}"]:
             self.assertEqual(compile_program(source).returncode, 1)
@@ -528,7 +545,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual([var.name for var in function.params], ["x", "y"])
         self.assertEqual([var.name for var in function.locals], ["z", "x", "y"])
         assembly = CodeGenerator().generate([function])
-        self.assertIn("  mov %rdi, -16(%rbp)\n  mov %rsi, -24(%rbp)\n", assembly)
+        self.assertIn("  mov %edi, -8(%rbp)\n  mov %esi, -12(%rbp)\n", assembly)
         self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 1)
         result = compile_program("int main(){return f(*3);}")
         self.assertIn("invalid pointer dereference", result.stderr)
@@ -582,12 +599,12 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.ty.base.kind, "INT")
         self.assertEqual(expression.rhs.kind, "*")
-        self.assertEqual(expression.rhs.rhs.value, 8)
+        self.assertEqual(expression.rhs.rhs.value, 4)
         expression = parse_body("int x,y; return &x-&y;").body.body[-1].lhs
         self.assertIs(expression.ty, ty_int)
         self.assertEqual(expression.kind, "/")
         self.assertIs(expression.lhs.ty, ty_int)
-        self.assertEqual(expression.rhs.value, 8)
+        self.assertEqual(expression.rhs.value, 4)
         expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs
         self.assertEqual(expression.lhs.ty.kind, "PTR")
         expression = parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs
@@ -617,10 +634,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         result = compile_program('int main(){int x; return &x;}')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
-                         "  lea -8(%rbp), %rax\n  jmp .L.return.main\n" + EPILOGUE)
+                         "  lea -4(%rbp), %rax\n  jmp .L.return.main\n" + EPILOGUE)
         result = compile_program('int main(){int x; return *&x;}')
         self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
-                         "  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"
+                         "  lea -4(%rbp), %rax\n  movsxd (%rax), %rax\n"
                          "  jmp .L.return.main\n" + EPILOGUE)
         for source, position in [('int main(){return &1;}', 19),
                                  ('int main(){return &(1+2);}', 21)]:
@@ -806,13 +823,13 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIs(program.body.body[1].body[0].lhs.lhs.var, bar)
         self.assertIs(program.body.body[2].lhs.rhs.var, bar)
         CodeGenerator().generate([program])
-        self.assertEqual((bar.offset, foo.offset, program.stack_size), (-8, -16, 16))
+        self.assertEqual((bar.offset, foo.offset, program.stack_size), (-4, -8, 16))
         another = parse_body("int foo=1; return foo;")
         self.assertIsNot(another.locals[0], foo)
         for source, offsets, size in [
-            ("1;", [], 0), ("int x;", [-8], 16),
-            ("int a,b,c;", [-8,-16,-24], 32),
-            ("int a,b,c,d;", [-8,-16,-24,-32], 32),
+            ("1;", [], 0), ("int x;", [-4], 16),
+            ("int a,b,c;", [-4,-8,-12], 16),
+            ("int a,b,c,d;", [-4,-8,-12,-16], 16),
         ]:
             program = parse_body(source)
             assembly = CodeGenerator().generate([program])
@@ -923,10 +940,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return.main\n  mov $42, %rax\n"),
             ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return.main\n"
              "  mov $2, %rax\n  jmp .L.return.main\n"),
-            ("int a; a=3; a;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
-             "  pop %rdi\n  mov %rax, (%rdi)\n  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"),
-            ("int z; z=5;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
-             "  pop %rdi\n  mov %rax, (%rdi)\n"),
+            ("int a; a=3; a;", "  lea -4(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
+             "  pop %rdi\n  mov %eax, (%rdi)\n  lea -4(%rbp), %rax\n  movsxd (%rax), %rax\n"),
+            ("int z; z=5;", "  lea -4(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
+             "  pop %rdi\n  mov %eax, (%rdi)\n"),
             ("1; 2; 3;", "  mov $1, %rax\n  mov $2, %rax\n  mov $3, %rax\n"),
             ('42;', "  mov $42, %rax\n"),
             ('5+6*7;', "  mov $7, %rax\n  push %rax\n  mov $6, %rax\n"
@@ -1109,7 +1126,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){int a; a=3; (a=7)+2;}', 9),
             ('int main(){int a, b; a=-(3+4); b=2; a/b;}', 253),
             ('int main(){int a; (a)=6; a;}', 6),
-            ('int main(){int a; a=65536*65536; a/65536/65536;}', 1),
+            ('int main(){int a; a=65536*65536; a/65536/65536;}', 0),
             ('int main(){int a, z; a=2; z=8; (a+z)*(z-a); a+z;}', 10),
             ('int main(){1; 2; 3;}', 3),
             ('int main(){42; 0;}', 0),

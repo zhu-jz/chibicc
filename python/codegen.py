@@ -10,6 +10,7 @@ from common import CompileError, align_to
 
 ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
 ARGREG8 = ("%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b")
+ARGREG32 = ("%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d")
 
 
 class CodeGenerator:
@@ -52,6 +53,8 @@ class CodeGenerator:
             return
         if ty.size == 1:
             self.assembly.append("  movsbq (%rax), %rax")
+        elif ty.size == 4:
+            self.assembly.append("  movsxd (%rax), %rax")
         else:
             self.assembly.append("  mov (%rax), %rax")
 
@@ -64,6 +67,8 @@ class CodeGenerator:
             return
         if ty.size == 1:
             self.assembly.append("  mov %al, (%rdi)")
+        elif ty.size == 4:
+            self.assembly.append("  mov %eax, (%rdi)")
         else:
             self.assembly.append("  mov %rax, (%rdi)")
 
@@ -184,6 +189,17 @@ class CodeGenerator:
             return
         raise CompileError(node.tok, "invalid statement")
 
+    def store_gp(self, index, var):
+        if var.ty.size == 1:
+            register = ARGREG8[index]
+        elif var.ty.size == 4:
+            register = ARGREG32[index]
+        elif var.ty.size == 8:
+            register = ARGREG[index]
+        else:
+            raise CompileError(var.ty.name, "unsupported parameter size")
+        self.assembly.append(f"  mov {register}, {var.offset}(%rbp)")
+
     def generate(self, program):
         self.assembly = []
         for var in program:
@@ -211,8 +227,7 @@ class CodeGenerator:
                 raise CompileError(function.params[6].ty.name,
                                    "at most 6 parameters are supported")
             for index, var in enumerate(function.params):
-                register = ARGREG8[index] if var.ty.size == 1 else ARGREG[index]
-                self.assembly.append(f"  mov {register}, {var.offset}(%rbp)")
+                self.store_gp(index, var)
             self.gen_stmt(function.body)
             assert self.depth == 0
             self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",

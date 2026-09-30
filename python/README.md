@@ -1,41 +1,46 @@
-# Lesson 55: Struct and union assignment
+# Lesson 56: Four-byte ints
 
-Original chibicc commit: [`bef05432c9d3289636ed1d360ca9b863a0698dc7`](https://github.com/rui314/chibicc/commit/bef05432c9d3289636ed1d360ca9b863a0698dc7).
+Original chibicc commit: [`5831edaab3eb6d56126c08f01f5639222602f7e5`](https://github.com/rui314/chibicc/commit/5831edaab3eb6d56126c08f01f5639222602f7e5).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A struct or union can be too large for a register. Loading an aggregate now
-leaves its storage address in `%rax`, as array expressions already did.
-For aggregate assignment, codegen pops the destination address into `%rdi`
-and emits a byte load/store pair for every byte in the destination type.
-`%rax` still points to the source, and `%r8b` carries each byte during copying.
-All bytes, including padding, are copied.
+Int now has size and alignment 4, matching x86-64 Linux C. Char stays one byte
+and pointers stay eight. This changes sizeof, pointer-arithmetic scaling,
+array strides, struct/union layouts, local offsets, and global zero storage.
+An `int[3]` occupies 12 bytes; `struct {char a;int b;}` has offsets 0 and 4
+and total size 8.
 
-This supports `y=x`, assignments through pointers, initialization from another
-aggregate, and chains such as `z=y=x`. No Python memory copy runs at compile
-time: Python emits the real x86-64 copy instructions, just as upstream C does.
-Arrays still cannot be assigned directly, and aggregate function argument /
-return ABI rules and assignment type compatibility remain incomplete.
+An int store uses `%eax`, writing only the low four bytes. An int load uses
+`movsxd (%rax), %rax`, sign-extending those four bytes into the expression
+register. Parameter saves choose eight-bit, thirty-two-bit, or sixty-four-bit
+argument-register names for sizes 1, 4, or 8. Unsupported sizes produce a
+source diagnostic in Python instead of C's internal unreachable error.
+
+This original commit changes memory widths, not all arithmetic conversions.
+Expressions still use sixty-four-bit arithmetic registers; storing into an int
+truncates to four bytes, and reloading makes the stored sign visible. Function
+return conversion, full type compatibility, and aggregate call ABI rules remain
+incomplete. Python's compile-time integers are arbitrary precision, but the
+emitted memory operations implement the target's four-byte values.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){struct t{int a,b;} x,y;x.a=20;x.b=22;y=x;return y.a+y.b;}\n' > /tmp/lesson55.c
-python3 python/main.py -o /tmp/lesson55.s /tmp/lesson55.c
-cat /tmp/lesson55.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson55 /tmp/lesson55.s
-/tmp/lesson55
+printf 'int main(){int x=42;return x;}\n' > /tmp/lesson56.c
+python3 python/main.py -o /tmp/lesson56.s /tmp/lesson56.c
+cat /tmp/lesson56.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson56 /tmp/lesson56.s
+/tmp/lesson56
 echo $?
 ```
 
-After obtaining both addresses, the copy includes pairs such as
-`mov 0(%rax), %r8b` and `mov %r8b, 0(%rdi)`, up through byte 15.
-The final field loads add 20 and 22, returning status 42. The executable
-prints nothing. Tests cover the upstream struct/union assignments, pointer
-copies, chains, a seventeen-byte object, padding bytes, globals, initialization
-and self-assignment. A small assembly check ensures exactly the required bytes
-are copied, and all updated upstream C fixtures run as executables.
+x now lives at -4(%rbp) within a sixteen-byte frame. `mov %eax, (%rdi)` stores
+42 without overwriting a neighboring int, and `movsxd (%rax), %rax` loads it
+for the return. The shell displays status 42. Tests update the previous layout
+and sizeof expectations, check signed loads, truncation and neighboring values,
+mixed-size parameters, and an int array passed to a tiny GCC-built helper.
+The updated upstream C fixtures and the full Python regression suite are run.
 
 ## Tests and attribution
 

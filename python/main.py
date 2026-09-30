@@ -1,6 +1,6 @@
-"""Lesson 55: Struct and union assignment.
+"""Lesson 56: Four-byte ints.
 
-Based on chibicc commit bef05432c9d3289636ed1d360ca9b863a0698dc7.
+Based on chibicc commit 5831edaab3eb6d56126c08f01f5639222602f7e5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,6 +1,6 @@
-"""Lesson 50: Struct member alignment.
+"""Lesson 51: Aligned local stack slots.
 
-Based on chibicc commit 9443e4b8bc587b670f9b448b03842530cd355760.
+Based on chibicc commit dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

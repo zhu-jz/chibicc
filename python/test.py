@@ -42,6 +42,21 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_local_alignment(self):
+        for source, offsets, stack_size in [
+            ("int x;char y;", [-1, -16], 16),
+            ("char x;int y;", [-8, -9], 16),
+            ("struct {char a;int b;} x;char y;", [-1, -24], 32),
+        ]:
+            program = parse_body(source)
+            CodeGenerator().generate([program])
+            self.assertEqual([var.offset for var in program.locals], offsets)
+            self.assertEqual(program.stack_size, stack_size)
+            for var in program.locals:
+                self.assertEqual(var.offset % var.ty.align, 0)
+        self.assert_program_returns("int main(){int x;int y;char z;char *a=&y;char *b=&z;return b-a;}", 15)
+        self.assert_program_returns("int main(){int x;char y;int z;char *a=&y;char *b=&z;return b-a;}", 1)
+
     def test_struct_alignment(self):
         for declaration, size, alignment, offsets in [
             ("struct {char a;int b;char c;} x;", 24, 8, [0, 8, 16]),

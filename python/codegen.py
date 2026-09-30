@@ -195,6 +195,7 @@ class CodeGenerator:
             offset = 0
             for var in function.locals:
                 offset += var.ty.size
+                offset = align_to(offset, var.ty.align)
                 var.offset = -offset
             function.stack_size = align_to(offset, 16)
             self.current_fn = function

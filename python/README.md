@@ -1,44 +1,44 @@
-# Lesson 50: Struct member alignment
+# Lesson 51: Aligned local stack slots
 
-Original chibicc commit: [`9443e4b8bc587b670f9b448b03842530cd355760`](https://github.com/rui314/chibicc/commit/9443e4b8bc587b670f9b448b03842530cd355760).
+Original chibicc commit: [`dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4`](https://github.com/rui314/chibicc/commit/dfec1157b41bb86c8cb66eee0b0cbdb9dcccb6f4).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Types now carry alignment as well as size. Char has size/alignment 1; int and
-pointers still have size/alignment 8. An array inherits its element alignment.
-Before placing each struct member, round its offset up to that member's
-alignment. The struct alignment is the maximum of its members, at least 1.
-Finally round the total size up to that alignment, including tail padding.
+Stack allocation now respects each local variable's alignment. Walking the
+function's locals in their existing reverse declaration order, first add the
+variable's size, round the running offset up to its alignment, then negate
+that offset to get its address relative to `%rbp`. The complete frame is
+still rounded to 16 bytes. Struct fields already have internal alignment;
+this commit also aligns their containing local object.
 
-`struct {char a; int b;}` now has offsets 0 and 8, size 16 and alignment 8.
-Reversing the fields still gives size 16 because tail padding follows the
-char. Adding a final char gives offsets 0, 8, 16 and total size 24. Empty
-structs remain size 0 with alignment 1, matching upstream's extension. Array
-strides use the padded size, so every successive element keeps its members'
-relative alignment.
+For `int x; char y;`, allocation visits y first: y is at -1 and x at -16.
+The seven-byte gap makes x's start divisible by eight. For `char x; int y;`,
+y is at -8 and x at -9, with no intervening padding. No extra instruction
+executes to create padding; only addresses and frame size change.
 
-Python's align_to helper uses integer `//`, which expresses the integer
-rounding directly; C uses integer `/`. The helper is shared by parsing and
-stack-frame rounding. This commit aligns members within structs; it does not
-add alignment rules for independent stack/global variables. Int is still
-unlike GCC's four-byte int, and struct copying/call ABI rules are incomplete.
+Python reuses align_to with integer `//`. Global data alignment and call-site
+temporary-stack alignment remain at their previous stage; this commit only
+changes local-variable offsets. Ints are still eight bytes. Upstream's new
+address-difference examples intentionally depend on this compiler's layout
+rather than portable C guarantees about separate local variables.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){struct {char a;int b;} x; x.b=42; return x.b;}\n' > /tmp/lesson50.c
-python3 python/main.py -o /tmp/lesson50.s /tmp/lesson50.c
-cat /tmp/lesson50.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson50 /tmp/lesson50.s
-/tmp/lesson50
+printf 'int main(){int x=42;char y=1;return x;}\n' > /tmp/lesson51.c
+python3 python/main.py -o /tmp/lesson51.s /tmp/lesson51.c
+cat /tmp/lesson51.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson51 /tmp/lesson51.s
+/tmp/lesson51
 echo $?
 ```
 
-Member access now emits `add $8, %rax` to reach b rather than `add $1`.
-The eight-byte field load/store and epilogue are unchanged; the shell reports
-42. Tests inspect field offsets, tail padding, nested structs, arrays and empty
-structs, then run real programs and the updated upstream C struct fixture.
+The prologue reserves 16 bytes. Addresses use `lea -1(%rbp), %rax` for y and
+`lea -16(%rbp), %rax` for x. The typed stores and loads are unchanged, and
+the shell displays status 42. Tests inspect offsets and frame sizes for both
+orders and a struct/char mixture, run the two upstream address-difference
+examples, and run the updated C variable fixture with the other C fixtures.
 
 ## Tests and attribution
 

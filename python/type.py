@@ -4,6 +4,8 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
+from dataclasses import replace
+
 from common import CompileError, Type
 
 
@@ -12,6 +14,10 @@ ty_int = Type("INT")
 
 def is_integer(ty):
     return ty.kind == "INT"
+
+
+def copy_type(ty):
+    return replace(ty)
 
 
 def pointer_to(base):
@@ -31,6 +37,8 @@ def add_type(node):
         add_type(child)
     for statement in node.body:
         add_type(statement)
+    for arg in node.args:
+        add_type(arg)
 
     if node.kind in ("+", "-", "*", "/", "NEG", "ASSIGN"):
         node.ty = node.lhs.ty

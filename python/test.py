@@ -32,6 +32,24 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_parameters(self):
+        for source, expected in [
+            ("int main(){return add2(3,4);} int add2(int x,int y){return x+y;}", 7),
+            ("int main(){return sub2(4,3);} int sub2(int x,int y){return x-y;}", 1),
+            ("int main(){return fib(9);} int fib(int x){if(x<=1)return 1; return fib(x-1)+fib(x-2);}", 55),
+            ("int f(int a,int b,int c,int d,int e,int f){return a+2*b+3*c+4*d+5*e+6*f;} int main(){return f(1,2,3,4,5,6);}", 91),
+            ("int set(int *p){*p=9; return *p;} int main(){int x=1; return set(&x);}", 9),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse(tokenize("int f(int x,int y){int z; return x-y;}"))[0]
+        self.assertEqual([var.name for var in function.params], ["x", "y"])
+        self.assertEqual([var.name for var in function.locals], ["z", "x", "y"])
+        assembly = CodeGenerator().generate([function])
+        self.assertIn("  mov %rdi, -16(%rbp)\n  mov %rsi, -24(%rbp)\n", assembly)
+        self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 1)
+        result = compile_program("int main(){return f(*3);}")
+        self.assertIn("invalid pointer dereference", result.stderr)
+
     def test_argument_calls(self):
         helpers = """
 int add(int x,int y) {return x+y;} int sub(int x,int y) {return x-y;}

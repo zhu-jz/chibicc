@@ -28,6 +28,7 @@ class Type:
     base: Optional["Type"] = None
     name: Optional[Token] = field(default=None, compare=False)
     return_ty: Optional["Type"] = None
+    params: list["Type"] = field(default_factory=list)
 
 
 @dataclass
@@ -62,3 +63,4 @@ class Function:
     locals: list[Obj]
     stack_size: int = 0
     name: str = "main"
+    params: list[Obj] = field(default_factory=list)

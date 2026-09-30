@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Function, Node, Obj, Type
-from type import add_type, func_type, is_integer, pointer_to, ty_int
+from type import add_type, copy_type, func_type, is_integer, pointer_to, ty_int
 
 
 def new_add(lhs, rhs, token):
@@ -226,12 +226,22 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected 'int'")
         return ty_int, position + 1
 
-    # type-suffix = ("(" ")")?
+    # type-suffix = ("(" (declspec declarator ("," declspec declarator)*)? ")")?
     def type_suffix(self, position, ty):
         if self.tokens[position].text == "(":
-            if self.tokens[position + 1].text != ")":
-                raise CompileError(self.tokens[position + 1].position, "expected ')'")
-            return func_type(ty), position + 2
+            position += 1
+            params = []
+            while self.tokens[position].text != ")":
+                if params:
+                    if self.tokens[position].text != ",":
+                        raise CompileError(self.tokens[position].position, "expected ','")
+                    position += 1
+                basety, position = self.declspec(position)
+                param, position = self.declarator(position, basety)
+                params.append(copy_type(param))
+            ty = func_type(ty)
+            ty.params = params
+            return ty, position + 1
         return ty, position
 
     # declarator = "*"* identifier type-suffix
@@ -244,7 +254,9 @@ class Parser:
             raise CompileError(token.position, "expected a variable name")
         # Keep the declaration name without mutating the shared integer type.
         ty, position = self.type_suffix(position + 1, ty)
-        return Type(ty.kind, ty.base, token, ty.return_ty), position
+        ty = copy_type(ty)
+        ty.name = token
+        return ty, position
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
@@ -296,11 +308,12 @@ class Parser:
     def function(self, position):
         ty, position = self.declspec(position)
         ty, position = self.declarator(position, ty)
-        self.locals = []
+        params = [Obj(param.name.text, ty=param) for param in ty.params]
+        self.locals = params.copy()
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position].position, "expected '{'")
         body, position = self.compound_stmt(position + 1)
-        return Function(body, self.locals, name=ty.name.text), position
+        return Function(body, self.locals, name=ty.name.text, params=params), position
 
     # program = function-definition*
     def parse(self):

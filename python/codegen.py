@@ -153,6 +153,11 @@ class CodeGenerator:
             self.assembly.extend([f"  .globl {function.name}", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
+            if len(function.params) > len(ARGREG):
+                raise CompileError(function.params[6].ty.name.position,
+                                   "at most 6 parameters are supported")
+            for index, var in enumerate(function.params):
+                self.assembly.append(f"  mov {ARGREG[index]}, {var.offset}(%rbp)")
             self.gen_stmt(function.body)
             assert self.depth == 0
             self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",

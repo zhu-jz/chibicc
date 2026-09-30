@@ -1,6 +1,6 @@
-"""Lesson 25: Function definitions without parameters.
+"""Lesson 26: Function parameters.
 
-Based on chibicc commit 6cb4220f339e7d2a894e44b61c90c576a482914b.
+Based on chibicc commit aacc0cfec24e0aef1e884ac8b657e182a33a7b1c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

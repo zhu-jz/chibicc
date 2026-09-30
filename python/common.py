@@ -39,6 +39,14 @@ class Type:
     params: list["Type"] = field(default_factory=list)
     size: int = 0
     array_len: int = 0
+    members: list["Member"] = field(default_factory=list)
+
+
+@dataclass
+class Member:
+    ty: Type
+    name: Token
+    offset: int = 0
 
 
 @dataclass
@@ -72,3 +80,4 @@ class Node:
     ty: Optional[Type] = field(default=None, compare=False)  # Inferred type.
     funcname: str = ""
     args: list["Node"] = field(default_factory=list)
+    member: Optional[Member] = None

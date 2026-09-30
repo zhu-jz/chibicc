@@ -1,44 +1,46 @@
-# Lesson 48: Comma expressions and generalized lvalues
+# Lesson 49: Anonymous structs and member access
 
-Original chibicc commit: [`e6307ad374eeecd6474286b1b6fda5b3dda89d9a`](https://github.com/rui314/chibicc/commit/e6307ad374eeecd6474286b1b6fda5b3dda89d9a).
+Original chibicc commit: [`f814033d04c4cefdbcf8174d65011d484d69303c`](https://github.com/rui314/chibicc/commit/f814033d04c4cefdbcf8174d65011d484d69303c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`expr` now accepts a comma after an assignment expression. It recursively
-parses the remainder into a COMMA node. A comma expression evaluates its left
-operand for side effects, then its right operand; its value and type come from
-the right. This follows upstream's right-recursive grammar. Function arguments
-and declaration initializers still parse `assign`, so separator commas stay
-separators unless parentheses explicitly create a comma expression.
+`struct { ... }` builds a STRUCT type containing members in declaration order.
+Each Member has its type, name token, and byte offset. At this stage members
+are packed without padding: char is one byte and int is eight, so
+`struct {char a; int b;}` has offsets 0 and 1 and total size 9. Anonymous
+structs can contain arrays and other structs and can themselves be array
+elements or global variables. Struct tags and `->` are not supported yet.
 
-The address generator also handles COMMA: evaluate the left operand, then
-compute the right operand's address. Thus `(i=5,j)=6` sets i to 5 and j to 6.
-This generalized-lvalue behavior is a deprecated GNU extension intentionally
-preserved from this commit, rather than standard C behavior. A numeric right
-operand still cannot be an lvalue. The Python tree stores two ordinary child
-references instead of C pointers.
+Postfix parsing accepts `.` alongside subscripts. It checks that the left
+operand is a struct and finds the named member. The MEMBER node inherits that
+field's type. To get its address, codegen gets the containing struct's address
+and adds the member offset; the usual typed load/store handles the field.
+For `x.a.b`, address generation recursively adds both offsets. Array members
+retain their addresses rather than loading an entire array.
+
+Python stores members in a list of dataclasses instead of C's linked records.
+This first struct lesson does not implement aggregate copying or struct call
+ABI rules. Its packed layout also differs from GCC's normal aligned layout;
+our test helper receives scalar assertion results, not struct values.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int i=2,j=3; (i=5,j)=6; return i+j;}\n' > /tmp/lesson48.c
-python3 python/main.py -o /tmp/lesson48.s /tmp/lesson48.c
-cat /tmp/lesson48.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson48 /tmp/lesson48.s
-/tmp/lesson48
+printf 'int main(){struct {char a;int b;} x; x.b=42; return x.b;}\n' > /tmp/lesson49.c
+python3 python/main.py -o /tmp/lesson49.s /tmp/lesson49.c
+cat /tmp/lesson49.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson49 /tmp/lesson49.s
+/tmp/lesson49
 echo $?
 ```
 
-The comma needs no special machine instruction. Codegen emits the store of 5
-to i, then j's address and the store of 6. The return expression loads both
-variables and adds them in `%rax`; the shell displays status 11. `.file` and
-`.loc` still describe source positions and do not execute.
-
-Tests include all three upstream examples, left-to-right side effects,
-parenthesized call arguments, pointer results, sizeof's right-operand type,
-and rejecting a numeric lvalue. The C control fixture is updated to this
-original commit; the entire upstream C fixture suite is also run.
+`lea offset(%rbp), %rax` finds x, and `add $1, %rax` finds b. Storing/loading
+that eight-byte field uses the existing integer instructions. The shell
+reports 42; the executable itself prints nothing. The new upstream struct
+fixture checks member reads/writes, arrays, nested structs, sizeof, and empty
+structs. Additional tests check globals, taking a member's address, exact
+layout, and the `not a struct` / `no such member` diagnostics.
 
 ## Tests and attribution
 

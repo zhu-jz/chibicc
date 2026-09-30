@@ -1,6 +1,6 @@
-"""Lesson 48: Comma expressions and generalized lvalues.
+"""Lesson 49: Anonymous structs and member access.
 
-Based on chibicc commit e6307ad374eeecd6474286b1b6fda5b3dda89d9a.
+Based on chibicc commit f814033d04c4cefdbcf8174d65011d484d69303c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -42,6 +42,28 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_members(self):
+        for source, expected in [
+            ("int main(){struct {char a;int b;char c;} x;x.a=1;x.b=2;x.c=3;return x.a+x.b+x.c;}", 6),
+            ("struct {int a;char b;} g;int main(){g.a=7;g.b=3;return g.a+g.b;}", 10),
+            ("int main(){struct {char a[3];char b;} x;x.a[2]=5;x.b=7;return x.a[2]+x.b;}", 12),
+            ("int main(){struct {int a;} x;int *p=&x.a;*p=9;return x.a;}", 9),
+        ]:
+            self.assert_program_returns(source, expected)
+        program = parse_body("struct {char a;int b;} x;return sizeof(x);")
+        ty = program.locals[0].ty
+        self.assertEqual(ty.size, 9)
+        self.assertEqual([member.offset for member in ty.members], [0, 1])
+        assembly = compile_program("int main(){struct {char a;int b;} x;x.b=42;return x.b;}")
+        self.assertIn("  add $1, %rax\n", assembly.stdout)
+        for source, message in [
+            ("int main(){int x;return x.a;}", "not a struct"),
+            ("int main(){struct {int x;} a;return a.y;}", "no such member"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_comma_operator(self):
         for source, expected in [
             ("int main(){return (1,2,3);}", 3),

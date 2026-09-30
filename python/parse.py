@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Node, Obj, Type
+from common import CompileError, Member, Node, Obj, Type
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int
 
 
@@ -163,17 +163,31 @@ class Parser:
             return Node("DEREF", lhs=operand, tok=token), position
         return self.postfix(position)
 
-    # postfix = primary ("[" expr "]")*
+    def struct_ref(self, lhs, token):
+        add_type(lhs)
+        if lhs.ty.kind != "STRUCT":
+            raise CompileError(lhs.tok, "not a struct")
+        for member in lhs.ty.members:
+            if member.name.text == token.text:
+                return Node("MEMBER", lhs=lhs, member=member, tok=token)
+        raise CompileError(token, "no such member")
+
+    # postfix = primary ("[" expr "]" | "." identifier)*
     def postfix(self, position):
         node, position = self.primary(position)
-        while self.tokens[position].text == "[":
-            token = self.tokens[position]
-            index, position = self.expr(position + 1)
-            if self.tokens[position].text != "]":
-                raise CompileError(self.tokens[position], "expected ']'")
-            node = Node("DEREF", lhs=new_add(node, index, token), tok=token)
-            position += 1
-        return node, position
+        while True:
+            if self.tokens[position].text == "[":
+                token = self.tokens[position]
+                index, position = self.expr(position + 1)
+                if self.tokens[position].text != "]":
+                    raise CompileError(self.tokens[position], "expected ']'")
+                node = Node("DEREF", lhs=new_add(node, index, token), tok=token)
+                position += 1
+            elif self.tokens[position].text == ".":
+                node = self.struct_ref(node, self.tokens[position + 1])
+                position += 2
+            else:
+                return node, position
 
     # funcall = identifier "(" (assign ("," assign)*)? ")"
     def funcall(self, position):
@@ -279,13 +293,39 @@ class Parser:
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
 
-    # declspec = "char" | "int"
+    # declspec = "char" | "int" | "struct" struct-decl
     def declspec(self, position):
         if self.tokens[position].text == "char":
             return ty_char, position + 1
-        if self.tokens[position].text != "int":
-            raise CompileError(self.tokens[position], "expected 'int'")
-        return ty_int, position + 1
+        if self.tokens[position].text == "int":
+            return ty_int, position + 1
+        if self.tokens[position].text == "struct":
+            return self.struct_decl(position + 1)
+        raise CompileError(self.tokens[position], "typename expected")
+
+    # struct-decl = "{" (declspec (declarator ("," declarator)*)? ";")* "}"
+    def struct_decl(self, position):
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position], "expected '{'")
+        position += 1
+        members = []
+        while self.tokens[position].text != "}":
+            basety, position = self.declspec(position)
+            first = True
+            while self.tokens[position].text != ";":
+                if not first:
+                    if self.tokens[position].text != ",":
+                        raise CompileError(self.tokens[position], "expected ','")
+                    position += 1
+                first = False
+                ty, position = self.declarator(position, basety)
+                members.append(Member(ty, ty.name))
+            position += 1
+        offset = 0
+        for member in members:
+            member.offset = offset
+            offset += member.ty.size
+        return Type("STRUCT", size=offset, members=members), position + 1
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
     def func_params(self, position, ty):
@@ -359,7 +399,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.tokens[position].text in ("char", "int"):
+            if self.tokens[position].text in ("char", "int", "struct"):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

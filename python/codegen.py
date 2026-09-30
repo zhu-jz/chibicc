@@ -41,6 +41,10 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.gen_addr(node.rhs)
             return
+        if node.kind == "MEMBER":
+            self.gen_addr(node.lhs)
+            self.assembly.append(f"  add ${node.member.offset}, %rax")
+            return
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
@@ -68,7 +72,7 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.assembly.append("  neg %rax")
             return
-        if node.kind == "VAR":
+        if node.kind in ("VAR", "MEMBER"):
             self.gen_addr(node)
             self.load(node.ty)
             return

@@ -130,7 +130,21 @@ class Parser:
             return Node("DEREF", lhs=operand, tok=token), position
         return self.primary(position)
 
-    # primary = "(" expr ")" | identifier ("(" ")")? | number
+    # funcall = identifier "(" (assign ("," assign)*)? ")"
+    def funcall(self, position):
+        token = self.tokens[position]
+        position += 2
+        args = []
+        while self.tokens[position].text != ")":
+            if args:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position].position, "expected ','")
+                position += 1
+            arg, position = self.assign(position)
+            args.append(arg)
+        return Node("FUNCALL", funcname=token.text, args=args, tok=token), position + 1
+
+    # primary = "(" expr ")" | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
         if token.text == "(":
@@ -141,9 +155,7 @@ class Parser:
 
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":
-                if self.tokens[position + 2].text != ")":
-                    raise CompileError(self.tokens[position + 2].position, "expected ')'")
-                return Node("FUNCALL", funcname=token.text, tok=token), position + 3
+                return self.funcall(position)
             var = self.find_var(token.text)
             if var is None:
                 raise CompileError(token.position, "undefined variable")

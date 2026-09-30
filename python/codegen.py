@@ -8,6 +8,9 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 from common import CompileError
 
 
+ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
+
+
 class CodeGenerator:
     def __init__(self):
         self.assembly = []
@@ -58,6 +61,13 @@ class CodeGenerator:
             self.assembly.append("  mov %rax, (%rdi)")
             return
         if node.kind == "FUNCALL":
+            if len(node.args) > len(ARGREG):
+                raise CompileError(node.tok.position, "at most 6 arguments are supported")
+            for arg in node.args:
+                self.gen_expr(arg)
+                self.push()
+            for index in range(len(node.args) - 1, -1, -1):
+                self.pop(ARGREG[index])
             self.assembly.append("  mov $0, %rax")
             self.assembly.append(f"  call {node.funcname}")
             return

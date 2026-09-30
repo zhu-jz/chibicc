@@ -1,6 +1,6 @@
-"""Lesson 23: Calls without arguments.
+"""Lesson 24: Calls with up to six arguments.
 
-Based on chibicc commit 30a39926272a8341c52018654ca18d2c86ba662b.
+Based on chibicc commit 964b1d2a0e3e46882743f16703cb12b51e724179.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

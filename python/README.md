@@ -1,47 +1,41 @@
-# Lesson 23: Calls without arguments
+# Lesson 24: Calls with up to six arguments
 
-Original chibicc commit: [`30a39926272a8341c52018654ca18d2c86ba662b`](https://github.com/rui314/chibicc/commit/30a39926272a8341c52018654ca18d2c86ba662b).
+Original chibicc commit: [`964b1d2a0e3e46882743f16703cb12b51e724179`](https://github.com/rui314/chibicc/commit/964b1d2a0e3e46882743f16703cb12b51e724179).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-An identifier followed by `()` becomes a FUNCALL node rather than a variable
-lookup. Calls have integer result type and do not require declarations yet.
-Arguments are not accepted in this step.
+Calls accept comma-separated assignment expressions. FUNCALL keeps arguments
+in a Python list, replacing upstream's linked list. For `sub(5,3)`, the
+compiler evaluates 5 then 3, pushing each result. It pops them into `%rsi`
+and `%rdi`, clears `%rax`, and emits `call sub`.
 
-For `{return ret3();}`, the body contains:
-
-```asm
-  mov $0, %rax
-  call ret3
-  jmp .L.return
-```
-
-`call` pushes a return address and transfers execution to the linked function.
-Its result arrives in `%rax`. Setting `%rax` to zero supplies the ABI's vector
-argument count. The existing epilogue restores the frame and returns from main.
+The six integer/pointer argument registers are `%rdi`, `%rsi`, `%rdx`, `%rcx`,
+`%r8`, and `%r9`. Reverse popping maps the first argument to the first register.
+Saving values on the stack protects them while later arguments make nested
+calls. Binary operators still evaluate their right operand first; call
+arguments follow upstream's left-to-right order.
 
 ## Run it
 
 ```sh
-printf 'int ret3(void) { return 3; }\n' > /tmp/helper23.c
-python3 python/main.py '{return ret3();}' > /tmp/lesson23.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson23 /tmp/lesson23.s /tmp/helper23.c
-/tmp/lesson23
+printf 'int sub(int x,int y) { return x-y; }\n' > /tmp/helper24.c
+python3 python/main.py '{return sub(5,3);}' > /tmp/lesson24.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson24 /tmp/lesson24.s /tmp/helper24.c
+/tmp/lesson24
 echo $?
 ```
 
-The executable prints nothing; the last command displays exit status **3**.
-Use an interactive shell without `set -e` for nonzero example statuses.
-GCC compiles only the test helper and assembles/links the Python output.
+The last command shows **2**. The executable itself prints nothing. Use an
+interactive shell without `set -e` for nonzero statuses. GCC compiles the
+helper, then assembles and links our output.
 
-Tests include upstream's ret3/ret5 examples, calls in arithmetic, AST/result
-types, the emitted call sequence, and rejection of arguments. As in upstream,
-this step does not adjust alignment for calls inside temporary expressions;
-its trivial helper functions do not require an aligned stack. Unknown function
-names produce assembly but fail when linking unless a definition is supplied.
-All local slots are still eight bytes, and numeric tokens are checked to fit
-0 through 2147483647. No new Python/C behavioral differences are introduced.
+Tests include all five new upstream examples, deeply nested six-argument
+calls, noncommutative subtraction, assignment side effects, register order,
+and malformed separators. The port deliberately reports a compile error
+above six arguments; upstream would index beyond its register array. Calls
+still lack temporary-stack alignment adjustment at this original stage.
+Local slots remain eight bytes; numeric tokens retain the checked 32-bit range.
 
 ## Tests and attribution
 

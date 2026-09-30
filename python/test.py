@@ -32,6 +32,28 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_argument_calls(self):
+        helpers = """
+int add(int x,int y) {return x+y;} int sub(int x,int y) {return x-y;}
+int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
+"""
+        for source, expected in [
+            ("{return add(3,5);}", 8), ("{return sub(5,3);}", 2),
+            ("{return add6(1,2,3,4,5,6);}", 21),
+            ("{return add6(1,2,add6(3,4,5,6,7,8),9,10,11);}", 66),
+            ("{return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16);}", 136),
+            ("{int x=0; return sub(x=5,x=3);}", 2),
+        ]:
+            self.assert_program_returns(source, expected, helpers)
+        assembly = compile_program("{return add6(1,2,3,4,5,6);}").stdout
+        self.assertIn("  pop %r9\n  pop %r8\n  pop %rcx\n  pop %rdx\n"
+                      "  pop %rsi\n  pop %rdi\n", assembly)
+        result = compile_program("{return f(1,2,3,4,5,6,7);}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("at most 6 arguments", result.stderr)
+        for source in ["{return f(1 2);}", "{return f(1,);}"]:
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_zero_argument_calls(self):
         helpers = "int ret3(void) { return 3; } int ret5(void) { return 5; }"
         for source, expected in [("{return ret3();}", 3), ("{return ret5();}", 5),
@@ -42,7 +64,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertIs(call.ty, ty_int)
         assembly = compile_program("{return ret3();}").stdout
         self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
-        self.assertEqual(compile_program("{return ret3(1);}").returncode, 1)
+        self.assertEqual(compile_program("{return ret3(,);}").returncode, 1)
 
     def test_pointer_arithmetic(self):
         for source, expected in [

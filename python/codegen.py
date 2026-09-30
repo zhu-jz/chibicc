@@ -16,6 +16,7 @@ class CodeGenerator:
         self.assembly = []
         self.depth = 0
         self.label_count = 0
+        self.current_fn = None
 
     def push(self):
         self.assembly.append("  push %rax")
@@ -133,7 +134,7 @@ class CodeGenerator:
             return
         if node.kind == "RETURN":
             self.gen_expr(node.lhs)
-            self.assembly.append("  jmp .L.return")
+            self.assembly.append(f"  jmp .L.return.{self.current_fn.name}")
             return
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
@@ -141,17 +142,21 @@ class CodeGenerator:
         raise CompileError(node.tok.position, "invalid statement")
 
     def generate(self, program):
-        offset = 0
-        for var in program.locals:
-            offset += 8
-            var.offset = -offset
-        program.stack_size = (offset + 15) // 16 * 16
-
-        self.assembly = ["  .globl main", "main:", "  push %rbp",
-                         "  mov %rsp, %rbp", f"  sub ${program.stack_size}, %rsp"]
-        self.gen_stmt(program.body)
-        assert self.depth == 0
-        self.assembly.extend([".L.return:", "  mov %rbp, %rsp", "  pop %rbp", "  ret"])
+        self.assembly = []
+        for function in program:
+            offset = 0
+            for var in function.locals:
+                offset += 8
+                var.offset = -offset
+            function.stack_size = (offset + 15) // 16 * 16
+            self.current_fn = function
+            self.assembly.extend([f"  .globl {function.name}", f"{function.name}:",
+                                  "  push %rbp", "  mov %rsp, %rbp",
+                                  f"  sub ${function.stack_size}, %rsp"])
+            self.gen_stmt(function.body)
+            assert self.depth == 0
+            self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",
+                                  "  pop %rbp", "  ret"])
         return "\n".join(self.assembly)
 
 

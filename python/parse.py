@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Function, Node, Obj, Type
-from type import add_type, is_integer, pointer_to, ty_int
+from type import add_type, func_type, is_integer, pointer_to, ty_int
 
 
 def new_add(lhs, rhs, token):
@@ -226,7 +226,15 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected 'int'")
         return ty_int, position + 1
 
-    # declarator = "*"* identifier
+    # type-suffix = ("(" ")")?
+    def type_suffix(self, position, ty):
+        if self.tokens[position].text == "(":
+            if self.tokens[position + 1].text != ")":
+                raise CompileError(self.tokens[position + 1].position, "expected ')'")
+            return func_type(ty), position + 2
+        return ty, position
+
+    # declarator = "*"* identifier type-suffix
     def declarator(self, position, ty):
         while self.tokens[position].text == "*":
             ty = pointer_to(ty)
@@ -235,7 +243,8 @@ class Parser:
         if token.kind != "IDENT":
             raise CompileError(token.position, "expected a variable name")
         # Keep the declaration name without mutating the shared integer type.
-        return Type(ty.kind, ty.base, token), position + 1
+        ty, position = self.type_suffix(position + 1, ty)
+        return Type(ty.kind, ty.base, token, ty.return_ty), position
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
@@ -284,13 +293,23 @@ class Parser:
             raise CompileError(self.tokens[position].position, "expected ';'")
         return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
-    # program = "{" compound-stmt
+    def function(self, position):
+        ty, position = self.declspec(position)
+        ty, position = self.declarator(position, ty)
+        self.locals = []
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position].position, "expected '{'")
+        body, position = self.compound_stmt(position + 1)
+        return Function(body, self.locals, name=ty.name.text), position
+
+    # program = function-definition*
     def parse(self):
-        if self.tokens[0].text != "{":
-            raise CompileError(self.tokens[0].position, "expected '{'")
-        body, position = self.compound_stmt(1)
-        # This original commit does not check for tokens after the outer block.
-        return Function(body, self.locals)
+        functions = []
+        position = 0
+        while self.tokens[position].kind != "EOF":
+            function, position = self.function(position)
+            functions.append(function)
+        return functions
 
 
 def parse(tokens):

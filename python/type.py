@@ -18,6 +18,10 @@ def pointer_to(base):
     return Type("PTR", base)
 
 
+def func_type(return_ty):
+    return Type("FUNC", return_ty=return_ty)
+
+
 def add_type(node):
     if node is None or node.ty is not None:
         return

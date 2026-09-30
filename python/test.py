@@ -15,7 +15,7 @@ from type import ty_int
 
 COMPILER = Path(__file__).with_name("main.py")
 PROLOGUE = "  .globl main\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
-EPILOGUE = ".L.return:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
+EPILOGUE = ".L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
 def compile_program(*arguments):
@@ -27,8 +27,8 @@ def compile_program(*arguments):
 
 
 def parse_body(source):
-    """Wrap earlier lesson fixtures in the now-required outer block."""
-    return parse(tokenize("{" + source + "}"))
+    """Parse a main function containing a statement-body fixture."""
+    return parse(tokenize('int main(){' + source + "}"))[0]
 
 
 class ExpressionCompilerTests(unittest.TestCase):
@@ -38,42 +38,42 @@ int add(int x,int y) {return x+y;} int sub(int x,int y) {return x-y;}
 int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 """
         for source, expected in [
-            ("{return add(3,5);}", 8), ("{return sub(5,3);}", 2),
-            ("{return add6(1,2,3,4,5,6);}", 21),
-            ("{return add6(1,2,add6(3,4,5,6,7,8),9,10,11);}", 66),
-            ("{return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16);}", 136),
-            ("{int x=0; return sub(x=5,x=3);}", 2),
+            ('int main(){return add(3,5);}', 8), ('int main(){return sub(5,3);}', 2),
+            ('int main(){return add6(1,2,3,4,5,6);}', 21),
+            ('int main(){return add6(1,2,add6(3,4,5,6,7,8),9,10,11);}', 66),
+            ('int main(){return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16);}', 136),
+            ('int main(){int x=0; return sub(x=5,x=3);}', 2),
         ]:
             self.assert_program_returns(source, expected, helpers)
-        assembly = compile_program("{return add6(1,2,3,4,5,6);}").stdout
+        assembly = compile_program('int main(){return add6(1,2,3,4,5,6);}').stdout
         self.assertIn("  pop %r9\n  pop %r8\n  pop %rcx\n  pop %rdx\n"
                       "  pop %rsi\n  pop %rdi\n", assembly)
-        result = compile_program("{return f(1,2,3,4,5,6,7);}")
+        result = compile_program('int main(){return f(1,2,3,4,5,6,7);}')
         self.assertEqual(result.returncode, 1)
         self.assertIn("at most 6 arguments", result.stderr)
-        for source in ["{return f(1 2);}", "{return f(1,);}"]:
+        for source in ['int main(){return f(1 2);}', 'int main(){return f(1,);}']:
             self.assertEqual(compile_program(source).returncode, 1)
 
     def test_zero_argument_calls(self):
         helpers = "int ret3(void) { return 3; } int ret5(void) { return 5; }"
-        for source, expected in [("{return ret3();}", 3), ("{return ret5();}", 5),
-                                 ("{return ret3()+ret5();}", 8)]:
+        for source, expected in [('int main(){return ret3();}', 3), ('int main(){return ret5();}', 5),
+                                 ('int main(){return ret3()+ret5();}', 8)]:
             self.assert_program_returns(source, expected, helpers)
         call = parse_body("return ret3();").body.body[0].lhs
         self.assertEqual(call.funcname, "ret3")
         self.assertIs(call.ty, ty_int)
-        assembly = compile_program("{return ret3();}").stdout
+        assembly = compile_program('int main(){return ret3();}').stdout
         self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
-        self.assertEqual(compile_program("{return ret3(,);}").returncode, 1)
+        self.assertEqual(compile_program('int main(){return ret3(,);}').returncode, 1)
 
     def test_pointer_arithmetic(self):
         for source, expected in [
-            ("{int x=3; int y=5; return *(1+&x);}", 5),
-            ("{int x=3; int y=5; return &y-&x;}", 1),
-            ("{int x=3; int y=5; return &x-&y;}", 255),
-            ("{int x=3; return (&x+3)-(&x+1);}", 2),
-            ("{int x=3; return (&x-2)-&x;}", 254),
-            ("{int x=3; int y=5; int *p=&x; return *(p+1);}", 5),
+            ('int main(){int x=3; int y=5; return *(1+&x);}', 5),
+            ('int main(){int x=3; int y=5; return &y-&x;}', 1),
+            ('int main(){int x=3; int y=5; return &x-&y;}', 255),
+            ('int main(){int x=3; return (&x+3)-(&x+1);}', 2),
+            ('int main(){int x=3; return (&x-2)-&x;}', 254),
+            ('int main(){int x=3; int y=5; int *p=&x; return *(p+1);}', 5),
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
@@ -95,16 +95,16 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_address_and_dereference(self):
         for source, expected in [
-            ("{ int x=3; return *&x; }", 3),
-            ("{ int x=3; int *y=&x; int **z=&y; return **z; }", 3),
-            ("{ int x=3; int y=5; return *(&x+1); }", 5),
-            ("{ int x=3; int y=5; return *(&y-1); }", 3),
-            ("{ int x=3; int *y=&x; *y=5; return x; }", 5),
-            ("{ int x=3; int y=5; *(&x+1)=7; return y; }", 7),
-            ("{ int x=3; int y=5; *(&y-1)=7; return x; }", 7),
-            ("{ int x=1; int *p=&x; int **q=&p; **q=9; return x; }", 9),
-            ("{ int x=1; *&x=7; return x; }", 7),
-            ("{ int x=3; int *p=&x; return &*p==p; }", 1),
+            ('int main(){ int x=3; return *&x; }', 3),
+            ('int main(){ int x=3; int *y=&x; int **z=&y; return **z; }', 3),
+            ('int main(){ int x=3; int y=5; return *(&x+1); }', 5),
+            ('int main(){ int x=3; int y=5; return *(&y-1); }', 3),
+            ('int main(){ int x=3; int *y=&x; *y=5; return x; }', 5),
+            ('int main(){ int x=3; int y=5; *(&x+1)=7; return y; }', 7),
+            ('int main(){ int x=3; int y=5; *(&y-1)=7; return x; }', 7),
+            ('int main(){ int x=1; int *p=&x; int **q=&p; **q=9; return x; }', 9),
+            ('int main(){ int x=1; *&x=7; return x; }', 7),
+            ('int main(){ int x=3; int *p=&x; return &*p==p; }', 1),
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
@@ -113,16 +113,16 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.kind, "*")
         self.assertEqual(expression.rhs.kind, "DEREF")
         self.assertEqual(expression.rhs.tok.text, "*")
-        result = compile_program("{int x; return &x;}")
+        result = compile_program('int main(){int x; return &x;}')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
-                         "  lea -8(%rbp), %rax\n  jmp .L.return\n" + EPILOGUE)
-        result = compile_program("{int x; return *&x;}")
+                         "  lea -8(%rbp), %rax\n  jmp .L.return.main\n" + EPILOGUE)
+        result = compile_program('int main(){int x; return *&x;}')
         self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
                          "  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"
-                         "  jmp .L.return\n" + EPILOGUE)
-        for source, position in [("{return &1;}", 9),
-                                 ("{return &(1+2);}", 11)]:
+                         "  jmp .L.return.main\n" + EPILOGUE)
+        for source, position in [('int main(){return &1;}', 19),
+                                 ('int main(){return &(1+2);}', 21)]:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout, "")
@@ -130,12 +130,12 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                              + "^ not an lvalue\n")
 
     def test_representative_tokens(self):
-        source = "{return -(1+2)*3>4;}"
+        source = 'int main(){return -(1+2)*3>4;}'
         tokens = tokenize(source)
-        program = parse(tokens)
+        program = parse(tokens)[0]
         statement = program.body.body[0]
-        self.assertIs(program.body.tok, tokens[1])
-        self.assertIs(statement.tok, tokens[1])
+        self.assertIs(program.body.tok, tokens[5])
+        self.assertIs(statement.tok, tokens[5])
         comparison = statement.lhs
         self.assertEqual(comparison.kind, "<")
         self.assertEqual(comparison.tok.text, ">")
@@ -144,8 +144,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(multiply.lhs.tok.position, source.index("-"))
         self.assertEqual(multiply.lhs.lhs.tok.position, source.index("+"))
         self.assertEqual(multiply.rhs.tok.text, "3")
-        for source, position in [("{1=2;}", 1), ("{(1+2)=3;}", 3),
-                                 ("{int a; -a=3;}", 8), ("{(2>1)=3;}", 3)]:
+        for source, position in [('int main(){1=2;}', 11), ('int main(){(1+2)=3;}', 13),
+                                 ('int main(){int a; -a=3;}', 18), ('int main(){(2>1)=3;}', 13)]:
             with self.subTest(source=source):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 1)
@@ -165,11 +165,11 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_while(self):
         for source, expected in [
-            ('{int i; i=0; while(i<10) {i=i+1;} return i;}', 10),
-            ("{while(0) return 9; return 3;}", 3),
-            ("{while(-2) return 7;}", 7),
-            ('{int i, sum; i=3; sum=0; while(i) {sum=sum+i; i=i-1;} return sum;}', 6),
-            ('{int i, j; i=0; while(i<3) {for(j=0;j<2;j=j+1); i=i+1;} return i+j;}', 5),
+            ('int main(){int i; i=0; while(i<10) {i=i+1;} return i;}', 10),
+            ('int main(){while(0) return 9; return 3;}', 3),
+            ('int main(){while(-2) return 7;}', 7),
+            ('int main(){int i, sum; i=3; sum=0; while(i) {sum=sum+i; i=i-1;} return sum;}', 6),
+            ('int main(){int i, j; i=0; while(i<3) {for(j=0;j<2;j=j+1); i=i+1;} return i+j;}', 5),
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
@@ -178,9 +178,9 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(node.kind, "FOR")
         self.assertIsNone(node.init)
         self.assertIsNone(node.inc)
-        expected = CodeGenerator().generate(parse_body("for(;1;) return 3;"))
-        self.assertEqual(CodeGenerator().generate(program), expected)
-        result = compile_program("{while() ;}")
+        expected = CodeGenerator().generate([parse_body("for(;1;) return 3;")])
+        self.assertEqual(CodeGenerator().generate([program]), expected)
+        result = compile_program('int main(){while() ;}')
         self.assertEqual(result.returncode, 1)
         self.assertIn("expected an expression", result.stderr)
 
@@ -206,14 +206,14 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_for(self):
         cases = [
-            ('{int i, j;  i=0; j=0; for(i=0;i<=10;i=i+1) j=i+j; return j; }', 55),
-            ("{ for(;;) {return 3;} return 5; }", 3),
-            ('{int i;  i=4; for(;i<4;i=i+1) return 9; return i; }', 4),
-            ('{int i;  i=0; for(;i<3;) i=i+1; return i; }', 3),
-            ('{int i;  i=0; for(;;i=i+1) if(i==4) return i; }', 4),
-            ('{int sum, i, j;  sum=0; for(i=0;i<3;i=i+1) for(j=0;j<2;j=j+1) sum=sum+1; return sum; }', 6),
-            ('{int i;  for(i=0;i<3;i=i+1); return i; }', 3),
-            ('{int format;  format=7; return format; }', 7),
+            ('int main(){int i, j;  i=0; j=0; for(i=0;i<=10;i=i+1) j=i+j; return j; }', 55),
+            ('int main(){ for(;;) {return 3;} return 5; }', 3),
+            ('int main(){int i;  i=4; for(;i<4;i=i+1) return 9; return i; }', 4),
+            ('int main(){int i;  i=0; for(;i<3;) i=i+1; return i; }', 3),
+            ('int main(){int i;  i=0; for(;;i=i+1) if(i==4) return i; }', 4),
+            ('int main(){int sum, i, j;  sum=0; for(i=0;i<3;i=i+1) for(j=0;j<2;j=j+1) sum=sum+1; return sum; }', 6),
+            ('int main(){int i;  for(i=0;i<3;i=i+1); return i; }', 3),
+            ('int main(){int format;  format=7; return format; }', 7),
         ]
         for source, expected in cases:
             with self.subTest(source=source):
@@ -223,14 +223,14 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(node.init, Node("BLOCK"))
         self.assertIsNone(node.cond)
         self.assertIsNone(node.inc)
-        self.assertEqual(CodeGenerator().generate(program) + "\n", PROLOGUE + "  sub $0, %rsp\n"
-                         ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return\n"
+        self.assertEqual(CodeGenerator().generate([program]) + "\n", PROLOGUE + "  sub $0, %rsp\n"
+                         ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
                          "  jmp .L.begin.1\n.L.end.1:\n" + EPILOGUE)
         for source, position, message in [
-            ("{for 1;}", 5, "expected '('"),
-            ("{for(1 2;3) ;}", 7, "expected ';'"),
-            ("{for(;1 2;) ;}", 8, "expected ';'"),
-            ("{for(;;1 2) ;}", 9, "expected ')'"),
+            ('int main(){for 1;}', 15, "expected '('"),
+            ('int main(){for(1 2;3) ;}', 17, "expected ';'"),
+            ('int main(){for(;1 2;) ;}', 18, "expected ';'"),
+            ('int main(){for(;;1 2) ;}', 19, "expected ')'"),
         ]:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
@@ -243,57 +243,50 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(outer.cond, Node("NUM", value=1))
         self.assertIsNone(outer.els)
         self.assertEqual(outer.then.els, Node("RETURN", lhs=Node("NUM", value=3)))
-        assembly = CodeGenerator().generate(program)
+        assembly = CodeGenerator().generate([program])
         for label in (".L.else.1:", ".L.end.1:", ".L.else.2:", ".L.end.2:"):
             self.assertEqual(assembly.count(label), 1)
 
     def test_null_statements(self):
-        program = parse(tokenize("{ ;;; return 5; }"))
+        program = parse(tokenize('int main(){ ;;; return 5; }'))[0]
         self.assertEqual(program.body, Node("BLOCK", body=[
             Node("BLOCK"), Node("BLOCK"), Node("BLOCK"),
             Node("RETURN", lhs=Node("NUM", value=5)),
         ]))
-        for source in ["{ ;;; return 5; }", "{ {}; return 5;; }", "{ return 5; ;;; }"]:
+        for source in ['int main(){ ;;; return 5; }', 'int main(){ {}; return 5;; }', 'int main(){ return 5; ;;; }']:
             with self.subTest(source=source):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
-                                 "  mov $5, %rax\n  jmp .L.return\n" + EPILOGUE)
+                                 "  mov $5, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         # A program containing only null statements does not set a return value.
-        result = compile_program("{;;;}")
+        result = compile_program('int main(){;;;}')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_nested_block_tree(self):
-        program = parse(tokenize("{ {1;} return 2; }"))
+        program = parse(tokenize('int main(){ {1;} return 2; }'))[0]
         self.assertEqual(program.body, Node("BLOCK", body=[
             Node("BLOCK", body=[Node("EXPR_STMT", lhs=Node("NUM", value=1))]),
             Node("RETURN", lhs=Node("NUM", value=2)),
         ]))
-        result = compile_program("{ {1;} return 2; }")
+        result = compile_program('int main(){ {1;} return 2; }')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n"
-                         "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return\n" + EPILOGUE)
+                         "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return.main\n" + EPILOGUE)
 
-    def test_block_errors_and_upstream_trailing_tokens(self):
-        cases = [
-            ("return 1;", "return 1;\n^ expected '{'\n"),
-            ("", "\n^ expected '{'\n"),
-            ("{", "{\n ^ expected an expression\n"),
-            ("{{}", "{{}\n   ^ expected an expression\n"),
-            ("{return 1}", "{return 1}\n         ^ expected ';'\n"),
-        ]
-        for source, expected in cases:
-            with self.subTest(source=source):
-                result = compile_program(source)
-                self.assertEqual(result.returncode, 1)
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr, expected)
-        # Upstream tokenizes everything, but parses only the first outer block.
-        normal = compile_program("{return 3;}")
-        trailing = compile_program("{return 3;} return 9;")
-        self.assertEqual(trailing.returncode, 0, trailing.stderr)
-        self.assertEqual(trailing.stdout, normal.stdout)
+    def test_function_definitions(self):
+        source = "int main(){return ret32();} int ret32(){return 32;}"
+        self.assert_program_returns(source, 32)
+        self.assert_program_returns("int f(){int x=4; return x;} int main(){int x=3; return f()+x;}", 7)
+        assembly = compile_program(source).stdout
+        self.assertIn(".L.return.main:", assembly)
+        self.assertIn(".L.return.ret32:", assembly)
+        self.assertEqual(compile_program("{return 1;}").returncode, 1)
+        self.assertEqual(compile_program("int main(){} return 3;").returncode, 1)
+        self.assertEqual(compile_program("int main(){return 1}").returncode, 1)
+        self.assertEqual(compile_program("").stdout, "")
+        self.assertEqual(parse(tokenize("")), [])
 
     def test_return_tree(self):
         program = parse_body("return 1+2; 3;")
@@ -310,7 +303,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIs(program.body.body[2].lhs.lhs.var, foo)
         self.assertIs(program.body.body[1].body[0].lhs.lhs.var, bar)
         self.assertIs(program.body.body[2].lhs.rhs.var, bar)
-        CodeGenerator().generate(program)
+        CodeGenerator().generate([program])
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-8, -16, 16))
         another = parse_body("int foo=1; return foo;")
         self.assertIsNot(another.locals[0], foo)
@@ -320,7 +313,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("int a,b,c,d;", [-8,-16,-24,-32], 32),
         ]:
             program = parse_body(source)
-            assembly = CodeGenerator().generate(program)
+            assembly = CodeGenerator().generate([program])
             self.assertEqual([var.offset for var in program.locals], offsets)
             self.assertEqual(program.stack_size, size)
             self.assertIn(f"  sub ${size}, %rsp\n", assembly)
@@ -332,7 +325,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             Node("EXPR_STMT", lhs=Node("+", Node("NUM", value=2), Node("NUM", value=3))),
         ])
         generator = CodeGenerator()
-        generator.generate(statements)
+        generator.generate([statements])
         self.assertEqual(generator.depth, 0)
 
     def test_empty_program(self):
@@ -341,7 +334,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
                 self.assertEqual(parse_body(source), Function(Node("BLOCK"), []))
-                result = compile_program("{" + source + "}")
+                result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 self.assertEqual(result.stdout, PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
@@ -415,7 +408,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 statements = parse_body(source)
                 self.assertEqual(statements.body.body, [Node("EXPR_STMT", lhs=expected)])
                 generator = CodeGenerator()
-                generator.generate(statements)
+                generator.generate([statements])
                 self.assertEqual(generator.depth, 0)
 
     def test_exact_assembly(self):
@@ -425,9 +418,9 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
              ".L.else.1:\n  mov $3, %rax\n.L.end.1:\n"),
             ("if(0) ;", "  mov $0, %rax\n  cmp $0, %rax\n"
              "  je  .L.else.1\n  jmp .L.end.1\n.L.else.1:\n.L.end.1:\n"),
-            ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return\n  mov $42, %rax\n"),
-            ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return\n"
-             "  mov $2, %rax\n  jmp .L.return\n"),
+            ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return.main\n  mov $42, %rax\n"),
+            ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return.main\n"
+             "  mov $2, %rax\n  jmp .L.return.main\n"),
             ("int a; a=3; a;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $3, %rax\n"
              "  pop %rdi\n  mov %rax, (%rdi)\n  lea -8(%rbp), %rax\n  mov (%rax), %rax\n"),
             ("int z; z=5;", "  lea -8(%rbp), %rax\n  push %rax\n  mov $5, %rax\n"
@@ -463,7 +456,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]
         for source, instructions in cases:
             with self.subTest(source=source):
-                result = compile_program("{" + source + "}")
+                result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
                 stack_size = 16 if source in ("int a; a=3; a;", "int z; z=5;") else 0
@@ -472,242 +465,242 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
     def test_executable_exit_status(self):
         # All current upstream examples and earlier arithmetic/control regressions.
         cases = [
-            ('{ return 0; }', 0),
-            ('{ return 42; }', 42),
-            ('{ return 5+20-4; }', 21),
-            ('{ return  12 + 34 - 5 ; }', 41),
-            ('{ return 5+6*7; }', 47),
-            ('{ return 5*(9-6); }', 15),
-            ('{ return (3+5)/2; }', 4),
-            ('{ return -10+20; }', 10),
-            ('{ return - -10; }', 10),
-            ('{ return - - +10; }', 10),
-            ('{ return 0==1; }', 0),
-            ('{ return 42==42; }', 1),
-            ('{ return 0!=1; }', 1),
-            ('{ return 42!=42; }', 0),
-            ('{ return 0<1; }', 1),
-            ('{ return 1<1; }', 0),
-            ('{ return 2<1; }', 0),
-            ('{ return 0<=1; }', 1),
-            ('{ return 1<=1; }', 1),
-            ('{ return 2<=1; }', 0),
-            ('{ return 1>0; }', 1),
-            ('{ return 1>1; }', 0),
-            ('{ return 1>2; }', 0),
-            ('{ return 1>=0; }', 1),
-            ('{ return 1>=1; }', 1),
-            ('{ return 1>=2; }', 0),
-            ('{ int a; a=3; return a; }', 3),
-            ('{ int a=3; return a; }', 3),
-            ('{ int a=3; int z=5; return a+z; }', 8),
-            ('{ int a; int b; a=b=3; return a+b; }', 6),
-            ('{ int foo=3; return foo; }', 3),
-            ('{ int foo123=3; int bar=5; return foo123+bar; }', 8),
-            ('{ return 1; 2; 3; }', 1),
-            ('{ 1; return 2; 3; }', 2),
-            ('{ 1; 2; return 3; }', 3),
-            ('{ {1; {2;} return 3;} }', 3),
-            ('{ ;;; return 5; }', 5),
-            ('{ if (0) return 2; return 3; }', 3),
-            ('{ if (1-1) return 2; return 3; }', 3),
-            ('{ if (1) return 2; return 3; }', 2),
-            ('{ if (2-1) return 2; return 3; }', 2),
-            ('{ if (0) { 1; 2; return 3; } else { return 4; } }', 4),
-            ('{ if (1) { 1; 2; return 3; } else { return 4; } }', 3),
-            ('{ int i=0; int j=0; for (i=0; i<=10; i=i+1) j=i+j; return j; }', 55),
-            ('{ for (;;) return 3; return 5; }', 3),
-            ('{ int i=0; while(i<10) i=i+1; return i; }', 10),
-            ('{ int i=0; int j=0; while(i<=10) {j=i+j; i=i+1;} return j; }', 55),
-            ('{ int x=3; return *&x; }', 3),
-            ('{ int x=3; int *y=&x; int **z=&y; return **z; }', 3),
-            ('{ int x=3; int y=5; return *(&x+1); }', 5),
-            ('{ int x=3; int y=5; return *(&y-1); }', 3),
-            ('{ int x=3; int y=5; return *(&x-(-1)); }', 5),
-            ('{ int x=3; int *y=&x; *y=5; return x; }', 5),
-            ('{ int x=3; int y=5; *(&x+1)=7; return y; }', 7),
-            ('{ int x=3; int y=5; *(&y-2+1)=7; return x; }', 7),
-            ('{ int x=3; return (&x+2)-&x+3; }', 5),
-            ('{ int x, y; x=3; y=5; return x+y; }', 8),
-            ('{ int x=3, y=5; return x+y; }', 8),
-            ('{if (0) return 2; return 3;}', 3),
-            ('{if (1-1) return 2; return 3;}', 3),
-            ('{if (1) return 2; return 3;}', 2),
-            ('{if (2-1) return 2; return 3;}', 2),
-            ('{if (0) {1; 2; return 3;} else {return 4;}}', 4),
-            ('{if (1) {1; 2; return 3;} else {return 4;}}', 3),
-            ('{if(-3) return 7; else return 9;}', 7),
-            ('{if(256) return 7; return 9;}', 7),
-            ('{int a; a=0; if(1) a=3; else a=8; return a;}', 3),
-            ('{int a; a=0; if(0) a=3; else a=8; return a;}', 8),
-            ('{if(1) if(0) return 2; else return 3; return 4;}', 3),
-            ('{if(0) if(1) return 2; else return 3; return 4;}', 4),
-            ('{if(0) {if(1) return 2;} else return 3;}', 3),
-            ('{if(0) return 1; else if(0) return 2; else return 3;}', 3),
-            ('{int a; a=0; if(a=5) a=a+2; if(a==7) a=a*2; return a;}', 14),
-            ('{if(1); else return 2; return 3;}', 3),
-            ('{int ifx, elsewhere; ifx=3; elsewhere=4; if(ifx<elsewhere) return 8; return 9;}', 8),
-            ('{;;; return 5;}', 5),
-            ('{1;;}', 1),
-            ('{int a; a=3;; {;; a=a+2;;}; return a;;}', 5),
-            ('{return 7;;;;}', 7),
-            ('{{1; {2;} return 3;}}', 3),
-            ('{{} return 7;}', 7),
-            ('{{{return 5;}} return 9;}', 5),
-            ('{int a, b; a=1; {a=4; b=3;} return a+b;}', 7),
-            ('{int a; a=2; {a=a*3; {a=a+4;}} return a;}', 10),
-            ('{{{{}}} return 8;}', 8),
-            ('{return 0;}', 0),
-            ('{return 42;}', 42),
-            ('{return 5+20-4;}', 21),
-            ('{return  12 + 34 - 5 ;}', 41),
-            ('{return 5+6*7;}', 47),
-            ('{return 5*(9-6);}', 15),
-            ('{return (3+5)/2;}', 4),
-            ('{return -10+20;}', 10),
-            ('{return - -10;}', 10),
-            ('{return - - +10;}', 10),
-            ('{return 0==1;}', 0),
-            ('{return 42==42;}', 1),
-            ('{return 0!=1;}', 1),
-            ('{return 42!=42;}', 0),
-            ('{return 0<1;}', 1),
-            ('{return 1<1;}', 0),
-            ('{return 2<1;}', 0),
-            ('{return 0<=1;}', 1),
-            ('{return 1<=1;}', 1),
-            ('{return 2<=1;}', 0),
-            ('{return 1>0;}', 1),
-            ('{return 1>1;}', 0),
-            ('{return 1>2;}', 0),
-            ('{return 1>=0;}', 1),
-            ('{return 1>=1;}', 1),
-            ('{return 1>=2;}', 0),
-            ('{int a; a=3; return a;}', 3),
-            ('{int a, z; a=3; z=5; return a+z;}', 8),
-            ('{int a, b; a=b=3; return a+b;}', 6),
-            ('{int foo; foo=3; return foo;}', 3),
-            ('{int foo123, bar; foo123=3; bar=5; return foo123+bar;}', 8),
-            ('{return 1; 2; 3;}', 1),
-            ('{1; return 2; 3;}', 2),
-            ('{1; 2; return 3;}', 3),
-            ('{return 1; return 2;}', 1),
-            ('{int foo; foo=7; return (foo+5)*(foo-2); foo=99;}', 60),
-            ('{int total; return total=9; total=0;}', 9),
-            ('{int returnx, return_, Return; returnx=3; return_=4; Return=5; return returnx+return_+Return;}', 12),
-            ('{return(3+4);}', 7),
-            ('{return -7;}', 249),
-            ('{int foo; foo=3; foo;}', 3),
-            ('{int foo123, bar; foo123=3; bar=5; foo123+bar;}', 8),
-            ('{int foo, foo123; foo=3; foo123=7; foo+foo123;}', 10),
-            ('{int Foo, foo; Foo=3; foo=7; Foo+foo;}', 10),
-            ('{int _, _value1; _=2; _value1=5; _+_value1;}', 7),
-            ('{int total, left, right; total=left=right=4; total+left+right;}', 12),
-            ('{int count; count=3; count=count+4; count;}', 7),
-            ('{int alpha, beta, gamma; alpha=1; beta=2; gamma=3; alpha+beta+gamma;}', 6),
-            ('{int a; a=3; a;}', 3),
-            ('{int a, z; a=3; z=5; a+z;}', 8),
-            ('{int a, b; a=b=3; a+b;}', 6),
-            ('{int a; a=1; a=a+2; a;}', 3),
-            ('{int a, b; a=4; b=7; a=9; b;}', 7),
-            ('{int a; a=5==5; a;}', 1),
-            ('{int a; a=3; (a=7)+2;}', 9),
-            ('{int a, b; a=-(3+4); b=2; a/b;}', 253),
-            ('{int a; (a)=6; a;}', 6),
-            ('{int a; a=65536*65536; a/65536/65536;}', 1),
-            ('{int a, z; a=2; z=8; (a+z)*(z-a); a+z;}', 10),
-            ('{1; 2; 3;}', 3),
-            ('{42; 0;}', 0),
-            ('{1+2; 3*(4+5); (10-3)/2;}', 3),
-            ('{5<6; -7;}', 249),
-            ('{10;\n 20+22;\n}', 42),
-            ('{0;}', 0),
-            ('{42;}', 42),
-            ('{5+20-4;}', 21),
-            ('{ 12 + 34 - 5 ;}', 41),
-            ('{5+6*7;}', 47),
-            ('{5*(9-6);}', 15),
-            ('{(3+5)/2;}', 4),
-            ('{255;}', 255),
-            ('{256;}', 0),
-            ('{ 0042 ;}', 42),
-            ('{2147483647;}', 255),
-            ('{10-3-2;}', 5),
-            ('{0-1;}', 255),
-            ('{255+2;}', 1),
-            ('{5+ 20-4;}', 21),
-            ('{5 +20-4;}', 21),
-            ('{\t12\n+\r34\x0b-\x0c5 ;}', 41),
-            ('{1\u2003+\u20032;}', 3),
-            ('{1+2147483647;}', 0),
-            ('{0-2147483647-1;}', 0),
-            ('{(5+6)*7;}', 77),
-            ('{20/3;}', 6),
-            ('{20/2/2;}', 5),
-            ('{20/(2/2);}', 20),
-            ('{24/3*2;}', 16),
-            ('{24/(3*2);}', 4),
-            ('{20-3*4+8/2;}', 12),
-            ('{((2+3)*(4+(8/2)));}', 40),
-            ('{((42));}', 42),
-            ('{(0-7)/2;}', 253),
-            ('{7/(0-2);}', 253),
-            ('{(0-7)/(0-2);}', 3),
-            ('{(0-3)*4;}', 244),
-            ('{100/(2+3*(4-2));}', 12),
-            ('{65536*65536/65536/65536;}', 1),
-            ('{-10+20;}', 10),
-            ('{- -10;}', 10),
-            ('{- - +10;}', 10),
-            ('{-1;}', 255),
-            ('{+42;}', 42),
-            ('{1+-2;}', 255),
-            ('{1--2;}', 3),
-            ('{1++2;}', 3),
-            ('{1 + +2;}', 3),
-            ('{-(3+4)*2;}', 242),
-            ('{2*-(3+4);}', 242),
-            ('{-20/3;}', 250),
-            ('{20/-3;}', 250),
-            ('{-20/-3;}', 6),
-            ('{3*-4+15;}', 3),
-            ('{-(-(-5));}', 251),
-            ('{-2147483647-1;}', 0),
-            ('{0==1;}', 0),
-            ('{42==42;}', 1),
-            ('{0!=1;}', 1),
-            ('{42!=42;}', 0),
-            ('{0<1;}', 1),
-            ('{1<1;}', 0),
-            ('{2<1;}', 0),
-            ('{0<=1;}', 1),
-            ('{1<=1;}', 1),
-            ('{2<=1;}', 0),
-            ('{1>0;}', 1),
-            ('{1>1;}', 0),
-            ('{1>2;}', 0),
-            ('{1>=0;}', 1),
-            ('{1>=1;}', 1),
-            ('{1>=2;}', 0),
-            ('{-1<0;}', 1),
-            ('{0>-1;}', 1),
-            ('{-2<=-1;}', 1),
-            ('{-1>=0;}', 0),
-            ('{2147483647+1>0;}', 1),
-            ('{5+6*7==47;}', 1),
-            ('{5+6*7!=47;}', 0),
-            ('{5==2+3;}', 1),
-            ('{3<4==1;}', 1),
-            ('{3==4<5;}', 0),
-            ('{1<2<3;}', 1),
-            ('{3>2>0;}', 1),
-            ('{(3>2)+4;}', 5),
-            ('{(5>=5)*7;}', 7),
-            ('{1==1==1;}', 1),
-            ('{2==2==2;}', 0),
-            ("{" + "".join(f"int var{i}={i};" for i in range(30))
+            ('int main(){ return 0; }', 0),
+            ('int main(){ return 42; }', 42),
+            ('int main(){ return 5+20-4; }', 21),
+            ('int main(){ return  12 + 34 - 5 ; }', 41),
+            ('int main(){ return 5+6*7; }', 47),
+            ('int main(){ return 5*(9-6); }', 15),
+            ('int main(){ return (3+5)/2; }', 4),
+            ('int main(){ return -10+20; }', 10),
+            ('int main(){ return - -10; }', 10),
+            ('int main(){ return - - +10; }', 10),
+            ('int main(){ return 0==1; }', 0),
+            ('int main(){ return 42==42; }', 1),
+            ('int main(){ return 0!=1; }', 1),
+            ('int main(){ return 42!=42; }', 0),
+            ('int main(){ return 0<1; }', 1),
+            ('int main(){ return 1<1; }', 0),
+            ('int main(){ return 2<1; }', 0),
+            ('int main(){ return 0<=1; }', 1),
+            ('int main(){ return 1<=1; }', 1),
+            ('int main(){ return 2<=1; }', 0),
+            ('int main(){ return 1>0; }', 1),
+            ('int main(){ return 1>1; }', 0),
+            ('int main(){ return 1>2; }', 0),
+            ('int main(){ return 1>=0; }', 1),
+            ('int main(){ return 1>=1; }', 1),
+            ('int main(){ return 1>=2; }', 0),
+            ('int main(){ int a; a=3; return a; }', 3),
+            ('int main(){ int a=3; return a; }', 3),
+            ('int main(){ int a=3; int z=5; return a+z; }', 8),
+            ('int main(){ int a; int b; a=b=3; return a+b; }', 6),
+            ('int main(){ int foo=3; return foo; }', 3),
+            ('int main(){ int foo123=3; int bar=5; return foo123+bar; }', 8),
+            ('int main(){ return 1; 2; 3; }', 1),
+            ('int main(){ 1; return 2; 3; }', 2),
+            ('int main(){ 1; 2; return 3; }', 3),
+            ('int main(){ {1; {2;} return 3;} }', 3),
+            ('int main(){ ;;; return 5; }', 5),
+            ('int main(){ if (0) return 2; return 3; }', 3),
+            ('int main(){ if (1-1) return 2; return 3; }', 3),
+            ('int main(){ if (1) return 2; return 3; }', 2),
+            ('int main(){ if (2-1) return 2; return 3; }', 2),
+            ('int main(){ if (0) { 1; 2; return 3; } else { return 4; } }', 4),
+            ('int main(){ if (1) { 1; 2; return 3; } else { return 4; } }', 3),
+            ('int main(){ int i=0; int j=0; for (i=0; i<=10; i=i+1) j=i+j; return j; }', 55),
+            ('int main(){ for (;;) return 3; return 5; }', 3),
+            ('int main(){ int i=0; while(i<10) i=i+1; return i; }', 10),
+            ('int main(){ int i=0; int j=0; while(i<=10) {j=i+j; i=i+1;} return j; }', 55),
+            ('int main(){ int x=3; return *&x; }', 3),
+            ('int main(){ int x=3; int *y=&x; int **z=&y; return **z; }', 3),
+            ('int main(){ int x=3; int y=5; return *(&x+1); }', 5),
+            ('int main(){ int x=3; int y=5; return *(&y-1); }', 3),
+            ('int main(){ int x=3; int y=5; return *(&x-(-1)); }', 5),
+            ('int main(){ int x=3; int *y=&x; *y=5; return x; }', 5),
+            ('int main(){ int x=3; int y=5; *(&x+1)=7; return y; }', 7),
+            ('int main(){ int x=3; int y=5; *(&y-2+1)=7; return x; }', 7),
+            ('int main(){ int x=3; return (&x+2)-&x+3; }', 5),
+            ('int main(){ int x, y; x=3; y=5; return x+y; }', 8),
+            ('int main(){ int x=3, y=5; return x+y; }', 8),
+            ('int main(){if (0) return 2; return 3;}', 3),
+            ('int main(){if (1-1) return 2; return 3;}', 3),
+            ('int main(){if (1) return 2; return 3;}', 2),
+            ('int main(){if (2-1) return 2; return 3;}', 2),
+            ('int main(){if (0) {1; 2; return 3;} else {return 4;}}', 4),
+            ('int main(){if (1) {1; 2; return 3;} else {return 4;}}', 3),
+            ('int main(){if(-3) return 7; else return 9;}', 7),
+            ('int main(){if(256) return 7; return 9;}', 7),
+            ('int main(){int a; a=0; if(1) a=3; else a=8; return a;}', 3),
+            ('int main(){int a; a=0; if(0) a=3; else a=8; return a;}', 8),
+            ('int main(){if(1) if(0) return 2; else return 3; return 4;}', 3),
+            ('int main(){if(0) if(1) return 2; else return 3; return 4;}', 4),
+            ('int main(){if(0) {if(1) return 2;} else return 3;}', 3),
+            ('int main(){if(0) return 1; else if(0) return 2; else return 3;}', 3),
+            ('int main(){int a; a=0; if(a=5) a=a+2; if(a==7) a=a*2; return a;}', 14),
+            ('int main(){if(1); else return 2; return 3;}', 3),
+            ('int main(){int ifx, elsewhere; ifx=3; elsewhere=4; if(ifx<elsewhere) return 8; return 9;}', 8),
+            ('int main(){;;; return 5;}', 5),
+            ('int main(){1;;}', 1),
+            ('int main(){int a; a=3;; {;; a=a+2;;}; return a;;}', 5),
+            ('int main(){return 7;;;;}', 7),
+            ('int main(){{1; {2;} return 3;}}', 3),
+            ('int main(){{} return 7;}', 7),
+            ('int main(){{{return 5;}} return 9;}', 5),
+            ('int main(){int a, b; a=1; {a=4; b=3;} return a+b;}', 7),
+            ('int main(){int a; a=2; {a=a*3; {a=a+4;}} return a;}', 10),
+            ('int main(){{{{}}} return 8;}', 8),
+            ('int main(){return 0;}', 0),
+            ('int main(){return 42;}', 42),
+            ('int main(){return 5+20-4;}', 21),
+            ('int main(){return  12 + 34 - 5 ;}', 41),
+            ('int main(){return 5+6*7;}', 47),
+            ('int main(){return 5*(9-6);}', 15),
+            ('int main(){return (3+5)/2;}', 4),
+            ('int main(){return -10+20;}', 10),
+            ('int main(){return - -10;}', 10),
+            ('int main(){return - - +10;}', 10),
+            ('int main(){return 0==1;}', 0),
+            ('int main(){return 42==42;}', 1),
+            ('int main(){return 0!=1;}', 1),
+            ('int main(){return 42!=42;}', 0),
+            ('int main(){return 0<1;}', 1),
+            ('int main(){return 1<1;}', 0),
+            ('int main(){return 2<1;}', 0),
+            ('int main(){return 0<=1;}', 1),
+            ('int main(){return 1<=1;}', 1),
+            ('int main(){return 2<=1;}', 0),
+            ('int main(){return 1>0;}', 1),
+            ('int main(){return 1>1;}', 0),
+            ('int main(){return 1>2;}', 0),
+            ('int main(){return 1>=0;}', 1),
+            ('int main(){return 1>=1;}', 1),
+            ('int main(){return 1>=2;}', 0),
+            ('int main(){int a; a=3; return a;}', 3),
+            ('int main(){int a, z; a=3; z=5; return a+z;}', 8),
+            ('int main(){int a, b; a=b=3; return a+b;}', 6),
+            ('int main(){int foo; foo=3; return foo;}', 3),
+            ('int main(){int foo123, bar; foo123=3; bar=5; return foo123+bar;}', 8),
+            ('int main(){return 1; 2; 3;}', 1),
+            ('int main(){1; return 2; 3;}', 2),
+            ('int main(){1; 2; return 3;}', 3),
+            ('int main(){return 1; return 2;}', 1),
+            ('int main(){int foo; foo=7; return (foo+5)*(foo-2); foo=99;}', 60),
+            ('int main(){int total; return total=9; total=0;}', 9),
+            ('int main(){int returnx, return_, Return; returnx=3; return_=4; Return=5; return returnx+return_+Return;}', 12),
+            ('int main(){return(3+4);}', 7),
+            ('int main(){return -7;}', 249),
+            ('int main(){int foo; foo=3; foo;}', 3),
+            ('int main(){int foo123, bar; foo123=3; bar=5; foo123+bar;}', 8),
+            ('int main(){int foo, foo123; foo=3; foo123=7; foo+foo123;}', 10),
+            ('int main(){int Foo, foo; Foo=3; foo=7; Foo+foo;}', 10),
+            ('int main(){int _, _value1; _=2; _value1=5; _+_value1;}', 7),
+            ('int main(){int total, left, right; total=left=right=4; total+left+right;}', 12),
+            ('int main(){int count; count=3; count=count+4; count;}', 7),
+            ('int main(){int alpha, beta, gamma; alpha=1; beta=2; gamma=3; alpha+beta+gamma;}', 6),
+            ('int main(){int a; a=3; a;}', 3),
+            ('int main(){int a, z; a=3; z=5; a+z;}', 8),
+            ('int main(){int a, b; a=b=3; a+b;}', 6),
+            ('int main(){int a; a=1; a=a+2; a;}', 3),
+            ('int main(){int a, b; a=4; b=7; a=9; b;}', 7),
+            ('int main(){int a; a=5==5; a;}', 1),
+            ('int main(){int a; a=3; (a=7)+2;}', 9),
+            ('int main(){int a, b; a=-(3+4); b=2; a/b;}', 253),
+            ('int main(){int a; (a)=6; a;}', 6),
+            ('int main(){int a; a=65536*65536; a/65536/65536;}', 1),
+            ('int main(){int a, z; a=2; z=8; (a+z)*(z-a); a+z;}', 10),
+            ('int main(){1; 2; 3;}', 3),
+            ('int main(){42; 0;}', 0),
+            ('int main(){1+2; 3*(4+5); (10-3)/2;}', 3),
+            ('int main(){5<6; -7;}', 249),
+            ('int main(){10;\n 20+22;\n}', 42),
+            ('int main(){0;}', 0),
+            ('int main(){42;}', 42),
+            ('int main(){5+20-4;}', 21),
+            ('int main(){ 12 + 34 - 5 ;}', 41),
+            ('int main(){5+6*7;}', 47),
+            ('int main(){5*(9-6);}', 15),
+            ('int main(){(3+5)/2;}', 4),
+            ('int main(){255;}', 255),
+            ('int main(){256;}', 0),
+            ('int main(){ 0042 ;}', 42),
+            ('int main(){2147483647;}', 255),
+            ('int main(){10-3-2;}', 5),
+            ('int main(){0-1;}', 255),
+            ('int main(){255+2;}', 1),
+            ('int main(){5+ 20-4;}', 21),
+            ('int main(){5 +20-4;}', 21),
+            ('int main(){\t12\n+\r34\x0b-\x0c5 ;}', 41),
+            ('int main(){1\u2003+\u20032;}', 3),
+            ('int main(){1+2147483647;}', 0),
+            ('int main(){0-2147483647-1;}', 0),
+            ('int main(){(5+6)*7;}', 77),
+            ('int main(){20/3;}', 6),
+            ('int main(){20/2/2;}', 5),
+            ('int main(){20/(2/2);}', 20),
+            ('int main(){24/3*2;}', 16),
+            ('int main(){24/(3*2);}', 4),
+            ('int main(){20-3*4+8/2;}', 12),
+            ('int main(){((2+3)*(4+(8/2)));}', 40),
+            ('int main(){((42));}', 42),
+            ('int main(){(0-7)/2;}', 253),
+            ('int main(){7/(0-2);}', 253),
+            ('int main(){(0-7)/(0-2);}', 3),
+            ('int main(){(0-3)*4;}', 244),
+            ('int main(){100/(2+3*(4-2));}', 12),
+            ('int main(){65536*65536/65536/65536;}', 1),
+            ('int main(){-10+20;}', 10),
+            ('int main(){- -10;}', 10),
+            ('int main(){- - +10;}', 10),
+            ('int main(){-1;}', 255),
+            ('int main(){+42;}', 42),
+            ('int main(){1+-2;}', 255),
+            ('int main(){1--2;}', 3),
+            ('int main(){1++2;}', 3),
+            ('int main(){1 + +2;}', 3),
+            ('int main(){-(3+4)*2;}', 242),
+            ('int main(){2*-(3+4);}', 242),
+            ('int main(){-20/3;}', 250),
+            ('int main(){20/-3;}', 250),
+            ('int main(){-20/-3;}', 6),
+            ('int main(){3*-4+15;}', 3),
+            ('int main(){-(-(-5));}', 251),
+            ('int main(){-2147483647-1;}', 0),
+            ('int main(){0==1;}', 0),
+            ('int main(){42==42;}', 1),
+            ('int main(){0!=1;}', 1),
+            ('int main(){42!=42;}', 0),
+            ('int main(){0<1;}', 1),
+            ('int main(){1<1;}', 0),
+            ('int main(){2<1;}', 0),
+            ('int main(){0<=1;}', 1),
+            ('int main(){1<=1;}', 1),
+            ('int main(){2<=1;}', 0),
+            ('int main(){1>0;}', 1),
+            ('int main(){1>1;}', 0),
+            ('int main(){1>2;}', 0),
+            ('int main(){1>=0;}', 1),
+            ('int main(){1>=1;}', 1),
+            ('int main(){1>=2;}', 0),
+            ('int main(){-1<0;}', 1),
+            ('int main(){0>-1;}', 1),
+            ('int main(){-2<=-1;}', 1),
+            ('int main(){-1>=0;}', 0),
+            ('int main(){2147483647+1>0;}', 1),
+            ('int main(){5+6*7==47;}', 1),
+            ('int main(){5+6*7!=47;}', 0),
+            ('int main(){5==2+3;}', 1),
+            ('int main(){3<4==1;}', 1),
+            ('int main(){3==4<5;}', 0),
+            ('int main(){1<2<3;}', 1),
+            ('int main(){3>2>0;}', 1),
+            ('int main(){(3>2)+4;}', 5),
+            ('int main(){(5>=5)*7;}', 7),
+            ('int main(){1==1==1;}', 1),
+            ('int main(){2==2==2;}', 0),
+            ('int main(){' + "".join(f"int var{i}={i};" for i in range(30))
              + "+".join(f"var{i}" for i in range(30)) + ";}", 179),
-            ("{" + "".join(f"int {chr(97+i)}={i+1};" for i in range(26))
+            ('int main(){' + "".join(f"int {chr(97+i)}={i+1};" for i in range(26))
              + "+".join(chr(97+i) for i in range(26)) + ";}", 95),
         ]
         for source, expected in cases:
@@ -727,7 +720,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for arguments in cases:
             with self.subTest(arguments=arguments):
                 if len(arguments) == 1:
-                    arguments = ("{" + arguments[0] + "}",)
+                    arguments = ('int main(){' + arguments[0] + "}",)
                 result = compile_program(*arguments)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
@@ -771,11 +764,11 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]
         for source, expected in cases:
             with self.subTest(source=source):
-                result = compile_program("{" + source + "}")
+                result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")
                 if expected.startswith(source + "\n"):
-                    expected = "{" + source + "}\n " + expected[len(source) + 1:]
+                    expected = 'int main(){' + source + "}\n" + " " * 11 + expected[len(source) + 1:]
                 self.assertEqual(result.stderr, expected)
 
     def test_argument_error_has_no_source_location(self):
@@ -788,13 +781,13 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_declarations(self):
         for source, expected in [
-            ("{int; return 7;}", 7),
-            ("{int x=3,y=x+2; return x+y;}", 8),
-            ("{int x=3,*p=&x; *p=7; return x;}", 7),
-            ("{int a,b; a=b=3; return a+b;}", 6),
-            ("{int integer=5; return integer;}", 5),
-            ("{int x=1; {int y=4;} return x+y;}", 5),
-            ("{int x=1; {int x=4;} return x;}", 4),
+            ('int main(){int; return 7;}', 7),
+            ('int main(){int x=3,y=x+2; return x+y;}', 8),
+            ('int main(){int x=3,*p=&x; *p=7; return x;}', 7),
+            ('int main(){int a,b; a=b=3; return a+b;}', 6),
+            ('int main(){int integer=5; return integer;}', 5),
+            ('int main(){int x=1; {int y=4;} return x+y;}', 5),
+            ('int main(){int x=1; {int x=4;} return x;}', 4),
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
@@ -815,29 +808,29 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         assignment = program.body.body[1].lhs
         self.assertEqual(assignment.kind, "ASSIGN")
         self.assertEqual(assignment.rhs.kind, "ASSIGN")
-        result = compile_program("{int x; return 7;}")
+        result = compile_program('int main(){int x; return 7;}')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, PROLOGUE + "  sub $16, %rsp\n"
-                         "  mov $7, %rax\n  jmp .L.return\n" + EPILOGUE)
+                         "  mov $7, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         self.assertEqual(tokenize("int integer")[0].kind, "KEYWORD")
         self.assertEqual(tokenize("int integer")[1].kind, "IDENT")
 
     def test_declaration_errors(self):
         cases = [
-            ("{x=3;}", 1, "undefined variable"),
-            ("{return x; int x;}", 8, "undefined variable"),
-            ("{int x=y;}", 7, "undefined variable"),
-            ("{int 3;}", 5, "expected a variable name"),
-            ("{int *;}", 6, "expected a variable name"),
-            ("{int x y;}", 7, "expected ','"),
-            ("{int x,;}", 7, "expected a variable name"),
-            ("{int x=;}", 7, "expected an expression"),
-            ("{for(int i=0;;);}", 5, "expected an expression"),
-            ("{return *1;}", 8, "invalid pointer dereference"),
-            ("{int x=3; return *x;}", 17, "invalid pointer dereference"),
-            ("{int x,y; return &x+&y;}", 19, "invalid operands"),
-            ("{int x; return 1-&x;}", 16, "invalid operands"),
-            ("{int x; (x+1)=3;}", 10, "not an lvalue"),
+            ('int main(){x=3;}', 11, "undefined variable"),
+            ('int main(){return x; int x;}', 18, "undefined variable"),
+            ('int main(){int x=y;}', 17, "undefined variable"),
+            ('int main(){int 3;}', 15, "expected a variable name"),
+            ('int main(){int *;}', 16, "expected a variable name"),
+            ('int main(){int x y;}', 17, "expected ','"),
+            ('int main(){int x,;}', 17, "expected a variable name"),
+            ('int main(){int x=;}', 17, "expected an expression"),
+            ('int main(){for(int i=0;;);}', 15, "expected an expression"),
+            ('int main(){return *1;}', 18, "invalid pointer dereference"),
+            ('int main(){int x=3; return *x;}', 27, "invalid pointer dereference"),
+            ('int main(){int x,y; return &x+&y;}', 29, "invalid operands"),
+            ('int main(){int x; return 1-&x;}', 26, "invalid operands"),
+            ('int main(){int x; (x+1)=3;}', 20, "not an lvalue"),
         ]
         for source, position, message in cases:
             with self.subTest(source=source):

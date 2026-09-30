@@ -1,6 +1,6 @@
-"""Lesson 24: Calls with up to six arguments.
+"""Lesson 25: Function definitions without parameters.
 
-Based on chibicc commit 964b1d2a0e3e46882743f16703cb12b51e724179.
+Based on chibicc commit 6cb4220f339e7d2a894e44b61c90c576a482914b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -30,7 +30,7 @@ def main():
             print(" " * error.position + "^ " + str(error), file=sys.stderr)
         return 1
 
-    print(assembly)
+    sys.stdout.write(assembly + ("\n" if assembly else ""))
     return 0
 
 

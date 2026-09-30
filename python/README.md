@@ -1,41 +1,51 @@
-# Lesson 24: Calls with up to six arguments
+# Lesson 25: Function definitions without parameters
 
-Original chibicc commit: [`964b1d2a0e3e46882743f16703cb12b51e724179`](https://github.com/rui314/chibicc/commit/964b1d2a0e3e46882743f16703cb12b51e724179).
+Original chibicc commit: [`6cb4220f339e7d2a894e44b61c90c576a482914b`](https://github.com/rui314/chibicc/commit/6cb4220f339e7d2a894e44b61c90c576a482914b).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Calls accept comma-separated assignment expressions. FUNCALL keeps arguments
-in a Python list, replacing upstream's linked list. For `sub(5,3)`, the
-compiler evaluates 5 then 3, pushing each result. It pops them into `%rsi`
-and `%rdi`, clears `%rax`, and emits `call sub`.
+Input is now a sequence of function definitions, rather than one bare block:
 
-The six integer/pointer argument registers are `%rdi`, `%rsi`, `%rdx`, `%rcx`,
-`%r8`, and `%r9`. Reverse popping maps the first argument to the first register.
-Saving values on the stack protects them while later arguments make nested
-calls. Binary operators still evaluate their right operand first; call
-arguments follow upstream's left-to-right order.
+```c
+int main() { return ret32(); }
+int ret32() { return 32; }
+```
+
+The parser returns a list of Function objects, each with its name, body, and
+locals. A function type records its return type. Every function resets its
+local-variable list, so names and offsets belong to that function alone.
+Definitions have no parameters in this lesson, although calls can pass up to
+six arguments to external functions.
+
+The generator emits a `.globl` declaration and stack frame per function.
+Returns jump to `.L.return.main` or `.L.return.ret32`, so cleanup labels do
+not collide. Control-flow labels remain unique throughout the compilation.
+`call ret32` can refer to a later definition; the assembler/linker resolves it.
+An empty translation unit emits no assembly. Trailing tokens are now parsed
+as further definitions, rather than silently ignored after the first block.
 
 ## Run it
 
 ```sh
-printf 'int sub(int x,int y) { return x-y; }\n' > /tmp/helper24.c
-python3 python/main.py '{return sub(5,3);}' > /tmp/lesson24.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson24 /tmp/lesson24.s /tmp/helper24.c
-/tmp/lesson24
+python3 python/main.py 'int main(){return ret32();} int ret32(){return 32;}' > /tmp/lesson25.s
+cat /tmp/lesson25.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson25 /tmp/lesson25.s
+/tmp/lesson25
 echo $?
 ```
 
-The last command shows **2**. The executable itself prints nothing. Use an
-interactive shell without `set -e` for nonzero statuses. GCC compiles the
-helper, then assembles and links our output.
+The executable prints nothing; the last command displays **32**. Use an
+interactive shell without `set -e` for nonzero statuses. GCC assembles and
+links the emitted code with the C runtime.
 
-Tests include all five new upstream examples, deeply nested six-argument
-calls, noncommutative subtraction, assignment side effects, register order,
-and malformed separators. The port deliberately reports a compile error
-above six arguments; upstream would index beyond its register array. Calls
-still lack temporary-stack alignment adjustment at this original stage.
-Local slots remain eight bytes; numeric tokens retain the checked 32-bit range.
+Tests migrate earlier fixtures to `int main(){...}`, check multiple functions,
+independent locals, forward calls, distinct cleanup labels, empty input,
+invalid headers, and rejection of the former bare-block input. As upstream,
+this small parser does not yet check that the declarator's type is a function,
+so a header without parentheses can also parse. Python uses a function list
+instead of C's linked list and retains a separate declaration-name type copy.
+All slots remain eight bytes; call alignment limitations are unchanged.
 
 ## Tests and attribution
 

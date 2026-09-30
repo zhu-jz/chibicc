@@ -1,6 +1,6 @@
-"""Lesson 72: _Bool values and conversions.
+"""Lesson 73: Character literals.
 
-Based on chibicc commit 44bba965cbe3827be2b68651e541b33fa040bb72.
+Based on chibicc commit aa0accc75e9358d313fef0a6d4005103e2ce25f5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

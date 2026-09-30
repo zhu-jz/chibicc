@@ -58,6 +58,20 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_character_literals(self):
+        for spelling, value in [("'a'", 97), (r"'\n'", 10), (r"'\x80'", -128),
+                                (r"'\377'", -1), (r"'\''", 39), ("'ab'", 97)]:
+            token = tokenize(spelling)[0]
+            self.assertEqual((token.kind, token.text, token.value), ("NUM", spelling, value))
+            self.assert_program_returns(f"int main(){{return {spelling};}}", value & 255)
+        self.assert_program_returns(r"int main(){return '\x80'<0;}", 1)
+        self.assert_program_returns("int main(){return sizeof('a');}", 4)
+        self.assertIn("  mov $97, %rax\n", compile_program("int main(){return 'a';}").stdout)
+        for source in ["'", "'a", "'\\"]:
+            with self.assertRaises(CompileError) as error:
+                tokenize(source)
+            self.assertIn("unclosed char literal", str(error.exception))
+
     def test_bool_type(self):
         for source, expected in [
             ("int main(){_Bool x=256;return x;}", 1),

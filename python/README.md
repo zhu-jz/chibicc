@@ -1,34 +1,35 @@
-# Lesson 72: _Bool values and conversions
+# Lesson 73: Character literals
 
-Original chibicc commit: [`44bba965cbe3827be2b68651e541b33fa040bb72`](https://github.com/rui314/chibicc/commit/44bba965cbe3827be2b68651e541b33fa040bb72).
+Original chibicc commit: [`aa0accc75e9358d313fef0a6d4005103e2ce25f5`](https://github.com/rui314/chibicc/commit/aa0accc75e9358d313fef0a6d4005103e2ce25f5).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-_Bool is a one-byte integer type whose conversions normalize values: zero becomes
-0, every nonzero value becomes 1. Char conversion instead keeps the low byte, so
-(char)256 is 0 while (_Bool)256 is 1. Assignment, explicit casts, function
-arguments, and returns all use the shared conversion path. Arithmetic promotes
-_Bool to int. Zero comparisons inspect eax for small integers and rax for longs
-or pointers, following the original helper.
+The tokenizer converts single-quoted characters into NUM tokens. It reuses the
+string escape reader for named, octal, and hexadecimal escapes. Values are
+interpreted as signed bytes on this x86-64 target, so '\x80' is -128. Character
+literals have int type, not char type. The parser and assembly emitter already
+understand numeric nodes and need no change.
 
-Python represents BOOL as another Type kind; no Python bool evaluation performs
-compiled arithmetic. Conversion is emitted as machine instructions.
+This historical reader uses the first byte and searches for the next closing
+quote; it does not yet validate multiple-character literals. Thus 'ab' yields
+97. Python explicitly maps UTF-8's first byte to a signed value rather than
+relying on C's platform-dependent signed char. EOF checks raise CompileError
+instead of reading beyond a string buffer.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){_Bool x=256;return x;}\n' > /tmp/lesson72.c
-python3 python/main.py /tmp/lesson72.c > /tmp/lesson72.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson72 /tmp/lesson72.s
-/tmp/lesson72
+printf "int main(){return 'a';}\n" > /tmp/lesson73.c
+python3 python/main.py /tmp/lesson73.c > /tmp/lesson73.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson73 /tmp/lesson73.s
+/tmp/lesson73
 echo $?
 ```
 
-`cmp $0, %eax`, `setne %al`, and `movzx %al, %eax` create exactly 0 or 1 before
-storing a byte. The example exits with 1. Tests cover zero/nonzero values,
-pointers, long values whose low 32 bits are zero, argument/return conversion,
-promotion, assembly widths, and the updated original programs.
+The literal becomes `mov $97, %rax`. Main returns 97, displayed by the shell.
+Tests check escaped values, signedness, int sizeof, original token spelling,
+malformed input, emitted assembly, executable status, and all original fixtures.
 
 ## Tests and attribution
 

@@ -81,6 +81,24 @@ def read_string_literal(source, start):
     return token, end + 1
 
 
+def read_char_literal(source, start):
+    position = start + 1
+    if position >= len(source) or source[position] == "\0":
+        raise CompileError(start, "unclosed char literal")
+    if source[position] == "\\":
+        if position + 1 >= len(source):
+            raise CompileError(start, "unclosed char literal")
+        data, position = read_escaped_char(source, position + 1)
+    else:
+        data = source[position].encode("utf-8")
+        position += 1
+    end = source.find("'", position)
+    if end == -1:
+        raise CompileError(position, "unclosed char literal")
+    value = data[0] if data[0] < 128 else data[0] - 256
+    return Token("NUM", source[start:end + 1], start, value), end + 1
+
+
 def is_ident1(character):
     return "a" <= character <= "z" or "A" <= character <= "Z" or character == "_"
 
@@ -139,6 +157,11 @@ def tokenize(source):
 
         if character == '"':
             token, position = read_string_literal(source, position)
+            tokens.append(token)
+            continue
+
+        if character == "'":
+            token, position = read_char_literal(source, position)
             tokens.append(token)
             continue
 

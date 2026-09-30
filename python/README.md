@@ -1,37 +1,35 @@
-# Lesson 88: Incomplete structs and unions
+# Lesson 89: Goto and labeled statements
 
-Original chibicc commit: [`61a10551209a0d3770449862152e1b73b584d771`](https://github.com/rui314/chibicc/commit/61a10551209a0d3770449862152e1b73b584d771).
+Original chibicc commit: [`6116cae4c4b98ef9ed55736f3a6c1d872de97767`](https://github.com/rui314/chibicc/commit/6116cae4c4b98ef9ed55736f3a6c1d872de97767).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-An unknown tagged struct/union creates an incomplete type with size -1. Pointers
-to it are valid; a later definition completes the existing object in the current
-scope. This makes forward references, typedef aliases, and self-referential
-members work. Definitions in an inner scope create distinct types rather than
-changing outer types. Local incomplete objects still produce an error.
+`goto name;` and `name: statement` get GOTO/LABEL nodes. Parsing records them,
+then resolves jumps after the whole function is known, allowing forward labels.
+Each label receives a unique assembly name from the parser's counter. Labels
+have function scope, independent of variable names and ordinary block scope.
+An unresolved jump reports `use of undeclared label` at the identifier.
 
-Python replaces the fields on the existing Type object, equivalent to C's
-`*old=*new`, so pointers keep seeing that same object. Aggregate declarators now
-retain the shared type rather than copying it for name metadata. This is needed
-for typedef struct T T to see T's completion; builtin types still copy declaration
-names. Strict redefinition/tag-kind validation remains incomplete in this commit.
+Python lists replace the original goto_next linked lists; goto entries also
+retain the label token for the diagnostic. The lists reset after each function.
+Duplicate-label validation remains incomplete in this historical implementation.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'struct T{struct T *next;int x;};int main(){struct T a,b;b.x=42;a.next=&b;return a.next->x;}\n' > /tmp/lesson88.c
-python3 python/main.py /tmp/lesson88.c > /tmp/lesson88.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson88 /tmp/lesson88.s
-/tmp/lesson88
+printf 'int main(){goto answer;return 1;answer:return 42;}\n' > /tmp/lesson89.c
+python3 python/main.py /tmp/lesson89.c > /tmp/lesson89.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson89 /tmp/lesson89.s
+/tmp/lesson89
 echo $?
 ```
 
-next is an eight-byte pointer; x lies at offset eight. Address calculation stores
-b's address in a.next, and the final member load follows that pointer and reads
-b.x. The shell displays 42. Tests cover forward pointer identity, self references,
-union completion, typedef completion, incomplete local errors, sizeof, assembly,
-and updated original struct programs.
+`jmp .L..N` transfers control directly to the matching `.L..N:` label, skipping
+the first return. Main exits with 42. Tests cover forward/backward jumps, labels
+inside blocks, repeated label spellings across functions, variable/label name
+coexistence, unresolved diagnostics, matched assembly symbols, and updated
+original control programs.
 
 ## Tests and attribution
 

@@ -111,3 +111,5 @@ class Node:
     func_ty: Optional[Type] = field(default=None, compare=False)
     args: list["Node"] = field(default_factory=list)
     member: Optional[Member] = None
+    label: str = ""
+    unique_label: Optional[str] = field(default=None, compare=False)

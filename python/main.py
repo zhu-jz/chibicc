@@ -1,6 +1,6 @@
-"""Lesson 88: Incomplete structs and unions.
+"""Lesson 89: Goto and labeled statements.
 
-Based on chibicc commit 61a10551209a0d3770449862152e1b73b584d771.
+Based on chibicc commit 6116cae4c4b98ef9ed55736f3a6c1d872de97767.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

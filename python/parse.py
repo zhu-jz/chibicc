@@ -48,6 +48,8 @@ class Parser:
         self.unique_id = 0
         self.scopes = [Scope()]  # Global scope, followed by nested block scopes.
         self.current_fn = None
+        self.gotos = []
+        self.labels = []
 
     def enter_scope(self):
         self.scopes.append(Scope())
@@ -448,6 +450,22 @@ class Parser:
             return Node("FOR", cond=cond, then=then, tok=token), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
+        if token.text == "goto":
+            name = self.tokens[position + 1]
+            if name.kind != "IDENT":
+                raise CompileError(name, "expected a variable name")
+            if self.tokens[position + 2].text != ";":
+                raise CompileError(self.tokens[position + 2], "expected ';'")
+            node = Node("GOTO", label=name.text, tok=token)
+            self.gotos.insert(0, (node, name))
+            return node, position + 3
+        if token.kind == "IDENT" and self.tokens[position + 1].text == ":":
+            unique = f".L..{self.unique_id}"
+            self.unique_id += 1
+            statement, position = self.stmt(position + 2)
+            node = Node("LABEL", lhs=statement, label=token.text, unique_label=unique, tok=token)
+            self.labels.insert(0, node)
+            return node, position
         return self.expr_stmt(position)
 
     def is_typename(self, position):
@@ -746,6 +764,17 @@ class Parser:
             raise CompileError(self.tokens[position], "expected ';'")
         return Node("EXPR_STMT", lhs=node, tok=token), position + 1
 
+    def resolve_goto_labels(self):
+        for jump, token in self.gotos:
+            for label in self.labels:
+                if jump.label == label.label:
+                    jump.unique_label = label.unique_label
+                    break
+            if jump.unique_label is None:
+                raise CompileError(token, "use of undeclared label")
+        self.gotos = []
+        self.labels = []
+
     def function(self, position, basety, attr):
         ty, position = self.declarator(position, basety)
         function = self.new_gvar(ty.name.text, ty)
@@ -765,6 +794,7 @@ class Parser:
         function.body, position = self.compound_stmt(position + 1)
         function.locals = self.locals
         self.leave_scope()
+        self.resolve_goto_labels()
         return position
 
     def global_variable(self, position, basety):

@@ -58,6 +58,27 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_goto_labels(self):
+        for source, expected in [
+            ("int main(){goto done;return 1;done:return 42;}", 42),
+            ("int main(){int x=0;again:++x;if(x<3)goto again;return x;}", 3),
+            ("int main(){goto done;{done:return 42;}}", 42),
+            ("int f(){goto a;a:return 3;}int main(){goto a;a:return f()+39;}", 42),
+            ("int main(){int x=42;goto x;x:return x;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("goto done;done:return 42;")
+        jump, label = function.body.body
+        self.assertEqual(jump.unique_label, label.unique_label)
+        assembly = compile_program("int main(){goto done;done:return 42;}").stdout
+        self.assertIn(f"  jmp {label.unique_label}\n", assembly)
+        self.assertIn(f"{label.unique_label}:\n", assembly)
+        for source in ("int main(){goto missing;}", "int f(){a:return 0;}int main(){goto a;}"):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("use of undeclared label", result.stderr)
+            self.assertEqual(result.stdout, "")
+
     def test_incomplete_structs(self):
         for source, expected in [
             ("int main(){struct T *p;return sizeof(p);}", 8),

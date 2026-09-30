@@ -252,6 +252,13 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.assembly.append(f"  jmp .L.return.{self.current_fn.name}")
             return
+        if node.kind == "GOTO":
+            self.assembly.append(f"  jmp {node.unique_label}")
+            return
+        if node.kind == "LABEL":
+            self.assembly.append(f"{node.unique_label}:")
+            self.gen_stmt(node.lhs)
+            return
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
             return

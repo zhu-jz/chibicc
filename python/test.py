@@ -42,6 +42,21 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aggregate_assignment(self):
+        for source, expected in [
+            ("int main(){struct t{int a,b;} x,y,z;x.a=3;x.b=7;z=y=x;return z.a+y.b;}", 10),
+            ("int main(){struct t{char a[17];} x,y;x.a[16]=42;y=x;return y.a[16];}", 42),
+            ("int main(){struct t{char a;int b;} x,y;char *p=&x;int i;for(i=0;i<sizeof(x);i=i+1)p[i]=i;y=x;char *q=&y;return q[7];}", 7),
+            ("int main(){union t{int a;char b[4];} x,y;x.a=515;y=x;return y.b[1];}", 2),
+            ("struct t{int a;} g;int main(){struct t x;x.a=42;g=x;return g.a;}", 42),
+            ("int main(){struct t{int a;} x;x.a=42;x=x;struct t y=x;return y.a;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){struct {char a[3];} x,y;y=x;return 0;}").stdout
+        for offset in range(3):
+            self.assertIn(f"  mov {offset}(%rax), %r8b\n  mov %r8b, {offset}(%rdi)\n", assembly)
+        self.assertNotIn("  mov 3(%rax), %r8b", assembly)
+
     def test_unions(self):
         for source, expected in [
             ("int main(){union t{int a;char b[4];} x;union t *p=&x;p->a=515;return p->b[0]+p->b[1];}", 5),

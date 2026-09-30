@@ -48,7 +48,7 @@ class CodeGenerator:
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
-        if ty.kind == "ARRAY":
+        if ty.kind in ("ARRAY", "STRUCT", "UNION"):
             return
         if ty.size == 1:
             self.assembly.append("  movsbq (%rax), %rax")
@@ -57,6 +57,11 @@ class CodeGenerator:
 
     def store(self, ty):
         self.pop("%rdi")
+        if ty.kind in ("STRUCT", "UNION"):
+            for offset in range(ty.size):
+                self.assembly.append(f"  mov {offset}(%rax), %r8b")
+                self.assembly.append(f"  mov %r8b, {offset}(%rdi)")
+            return
         if ty.size == 1:
             self.assembly.append("  mov %al, (%rdi)")
         else:

@@ -1,6 +1,6 @@
-"""Lesson 54: Unions and overlapping storage.
+"""Lesson 55: Struct and union assignment.
 
-Based on chibicc commit 11e3841832697c8ba4a1d68f5daa05045f70a716.
+Based on chibicc commit bef05432c9d3289636ed1d360ca9b863a0698dc7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

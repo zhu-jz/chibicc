@@ -1,44 +1,41 @@
-# Lesson 54: Unions and overlapping storage
+# Lesson 55: Struct and union assignment
 
-Original chibicc commit: [`11e3841832697c8ba4a1d68f5daa05045f70a716`](https://github.com/rui314/chibicc/commit/11e3841832697c8ba4a1d68f5daa05045f70a716).
+Original chibicc commit: [`bef05432c9d3289636ed1d360ca9b863a0698dc7`](https://github.com/rui314/chibicc/commit/bef05432c9d3289636ed1d360ca9b863a0698dc7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`union` shares struct's member parser, tag namespace, scope lookup and member
-access syntax. The layout differs: every member's offset is zero, alignment
-is the maximum member alignment, and size is the largest member size rounded
-up to that alignment. `union {int a; char b[9];}` therefore has size 16 and
-alignment 8 at this stage. An empty union has size 0 and alignment 1.
+A struct or union can be too large for a register. Loading an aggregate now
+leaves its storage address in `%rax`, as array expressions already did.
+For aggregate assignment, codegen pops the destination address into `%rdi`
+and emits a byte load/store pair for every byte in the destination type.
+`%rax` still points to the source, and `%r8b` carries each byte during copying.
+All bytes, including padding, are copied.
 
-Members overlap instead of occupying successive regions. On x86-64 Linux,
-storing 515 into the eight-byte int a writes bytes 3, 2, 0, 0, ... in
-little-endian order. Reading b[0] or b[1] observes 3 or 2. This machine-specific
-view is what upstream's new tests demonstrate.
-
-The existing MEMBER codegen works for unions without new instructions. Python
-keeps the same Type/Member dataclasses and lists; a shared parser avoids
-repeating the member grammar. Tags become visible only after member parsing,
-and tag-kind validation remains incomplete as in this commit. Aggregate
-copying and aggregate function calling are still not implemented.
+This supports `y=x`, assignments through pointers, initialization from another
+aggregate, and chains such as `z=y=x`. No Python memory copy runs at compile
+time: Python emits the real x86-64 copy instructions, just as upstream C does.
+Arrays still cannot be assigned directly, and aggregate function argument /
+return ABI rules and assignment type compatibility remain incomplete.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){union {int a;char b[4];} x;x.a=515;return x.b[0]+x.b[1];}\n' > /tmp/lesson54.c
-python3 python/main.py -o /tmp/lesson54.s /tmp/lesson54.c
-cat /tmp/lesson54.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson54 /tmp/lesson54.s
-/tmp/lesson54
+printf 'int main(){struct t{int a,b;} x,y;x.a=20;x.b=22;y=x;return y.a+y.b;}\n' > /tmp/lesson55.c
+python3 python/main.py -o /tmp/lesson55.s /tmp/lesson55.c
+cat /tmp/lesson55.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson55 /tmp/lesson55.s
+/tmp/lesson55
 echo $?
 ```
 
-The int store writes `%rax` to the union's address. Member offsets add zero,
-then char subscripts select bytes and `movsbq` loads them. Adding the bytes
-returns 5; the executable prints nothing and the shell displays status 5.
-Tests inspect overlap, size rounding, nested struct/union layout, global and
-tagged unions, arrow access, and array stride, and run the new upstream union
-fixture together with all existing C fixtures.
+After obtaining both addresses, the copy includes pairs such as
+`mov 0(%rax), %r8b` and `mov %r8b, 0(%rdi)`, up through byte 15.
+The final field loads add 20 and 22, returning status 42. The executable
+prints nothing. Tests cover the upstream struct/union assignments, pointer
+copies, chains, a seventeen-byte object, padding bytes, globals, initialization
+and self-assignment. A small assembly check ensures exactly the required bytes
+are copied, and all updated upstream C fixtures run as executables.
 
 ## Tests and attribution
 

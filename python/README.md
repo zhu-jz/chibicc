@@ -1,46 +1,46 @@
-# Lesson 56: Four-byte ints
+# Lesson 57: Eight-byte long values
 
-Original chibicc commit: [`5831edaab3eb6d56126c08f01f5639222602f7e5`](https://github.com/rui314/chibicc/commit/5831edaab3eb6d56126c08f01f5639222602f7e5).
+Original chibicc commit: [`43c2f0829f7d4ec3b96132b9964a778ff816b2eb`](https://github.com/rui314/chibicc/commit/43c2f0829f7d4ec3b96132b9964a778ff816b2eb).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Int now has size and alignment 4, matching x86-64 Linux C. Char stays one byte
-and pointers stay eight. This changes sizeof, pointer-arithmetic scaling,
-array strides, struct/union layouts, local offsets, and global zero storage.
-An `int[3]` occupies 12 bytes; `struct {char a;int b;}` has offsets 0 and 4
-and total size 8.
+Long has size/alignment 8; int remains 4 and char 1. Long variables, parameters,
+arrays and members use the existing eight-byte loads, stores, argument-register
+saves and pointer scaling. Numeric token/tree values now support wider literals.
+Python's integers already had the needed representation; its decimal input
+check now permits 0 through 9223372036854775807. Generated assembly interpolates
+that value directly into `mov $value, %rax`; the assembler chooses its encoding.
 
-An int store uses `%eax`, writing only the low four bytes. An int load uses
-`movsxd (%rax), %rax`, sign-extending those four bytes into the expression
-register. Parameter saves choose eight-bit, thirty-two-bit, or sixty-four-bit
-argument-register names for sizes 1, 4, or 8. Unsupported sizes produce a
-source diagnostic in Python instead of C's internal unreachable error.
+Upstream temporarily assigns long type to every numeric literal, comparison
+and function call, so `sizeof(1)`, `sizeof(1==2)`, and `sizeof(missing())` each
+produce 8. A declared int variable still has size 4. Arithmetic type conversion
+and function-call signature handling remain incomplete at this stage; these
+intermediate choices are intentionally retained. Short becomes a reserved
+keyword in this original commit but its type is not yet accepted.
 
-This original commit changes memory widths, not all arithmetic conversions.
-Expressions still use sixty-four-bit arithmetic registers; storing into an int
-truncates to four bytes, and reloading makes the stored sign visible. Function
-return conversion, full type compatibility, and aggregate call ABI rules remain
-incomplete. Python's compile-time integers are arbitrary precision, but the
-emitted memory operations implement the target's four-byte values.
+The Python port keeps a clear error for literals outside the signed sixty-four
+bit positive range rather than reproducing C strtoul's overflow/wrapping
+behavior. Larger positive input and the unsigned spelling of the minimum
+signed value are rejected. Negative expressions use unary minus as before.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=42;return x;}\n' > /tmp/lesson56.c
-python3 python/main.py -o /tmp/lesson56.s /tmp/lesson56.c
-cat /tmp/lesson56.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson56 /tmp/lesson56.s
-/tmp/lesson56
+printf 'int main(){long x=4294967296;return x/65536/65536;}\n' > /tmp/lesson57.c
+python3 python/main.py -o /tmp/lesson57.s /tmp/lesson57.c
+cat /tmp/lesson57.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson57 /tmp/lesson57.s
+/tmp/lesson57
 echo $?
 ```
 
-x now lives at -4(%rbp) within a sixteen-byte frame. `mov %eax, (%rdi)` stores
-42 without overwriting a neighboring int, and `movsxd (%rax), %rax` loads it
-for the return. The shell displays status 42. Tests update the previous layout
-and sizeof expectations, check signed loads, truncation and neighboring values,
-mixed-size parameters, and an int array passed to a tiny GCC-built helper.
-The updated upstream C fixtures and the full Python regression suite are run.
+`mov $4294967296, %rax` constructs the large value. A full `%rax` store and
+load preserve it in x. Two signed divisions reduce it to 1; the shell reports
+status 1. Tests cover the largest accepted literal, large globals and function
+parameters/returns, array strides, struct alignment, sizeof's intermediate
+long typing, assembly widths, and range/short diagnostics. Updated upstream
+function, struct and variable fixtures are run with all other C fixtures.
 
 ## Tests and attribution
 

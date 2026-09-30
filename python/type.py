@@ -11,10 +11,11 @@ from common import CompileError, Type
 
 ty_char = Type("CHAR", size=1, align=1)
 ty_int = Type("INT", size=4, align=4)
+ty_long = Type("LONG", size=8, align=8)
 
 
 def is_integer(ty):
-    return ty.kind in ("CHAR", "INT")
+    return ty.kind in ("CHAR", "INT", "LONG")
 
 
 def copy_type(ty):
@@ -52,7 +53,7 @@ def add_type(node):
             raise CompileError(node.lhs.tok, "not an lvalue")
         node.ty = node.lhs.ty
     elif node.kind in ("==", "!=", "<", "<=", "NUM", "FUNCALL"):
-        node.ty = ty_int
+        node.ty = ty_long
     elif node.kind == "VAR":
         node.ty = node.var.ty
     elif node.kind == "COMMA":

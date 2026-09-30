@@ -132,8 +132,8 @@ def tokenize(source):
                 value = int(text, 10)
             except ValueError:
                 raise CompileError(start, "integer is too large to convert") from None
-            if value > 2**31 - 1:
-                raise CompileError(start, "integer must fit in a signed 32-bit immediate")
+            if value > 2**63 - 1:
+                raise CompileError(start, "integer must fit in a signed 64-bit immediate")
             tokens.append(Token("NUM", text, start, value))
             continue
 
@@ -165,6 +165,6 @@ def tokenize(source):
     tokens.append(Token("EOF", "", position))
     add_line_numbers(source, tokens)
     for token in tokens:
-        if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char", "struct", "union"):
+        if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char", "struct", "union", "short", "long"):
             token.kind = "KEYWORD"
     return tokens

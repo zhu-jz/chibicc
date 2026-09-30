@@ -1,6 +1,6 @@
-"""Lesson 56: Four-byte ints.
+"""Lesson 57: Eight-byte long values.
 
-Based on chibicc commit 5831edaab3eb6d56126c08f01f5639222602f7e5.
+Based on chibicc commit 43c2f0829f7d4ec3b96132b9964a778ff816b2eb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

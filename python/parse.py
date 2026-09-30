@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int
+from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -309,6 +309,8 @@ class Parser:
             return ty_char, position + 1
         if self.tokens[position].text == "int":
             return ty_int, position + 1
+        if self.tokens[position].text == "long":
+            return ty_long, position + 1
         if self.tokens[position].text == "struct":
             return self.struct_decl(position + 1)
         if self.tokens[position].text == "union":
@@ -440,7 +442,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.tokens[position].text in ("char", "int", "struct", "union"):
+            if self.tokens[position].text in ("char", "short", "int", "long", "struct", "union"):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

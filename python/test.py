@@ -10,7 +10,7 @@ from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
-from type import ty_int
+from type import ty_int, ty_long
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -42,6 +42,30 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_long_type(self):
+        for source, expected in [
+            ("int main(){long x=4294967296;return x/65536/65536;}", 1),
+            ("long g;int main(){g=9223372036854775807;return g==9223372036854775807;}", 1),
+            ("long f(long x){return x+1;}int main(){return f(4294967296)/65536/65536;}", 1),
+            ("int main(){long a[2];a[0]=3;a[1]=4;return *(a+1);}", 4),
+            ("int main(){struct {char a;long b;} x;return sizeof(x);}", 16),
+            ("int main(){return sizeof(1)+sizeof(1==2)+sizeof(missing());}", 24),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("long f(long a){return a;}int main(){long x=4294967296;return f(x)/65536/65536;}").stdout
+        self.assertIn("  mov $4294967296, %rax\n", assembly)
+        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+        self.assertIn("  mov %rax, (%rdi)\n", assembly)
+        self.assertEqual((ty_long.size, ty_long.align), (8, 8))
+        self.assertIs(parse_body("return 1;").body.body[0].lhs.ty, ty_long)
+        self.assertEqual(tokenize("9223372036854775807")[0].value, 9223372036854775807)
+        self.assertEqual(tokenize("short")[0].kind, "KEYWORD")
+        result = compile_program("int main(){short x;}")
+        self.assertIn("typename expected", result.stderr)
+        result = compile_program("int main(){return 9223372036854775808;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("signed 64-bit immediate", result.stderr)
+
     def test_four_byte_ints(self):
         for source, expected in [
             ("int main(){int x;int *p=&x;return sizeof(x)+sizeof(p);}", 12),
@@ -188,7 +212,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         node = parse_body("return 1,2,3;").body.body[0].lhs
         self.assertEqual((node.kind, node.rhs.kind), ("COMMA", "COMMA"))
-        self.assertIs(node.ty, ty_int)
+        self.assertIs(node.ty, ty_long)
         result = compile_program("int main(){(1,2)=3;}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("not an lvalue", result.stderr)
@@ -483,7 +507,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int x[3][4]; return sizeof(**x+1);",4),
             ("int x=1; return sizeof(x=2);",4),
             ("int x=1; sizeof(x=2); return x;",1),
-            ("return sizeof missing();",4),
+            ("return sizeof missing();",8),
         ]:
             self.assert_program_returns("int main(){"+body+"}", expected)
         assembly = compile_program("int main(){return sizeof missing();}").stdout
@@ -579,7 +603,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             self.assert_program_returns(source, expected, helpers)
         call = parse_body("return ret3();").body.body[0].lhs
         self.assertEqual(call.funcname, "ret3")
-        self.assertIs(call.ty, ty_int)
+        self.assertIs(call.ty, ty_long)
         assembly = compile_program('int main(){return ret3();}').stdout
         self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
         self.assertEqual(compile_program('int main(){return ret3(,);}').returncode, 1)
@@ -1268,7 +1292,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("18 11", "18 11\n   ^ expected ';'\n"),
             ("--", "--\n  ^ expected an expression\n"),
             ("1 + +", "1 + +\n     ^ expected an expression\n"),
-            ("1+2147483648", "1+2147483648\n  ^ integer must fit in a signed 32-bit immediate\n"),
+            ("1+9223372036854775808", "1+9223372036854775808\n  ^ integer must fit in a signed 64-bit immediate\n"),
             ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),
             ("(1+2", "(1+2\n    ^ expected ')'\n"),
             ("1)", "1)\n ^ expected ';'\n"),

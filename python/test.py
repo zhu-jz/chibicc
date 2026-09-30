@@ -42,6 +42,17 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_type_specifier_combinations(self):
+        for spelling, size in [("char", 1), ("short int", 2), ("int short", 2),
+                               ("int", 4), ("long int", 8), ("int long", 8)]:
+            self.assert_program_returns("int main(){" + spelling + " x;return sizeof(x);}", size)
+        self.assert_program_returns("main(){return 42;}", 42)
+        self.assert_program_returns("int f(x){return x;}main(){return f(42);}", 42)
+        for spelling in ["char int", "int int", "long long", "void int", "short long"]:
+            result = compile_program("int main(){" + spelling + " x;}")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid type", result.stderr)
+
     def test_void_type(self):
         for source, expected in [
             ("int main(){void *p;return sizeof(p);}", 8),

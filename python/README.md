@@ -1,44 +1,44 @@
-# Lesson 61: Void and void pointers
+# Lesson 62: Combined type specifiers
 
-Original chibicc commit: [`8c3503bb94bd6b2d57e1f979d9fc1d84383b2961`](https://github.com/rui314/chibicc/commit/8c3503bb94bd6b2d57e1f979d9fc1d84383b2961).
+Original chibicc commit: [`287906abb85081b961e118bb80b30decb93fba6f`](https://github.com/rui314/chibicc/commit/287906abb85081b961e118bb80b30decb93fba6f).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Void is a type, and `void *` declares a pointer whose pointed-to type is void.
-The pointer itself still occupies eight bytes. A local variable declared
-directly as void is rejected at the token after its declarator. Dereferencing
-a void pointer is rejected during type annotation, including inside sizeof;
-without an object type there is no value to load.
+The declaration-specifier parser consumes a sequence of type words. Short and
+long may include int, in either order: `short int`, `int short`, `long int`,
+and `int long` select the same types as short and long. Char, void and plain
+int remain single-word types. Invalid built-in combinations such as `char int`
+and duplicate `int` are diagnosed at the word that makes the combination bad.
 
-Upstream assigns void size/alignment 1 here. This is an implementation choice
-that also makes void-pointer arithmetic byte-wise, a GNU extension. A void
-return type and an empty function body can be declared, but `f(void)`, bare
-`return;`, signature checking, and full global/return validation are not added
-by this commit. Calls still receive the intermediate long type.
+C packs keyword counts into one integer and switches on the result. Python
+keeps the seen words in a list and looks up their sorted tuple in a small table
+of permitted combinations. This readable representation replaces the bitfield
+trick without changing the accepted built-in combinations.
 
-Python adds a Type singleton and explicit CompileError checks, matching the
-valid behavior and diagnostics of this original step. Conversion between an
-object pointer and void pointer uses the same address bits; no runtime Python
-conversion or extra target instruction is involved.
+The upstream commit message mentions `long long`, but its actual switch has
+no case for two longs. This port follows the code: `long long` is rejected.
+The parser also defaults to int when no type word occurs in a context that
+calls declspec, so `main(){...}` and an implicitly typed named parameter work.
+This is an intermediate older-C behavior, not full modern declaration checking.
+Struct/union combination validation and other storage/type words are incomplete.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=42;void *p=&x;int *q=p;return *q;}\n' > /tmp/lesson61.c
-python3 python/main.py -o /tmp/lesson61.s /tmp/lesson61.c
-cat /tmp/lesson61.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson61 /tmp/lesson61.s
-/tmp/lesson61
+printf 'int main(){int long x=42;return x;}\n' > /tmp/lesson62.c
+python3 python/main.py -o /tmp/lesson62.s /tmp/lesson62.c
+cat /tmp/lesson62.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson62 /tmp/lesson62.s
+/tmp/lesson62
 echo $?
 ```
 
-The pointer assignments store/load eight-byte addresses. Dereferencing q,
-which points to int, uses the four-byte sign-extending load. The result is 42;
-the shell displays its status and the executable prints nothing. Tests cover
-pointer size, passing an address through void pointers, an unused void call,
-the one-byte arithmetic extension, and forbidden void locals/dereferences.
-The updated upstream variable fixture and complete C fixture suite also run.
+`int long` selects the eight-byte long type: the variable uses a full `%rax`
+store/load at -8(%rbp), then returns 42. No new machine instruction implements
+the alternate spelling. Tests cover every upstream combination, the implicit
+int cases, invalid words/duplicates, and the actual long-long restriction.
+The new upstream declaration fixture runs with the complete C fixture suite.
 
 ## Tests and attribution
 

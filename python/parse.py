@@ -303,23 +303,36 @@ class Parser:
             return self.compound_stmt(position + 1)
         return self.expr_stmt(position)
 
-    # declspec = "char" | "int" | "struct" struct-decl
+    def is_typename(self, position):
+        return self.tokens[position].text in ("void", "char", "short", "int", "long",
+                                              "struct", "union")
+
+    # declspec = ("void" | "char" | "short" | "int" | "long"
+    #             | struct-decl | union-decl)*
     def declspec(self, position):
-        if self.tokens[position].text == "void":
-            return ty_void, position + 1
-        if self.tokens[position].text == "char":
-            return ty_char, position + 1
-        if self.tokens[position].text == "short":
-            return ty_short, position + 1
-        if self.tokens[position].text == "int":
-            return ty_int, position + 1
-        if self.tokens[position].text == "long":
-            return ty_long, position + 1
-        if self.tokens[position].text == "struct":
-            return self.struct_decl(position + 1)
-        if self.tokens[position].text == "union":
-            return self.union_decl(position + 1)
-        raise CompileError(self.tokens[position], "typename expected")
+        combinations = {
+            ("void",): ty_void, ("char",): ty_char,
+            ("short",): ty_short, ("int", "short"): ty_short,
+            ("int",): ty_int,
+            ("long",): ty_long, ("int", "long"): ty_long,
+        }
+        ty = ty_int
+        specifiers = []
+        while self.is_typename(position):
+            token = self.tokens[position]
+            if token.text in ("struct", "union"):
+                if token.text == "struct":
+                    ty, position = self.struct_decl(position + 1)
+                else:
+                    ty, position = self.union_decl(position + 1)
+                specifiers.append("other")
+                continue
+            specifiers.append(token.text)
+            ty = combinations.get(tuple(sorted(specifiers)))
+            if ty is None:
+                raise CompileError(token, "invalid type")
+            position += 1
+        return ty, position
 
     # struct-union-decl = identifier? "{" struct-members "}" | identifier
     def struct_union_decl(self, position):
@@ -456,7 +469,7 @@ class Parser:
         statements = []
         self.enter_scope()
         while self.tokens[position].text != "}":
-            if self.tokens[position].text in ("void", "char", "short", "int", "long", "struct", "union"):
+            if self.is_typename(position):
                 node, position = self.declaration(position)
             else:
                 node, position = self.stmt(position)

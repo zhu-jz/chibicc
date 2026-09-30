@@ -1,6 +1,6 @@
-"""Lesson 61: Void and void pointers.
+"""Lesson 62: Combined type specifiers.
 
-Based on chibicc commit 8c3503bb94bd6b2d57e1f979d9fc1d84383b2961.
+Based on chibicc commit 287906abb85081b961e118bb80b30decb93fba6f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

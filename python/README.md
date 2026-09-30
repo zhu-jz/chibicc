@@ -1,35 +1,35 @@
-# Lesson 79: Postfix increment and decrement
+# Lesson 80: Integer literal bases
 
-Original chibicc commit: [`e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63`](https://github.com/rui314/chibicc/commit/e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63).
+Original chibicc commit: [`7df934d2b63727d67d1c054975893930fa6aff44`](https://github.com/rui314/chibicc/commit/7df934d2b63727d67d1c054975893930fa6aff44).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Postfix x++ updates x but returns its previous value. This commit lowers it to
-`(type of x)((x += 1) - 1)`; x-- uses an addend of -1 and reverses that afterward.
-The compound-assignment helper evaluates the address once. Pointer scaling works
-for both the update and reverse adjustment. The final cast restores char/short
-width, including boundary wrapping. Postfix binds tightly: *p++ dereferences the
-old pointer and advances p, whereas (*p)++ updates the pointed-to object.
+Integer tokens recognize decimal, a leading zero for octal, 0x/0X for hexadecimal,
+and 0b/0B for binary. The reader consumes valid digits and reports `invalid digit`
+at a following ASCII letter or digit that cannot belong to the literal. All
+spellings become ordinary numeric nodes; assembly depends on the value rather
+than the source base. Binary literals follow this compiler's extension to C.
 
-Python uses the same lowering, not a special runtime evaluator. This historical
-update-then-reverse strategy is imperfect for _Bool at value 1; general postfix
-semantics are not fully mature yet. Signed overflow remains outside portable C.
+Python's int(text, base) only converts a validated token; it does not evaluate C
+expressions. We retain the earlier explicit signed-64-bit range error rather
+than copying strtoul's platform overflow/wrap behavior. Integer suffixes remain
+unsupported in this commit.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=42;return x++;}\n' > /tmp/lesson79.c
-python3 python/main.py /tmp/lesson79.c > /tmp/lesson79.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson79 /tmp/lesson79.s
-/tmp/lesson79
+printf 'int main(){return 0x2a;}\n' > /tmp/lesson80.c
+python3 python/main.py /tmp/lesson80.c > /tmp/lesson80.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson80 /tmp/lesson80.s
+/tmp/lesson80
 echo $?
 ```
 
-The emitter stores 43 into x, then adds -1 to the expression result, returning
-42. Tests cover old/updated values, pointer precedence, side-effecting targets,
-char boundary conversion, sizeof suppression, tree types, invalid lvalues, and
-the original arithmetic/sizeof tests.
+0x2a becomes `mov $42, %rax`, exactly like decimal 42. The shell displays the
+exit status 42. Tests cover every base and uppercase prefix, token spelling,
+invalid digit positions, assembly, executable statuses, and the original literal
+test program alongside the existing fixtures.
 
 ## Tests and attribution
 

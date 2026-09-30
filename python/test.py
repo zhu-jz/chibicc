@@ -58,6 +58,19 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_integer_bases(self):
+        for spelling, value in [("0777", 511), ("0xbeef", 48879), ("0XBEEF", 48879),
+                                ("0b101111", 47), ("0B101111", 47), ("0", 0), ("42", 42)]:
+            token = tokenize(spelling)[0]
+            self.assertEqual((token.text, token.value), (spelling, value))
+            self.assert_program_returns(f"int main(){{return {spelling};}}", value & 255)
+        for spelling, position in [("08", 1), ("0b2", 2), ("0xG", 2), ("123abc", 3), ("0x", 1)]:
+            with self.assertRaises(CompileError) as caught:
+                tokenize(spelling)
+            self.assertEqual(caught.exception.position, position)
+            self.assertEqual(str(caught.exception), "invalid digit")
+        self.assertIn("  mov $42, %rax\n", compile_program("int main(){return 0x2a;}").stdout)
+
     def test_postfix_increment(self):
         for source, expected in [
             ("int main(){int x=2;return x++;}", 2),
@@ -1575,7 +1588,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){(3+5)/2;}', 4),
             ('int main(){255;}', 255),
             ('int main(){256;}', 0),
-            ('int main(){ 0042 ;}', 42),
+            ('int main(){ 0042 ;}', 34),
             ('int main(){2147483647;}', 255),
             ('int main(){10-3-2;}', 5),
             ('int main(){0-1;}', 255),

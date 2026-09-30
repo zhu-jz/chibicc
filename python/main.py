@@ -1,6 +1,6 @@
-"""Lesson 79: Postfix increment and decrement.
+"""Lesson 80: Integer literal bases.
 
-Based on chibicc commit e8ca48cf41f5f3113cadfb23acfedad7b9fa2e63.
+Based on chibicc commit 7df934d2b63727d67d1c054975893930fa6aff44.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

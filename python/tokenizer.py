@@ -99,6 +99,31 @@ def read_char_literal(source, start):
     return Token("NUM", source[start:end + 1], start, value), end + 1
 
 
+def read_int_literal(source, start):
+    position = start
+    base = 10
+    alphanumeric = string.ascii_letters + string.digits
+    if (source[start:start + 2].lower() in ("0x", "0b")
+            and start + 2 < len(source) and source[start + 2] in alphanumeric):
+        base = 16 if source[start + 1].lower() == "x" else 2
+        position += 2
+    elif source[start] == "0":
+        base = 8
+    digits = string.hexdigits if base == 16 else string.digits[:base]
+    first_digit = position
+    while position < len(source) and source[position] in digits:
+        position += 1
+    if position < len(source) and source[position] in alphanumeric:
+        raise CompileError(position, "invalid digit")
+    try:
+        value = int(source[first_digit:position], base)
+    except ValueError:
+        raise CompileError(start, "integer is too large to convert") from None
+    if value > 2**63 - 1:
+        raise CompileError(start, "integer must fit in a signed 64-bit immediate")
+    return Token("NUM", source[start:position], start, value), position
+
+
 def is_ident1(character):
     return "a" <= character <= "z" or "A" <= character <= "Z" or character == "_"
 
@@ -142,17 +167,8 @@ def tokenize(source):
             continue
 
         if "0" <= character <= "9":
-            start = position
-            while position < len(source) and "0" <= source[position] <= "9":
-                position += 1
-            text = source[start:position]
-            try:
-                value = int(text, 10)
-            except ValueError:
-                raise CompileError(start, "integer is too large to convert") from None
-            if value > 2**63 - 1:
-                raise CompileError(start, "integer must fit in a signed 64-bit immediate")
-            tokens.append(Token("NUM", text, start, value))
+            token, position = read_int_literal(source, position)
+            tokens.append(token)
             continue
 
         if character == '"':

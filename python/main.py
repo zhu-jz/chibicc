@@ -1,6 +1,6 @@
-"""Lesson 29: Array subscripts.
+"""Lesson 30: sizeof expressions.
 
-Based on chibicc commit 648646bba704745274fcd4fef3b7029c7f7e0fcd.
+Based on chibicc commit 3e55cafef80f0fc9d74bb06ea174de4b53e2ef94.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

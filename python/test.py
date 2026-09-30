@@ -32,6 +32,26 @@ def parse_body(source):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_sizeof(self):
+        for body, expected in [
+            ("int x; return sizeof(x);",8), ("int x; return sizeof x;",8),
+            ("int *x; return sizeof(x);",8), ("int x[4]; return sizeof(x);",32),
+            ("int x[3][4]; return sizeof(x);",96),
+            ("int x[3][4]; return sizeof(*x);",32),
+            ("int x[3][4]; return sizeof(**x);",8),
+            ("int x[3][4]; return sizeof(**x)+1;",9),
+            ("int x[3][4]; return sizeof **x+1;",9),
+            ("int x[3][4]; return sizeof(**x+1);",8),
+            ("int x=1; return sizeof(x=2);",8),
+            ("int x=1; sizeof(x=2); return x;",1),
+            ("return sizeof missing();",8),
+        ]:
+            self.assert_program_returns("int main(){"+body+"}", expected)
+        assembly = compile_program("int main(){return sizeof missing();}").stdout
+        self.assertNotIn("call", assembly)
+        self.assertEqual(compile_program("int main(){return sizeof *1;}").returncode, 1)
+        self.assertEqual(tokenize("sizeof sizeofx")[1].kind, "IDENT")
+
     def test_subscripts(self):
         for index, expected in [(0,3),(1,4),(2,5)]:
             self.assert_program_returns("int main(){int x[3]; *x=3; x[1]=4; x[2]=5;"

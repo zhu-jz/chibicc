@@ -156,7 +156,7 @@ class Parser:
             args.append(arg)
         return Node("FUNCALL", funcname=token.text, args=args, tok=token), position + 1
 
-    # primary = "(" expr ")" | identifier func-args? | number
+    # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
         if token.text == "(":
@@ -164,6 +164,11 @@ class Parser:
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position].position, "expected ')'")
             return node, position + 1
+
+        if token.text == "sizeof":
+            operand, position = self.unary(position + 1)
+            add_type(operand)
+            return Node("NUM", value=operand.ty.size, tok=token), position
 
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":

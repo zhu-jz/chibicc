@@ -1,34 +1,36 @@
-# Lesson 76: Declarations in for loops
+# Lesson 77: Compound assignments
 
-Original chibicc commit: [`a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c`](https://github.com/rui314/chibicc/commit/a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c).
+Original chibicc commit: [`01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882`](https://github.com/rui314/chibicc/commit/01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A for initializer can now be a declaration, such as `for(int i=0;...)`. Parsing
-enters a scope before the initializer and leaves it after the body. The variable
-is visible in the condition, increment, and body, then disappears; an outer
-variable with the same name becomes visible again. The generated loop structure
-is unchanged because a declaration already becomes a block of assignments.
+The tokenizer recognizes +=, -=, *=, and /=. The parser lowers `A op= B` to
+`tmp=&A, *tmp=*tmp op B`, where tmp is a fresh anonymous local pointer. Saving
+the address ensures a side effect in A occurs only once. The resulting expression
+returns the assigned value. Pointer +=/-= reuse element-size scaling, and normal
+assignment conversion handles narrow destination types. No new code-generation
+node is required: comma, address, dereference, arithmetic, and assignment suffice.
 
-As in the original, storage class specifiers in this initializer are rejected.
-Python keeps loop scopes on the same explicit scope stack used by ordinary
-blocks. Stack storage remains allocated once in the function prologue.
+Python constructs separate VAR nodes referring to the same temporary Obj; C
+builds equivalent nodes with pointers. The anonymous slot participates in normal
+stack allocation. Evaluation order follows this lowering and the existing emitter.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int sum=0;for(int i=0;i<=10;i=i+1)sum=sum+i;return sum;}\n' > /tmp/lesson76.c
-python3 python/main.py /tmp/lesson76.c > /tmp/lesson76.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson76 /tmp/lesson76.s
-/tmp/lesson76
+printf 'int main(){int x=2;x+=5;return x;}\n' > /tmp/lesson77.c
+python3 python/main.py /tmp/lesson77.c > /tmp/lesson77.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson77 /tmp/lesson77.s
+/tmp/lesson77
 echo $?
 ```
 
-The initializer stores zero to i's stack slot; the begin label tests i, the body
-updates sum, and the increment runs before jumping back. The program exits with
-55. Tests cover sums, nested loops and shadowing, visibility after the loop,
-assembly initialization, diagnostics, and the updated original control tests.
+`lea` computes x's address, a 64-bit store saves it in tmp, and the second
+assignment loads/adds/stores x through that pointer. The program exits with 7.
+Tests cover returned values, all four operators, nested assignments, pointer
+scaling, narrow conversions, one address evaluation, invalid lvalues, and the
+updated original arithmetic programs.
 
 ## Tests and attribution
 

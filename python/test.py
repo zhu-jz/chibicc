@@ -58,6 +58,24 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_compound_assignments(self):
+        for source, expected in [
+            ("int main(){int x=2;return x+=5;}", 7),
+            ("int main(){int x=12;x-=2;x*=3;return x/=5;}", 6),
+            ("int main(){int a[2];a[0]=3;a[1]=7;int i=0;a[i=i+1]+=5;return i+a[1];}", 13),
+            ("int main(){int a[2];a[1]=42;int *p=a;p+=1;return *p;}", 42),
+            ("int main(){char x=127;x+=1;return x<0;}", 1),
+            ("int main(){int x=1,y=2;x+=y*=3;return x+y;}", 13),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("int x=2;x+=5;")
+        node = without_implicit_casts(function.body.body[-1].lhs)
+        self.assertEqual((node.kind, node.lhs.kind, node.rhs.kind), ("COMMA", "ASSIGN", "ASSIGN"))
+        self.assertEqual(function.locals[0].name, "")
+        self.assertEqual(function.locals[0].ty.kind, "PTR")
+        self.assertEqual([token.text for token in tokenize("+= -= *= /=")[:-1]], ["+=", "-=", "*=", "/="])
+        self.assertEqual(compile_program("int main(){1+=2;}").returncode, 1)
+
     def test_for_declarations(self):
         for source, expected in [
             ("int main(){int s=0;for(int i=0;i<=10;i=i+1)s=s+i;return s;}", 55),

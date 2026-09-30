@@ -109,13 +109,37 @@ class Parser:
             node = Node("COMMA", node, rhs, tok=token)
         return node, position
 
-    # assign = equality ("=" assign)?
+    def to_assign(self, binary):
+        """Lower A op= B while evaluating A's address exactly once."""
+        add_type(binary.lhs)
+        add_type(binary.rhs)
+        token = binary.tok
+        temporary = self.new_lvar("", pointer_to(binary.lhs.ty))
+        save_address = Node("ASSIGN", Node("VAR", var=temporary, tok=token),
+                            Node("ADDR", lhs=binary.lhs, tok=token), tok=token)
+        target = Node("DEREF", lhs=Node("VAR", var=temporary, tok=token), tok=token)
+        value = Node("DEREF", lhs=Node("VAR", var=temporary, tok=token), tok=token)
+        operation = Node(binary.kind, value, binary.rhs, tok=token)
+        update = Node("ASSIGN", target, operation, tok=token)
+        return Node("COMMA", save_address, update, tok=token)
+
+    # assign = equality (assign-op assign)?
     def assign(self, position):
         node, position = self.equality(position)
         if self.tokens[position].text == "=":
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             node = Node("ASSIGN", node, rhs, tok=token)
+        elif self.tokens[position].text in ("+=", "-=", "*=", "/="):
+            token = self.tokens[position]
+            rhs, position = self.assign(position + 1)
+            if token.text == "+=":
+                binary = new_add(node, rhs, token)
+            elif token.text == "-=":
+                binary = new_sub(node, rhs, token)
+            else:
+                binary = Node(token.text[0], node, rhs, tok=token)
+            node = self.to_assign(binary)
         return node, position
 
     # equality = relational (("==" | "!=") relational)*

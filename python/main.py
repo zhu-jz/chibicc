@@ -1,6 +1,6 @@
-"""Lesson 76: Declarations in for loops.
+"""Lesson 77: Compound assignments.
 
-Based on chibicc commit a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c.
+Based on chibicc commit 01a94c04aa2b5a95ac4038bd0d6fd5334fcbf882.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

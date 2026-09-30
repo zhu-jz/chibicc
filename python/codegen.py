@@ -10,6 +10,7 @@ from common import CompileError, align_to
 
 ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
 ARGREG8 = ("%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b")
+ARGREG16 = ("%di", "%si", "%dx", "%cx", "%r8w", "%r9w")
 ARGREG32 = ("%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d")
 
 
@@ -53,6 +54,8 @@ class CodeGenerator:
             return
         if ty.size == 1:
             self.assembly.append("  movsbq (%rax), %rax")
+        elif ty.size == 2:
+            self.assembly.append("  movswq (%rax), %rax")
         elif ty.size == 4:
             self.assembly.append("  movsxd (%rax), %rax")
         else:
@@ -67,6 +70,8 @@ class CodeGenerator:
             return
         if ty.size == 1:
             self.assembly.append("  mov %al, (%rdi)")
+        elif ty.size == 2:
+            self.assembly.append("  mov %ax, (%rdi)")
         elif ty.size == 4:
             self.assembly.append("  mov %eax, (%rdi)")
         else:
@@ -192,6 +197,8 @@ class CodeGenerator:
     def store_gp(self, index, var):
         if var.ty.size == 1:
             register = ARGREG8[index]
+        elif var.ty.size == 2:
+            register = ARGREG16[index]
         elif var.ty.size == 4:
             register = ARGREG32[index]
         elif var.ty.size == 8:

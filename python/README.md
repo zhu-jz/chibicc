@@ -1,46 +1,43 @@
-# Lesson 57: Eight-byte long values
+# Lesson 58: Two-byte short values
 
-Original chibicc commit: [`43c2f0829f7d4ec3b96132b9964a778ff816b2eb`](https://github.com/rui314/chibicc/commit/43c2f0829f7d4ec3b96132b9964a778ff816b2eb).
+Original chibicc commit: [`9d48eef58b964551350fe0c1f641a57f5da40529`](https://github.com/rui314/chibicc/commit/9d48eef58b964551350fe0c1f641a57f5da40529).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Long has size/alignment 8; int remains 4 and char 1. Long variables, parameters,
-arrays and members use the existing eight-byte loads, stores, argument-register
-saves and pointer scaling. Numeric token/tree values now support wider literals.
-Python's integers already had the needed representation; its decimal input
-check now permits 0 through 9223372036854775807. Generated assembly interpolates
-that value directly into `mov $value, %rax`; the assembler chooses its encoding.
+Short is now accepted as a type with size/alignment 2. Scalar stores write
+`%ax`, the low sixteen bits of `%rax`. Loads use `movswq` to sign-extend a
+two-byte value into `%rax`. Parameter saves select `%di`, `%si`, `%dx`, `%cx`,
+`%r8w`, or `%r9w` for short arguments. Arrays and pointer arithmetic use the
+two-byte element size; struct fields and locals use two-byte alignment.
 
-Upstream temporarily assigns long type to every numeric literal, comparison
-and function call, so `sizeof(1)`, `sizeof(1==2)`, and `sizeof(missing())` each
-produce 8. A declared int variable still has size 4. Arithmetic type conversion
-and function-call signature handling remain incomplete at this stage; these
-intermediate choices are intentionally retained. Short becomes a reserved
-keyword in this original commit but its type is not yet accepted.
+Thus `short x=32768;` stores bytes representing -32768, and reloading x gives
+a negative sixty-four-bit value. Writing one short must not overwrite an
+adjacent short. Char/int/long and pointer storage widths remain 1/4/8/8.
+Python adds the ordinary Type singleton and instruction cases; no simulated
+Python runtime evaluates the program.
 
-The Python port keeps a clear error for literals outside the signed sixty-four
-bit positive range rather than reproducing C strtoul's overflow/wrapping
-behavior. Larger positive input and the unsigned spelling of the minimum
-signed value are rejected. Negative expressions use unary minus as before.
+Literal/comparison/function-call types remain long at this intermediate step,
+and arithmetic conversions are still incomplete. The input range check from
+lesson 57 and the existing compiler limits continue to apply.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){long x=4294967296;return x/65536/65536;}\n' > /tmp/lesson57.c
-python3 python/main.py -o /tmp/lesson57.s /tmp/lesson57.c
-cat /tmp/lesson57.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson57 /tmp/lesson57.s
-/tmp/lesson57
+printf 'int main(){short x=42;return x;}\n' > /tmp/lesson58.c
+python3 python/main.py -o /tmp/lesson58.s /tmp/lesson58.c
+cat /tmp/lesson58.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson58 /tmp/lesson58.s
+/tmp/lesson58
 echo $?
 ```
 
-`mov $4294967296, %rax` constructs the large value. A full `%rax` store and
-load preserve it in x. Two signed divisions reduce it to 1; the shell reports
-status 1. Tests cover the largest accepted literal, large globals and function
-parameters/returns, array strides, struct alignment, sizeof's intermediate
-long typing, assembly widths, and range/short diagnostics. Updated upstream
-function, struct and variable fixtures are run with all other C fixtures.
+x lives at -2(%rbp). `mov %ax, (%rdi)` stores two bytes and
+`movswq (%rax), %rax` loads them for the return. The shell displays status
+42; the executable prints nothing. Tests cover sizeof, truncation and signed
+loads, neighboring values, globals, arrays, struct padding, all six short
+parameters, and explicit assembly widths. Updated upstream function, struct
+and variable fixtures are run with the existing C fixture suite.
 
 ## Tests and attribution
 

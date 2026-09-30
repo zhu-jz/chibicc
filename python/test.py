@@ -10,7 +10,7 @@ from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
 from tokenizer import tokenize
-from type import ty_int, ty_long
+from type import ty_int, ty_long, ty_short
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -42,6 +42,23 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_short_type(self):
+        for source, expected in [
+            ("int main(){short x;return sizeof(x);}", 2),
+            ("int main(){short x=32768;return x<0;}", 1),
+            ("short g;int main(){g=65535;return g==-1;}", 1),
+            ("int main(){short x=7;short y=9;x=11;return y;}", 9),
+            ("int main(){short a[3];a[2]=42;return *(a+2);}", 42),
+            ("int main(){struct {char a;short b;} x;return sizeof(x);}", 4),
+            ("int f(short a,short b,short c,short d,short e,short f){return a+b+c+d+e+f;}int main(){return f(1,2,3,4,5,6);}", 21),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("short f(short a){return a;}int main(){short x=42;return f(x);}").stdout
+        self.assertIn("  mov %di, -2(%rbp)\n", assembly)
+        self.assertIn("  mov %ax, (%rdi)\n", assembly)
+        self.assertIn("  movswq (%rax), %rax\n", assembly)
+        self.assertEqual((ty_short.size, ty_short.align), (2, 2))
+
     def test_long_type(self):
         for source, expected in [
             ("int main(){long x=4294967296;return x/65536/65536;}", 1),
@@ -61,7 +78,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(tokenize("9223372036854775807")[0].value, 9223372036854775807)
         self.assertEqual(tokenize("short")[0].kind, "KEYWORD")
         result = compile_program("int main(){short x;}")
-        self.assertIn("typename expected", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
         result = compile_program("int main(){return 9223372036854775808;}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("signed 64-bit immediate", result.stderr)

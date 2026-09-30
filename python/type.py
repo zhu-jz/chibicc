@@ -10,12 +10,13 @@ from common import CompileError, Type
 
 
 ty_char = Type("CHAR", size=1, align=1)
+ty_short = Type("SHORT", size=2, align=2)
 ty_int = Type("INT", size=4, align=4)
 ty_long = Type("LONG", size=8, align=8)
 
 
 def is_integer(ty):
-    return ty.kind in ("CHAR", "INT", "LONG")
+    return ty.kind in ("CHAR", "SHORT", "INT", "LONG")
 
 
 def copy_type(ty):

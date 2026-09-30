@@ -1,6 +1,6 @@
-"""Lesson 57: Eight-byte long values.
+"""Lesson 58: Two-byte short values.
 
-Based on chibicc commit 43c2f0829f7d4ec3b96132b9964a778ff816b2eb.
+Based on chibicc commit 9d48eef58b964551350fe0c1f641a57f5da40529.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

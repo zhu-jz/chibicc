@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, align_to
-from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int, ty_long
+from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
@@ -307,6 +307,8 @@ class Parser:
     def declspec(self, position):
         if self.tokens[position].text == "char":
             return ty_char, position + 1
+        if self.tokens[position].text == "short":
+            return ty_short, position + 1
         if self.tokens[position].text == "int":
             return ty_int, position + 1
         if self.tokens[position].text == "long":

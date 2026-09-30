@@ -1,6 +1,6 @@
-"""Lesson 75: File-scope static functions.
+"""Lesson 76: Declarations in for loops.
 
-Based on chibicc commit 736232f3d672dae9a1ddae800909204c17fbe37c.
+Based on chibicc commit a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

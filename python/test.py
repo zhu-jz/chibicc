@@ -58,6 +58,21 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_for_declarations(self):
+        for source, expected in [
+            ("int main(){int s=0;for(int i=0;i<=10;i=i+1)s=s+i;return s;}", 55),
+            ("int main(){int i=42;for(int i=0;i<3;i=i+1);return i;}", 42),
+            ("int main(){int s=0;for(int i=0;i<2;i=i+1)for(int i=0;i<3;i=i+1)s=s+1;return s;}", 6),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = parse_body("for(int i=0;i<1;i=i+1);").body.body[0]
+        self.assertEqual(node.init.kind, "BLOCK")
+        self.assertEqual(node.init.body[0].lhs.kind, "ASSIGN")
+        result = compile_program("int main(){for(int i=0;i<1;i=i+1);return i;}")
+        self.assertIn("undefined variable", result.stderr)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(compile_program("int main(){for(static int i=0;;);}").returncode, 1)
+
     def test_static_functions(self):
         source = "static int f(){return 42;}int main(){return f();}"
         self.assert_program_returns(source, 42, "static int f(){return 5;}")
@@ -1716,7 +1731,6 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(){int x y;}', 17, "expected ','"),
             ('int main(){int x,;}', 17, "expected a variable name"),
             ('int main(){int x=;}', 17, "expected an expression"),
-            ('int main(){for(int i=0;;);}', 15, "expected an expression"),
             ('int main(){return *1;}', 18, "invalid pointer dereference"),
             ('int main(){int x=3; return *x;}', 27, "invalid pointer dereference"),
             ('int main(){int x,y; return &x+&y;}', 29, "invalid operands"),

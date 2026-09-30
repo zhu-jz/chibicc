@@ -1,35 +1,34 @@
-# Lesson 75: File-scope static functions
+# Lesson 76: Declarations in for loops
 
-Original chibicc commit: [`736232f3d672dae9a1ddae800909204c17fbe37c`](https://github.com/rui314/chibicc/commit/736232f3d672dae9a1ddae800909204c17fbe37c).
+Original chibicc commit: [`a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c`](https://github.com/rui314/chibicc/commit/a4fea2ba3edeb8ab5a0812a09f14c2a771aa196c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A static function gets internal linkage: its assembly symbol is local to the
-object file. Other source files may define a different static function with the
-same name without a link conflict. The parser records the static attribute on
-function declarations and definitions; typedef combined with static is an error.
-Storage classes remain invalid in parameter/type-name/member contexts.
+A for initializer can now be a declaration, such as `for(int i=0;...)`. Parsing
+enters a scope before the initializer and leaves it after the body. The variable
+is visible in the condition, increment, and body, then disappears; an outer
+variable with the same name becomes visible again. The generated loop structure
+is unchanged because a declaration already becomes a block of assignments.
 
-At this historical step static affects functions only. Static variable storage
-and complete redeclaration/linkage rules are not implemented yet. Python bool
-fields replace the original C attributes without changing emitted behavior.
+As in the original, storage class specifiers in this initializer are rejected.
+Python keeps loop scopes on the same explicit scope stack used by ordinary
+blocks. Stack storage remains allocated once in the function prologue.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'static int f(){return 42;}int main(){return f();}\n' > /tmp/lesson75.c
-python3 python/main.py /tmp/lesson75.c > /tmp/lesson75.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson75 /tmp/lesson75.s
-/tmp/lesson75
+printf 'int main(){int sum=0;for(int i=0;i<=10;i=i+1)sum=sum+i;return sum;}\n' > /tmp/lesson76.c
+python3 python/main.py /tmp/lesson76.c > /tmp/lesson76.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson76 /tmp/lesson76.s
+/tmp/lesson76
 echo $?
-nm /tmp/lesson75 | grep ' f$'
 ```
 
-`.local f` makes f a local symbol (nm prints lowercase t), while `.globl main`
-keeps main externally visible. `call f` still invokes it normally. The program
-returns 42. Tests link another C file containing its own static f, check assembly
-visibility and declaration attributes, exercise errors, and run upstream tests.
+The initializer stores zero to i's stack slot; the begin label tests i, the body
+updates sum, and the increment runs before jumping back. The program exits with
+55. Tests cover sums, nested loops and shadowing, visibility after the loop,
+assembly initialization, diagnostics, and the updated original control tests.
 
 ## Tests and attribution
 

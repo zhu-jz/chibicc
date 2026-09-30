@@ -326,7 +326,13 @@ class Parser:
             position += 1
             if self.tokens[position].text != "(":
                 raise CompileError(self.tokens[position], "expected '('")
-            init, position = self.expr_stmt(position + 1)
+            self.enter_scope()
+            position += 1
+            if self.is_typename(position):
+                basety, position = self.declspec(position)
+                init, position = self.declaration(position, basety)
+            else:
+                init, position = self.expr_stmt(position)
             cond = None
             if self.tokens[position].text != ";":
                 cond, position = self.expr(position)
@@ -339,6 +345,7 @@ class Parser:
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
             then, position = self.stmt(position + 1)
+            self.leave_scope()
             return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token), position
         if self.tokens[position].text == "while":
             position += 1

@@ -42,6 +42,21 @@ def instruction_assembly(assembly):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_alignment(self):
+        for declaration, size, alignment, offsets in [
+            ("struct {char a;int b;char c;} x;", 24, 8, [0, 8, 16]),
+            ("struct {char a;char b;} x;", 2, 1, [0, 1]),
+            ("struct {} x;", 0, 1, []),
+            ("struct {char a;struct {char b;int c;} d;} x;", 24, 8, [0, 8]),
+        ]:
+            ty = parse_body(declaration).locals[0].ty
+            self.assertEqual((ty.size, ty.align), (size, alignment))
+            self.assertEqual([member.offset for member in ty.members], offsets)
+        self.assert_program_returns("int main(){struct {char a;int b;} x;char *p=&x;char *q=&x.b;return q-p;}", 8)
+        self.assert_program_returns("int main(){struct {char a;int b;} x[2];char *p=x;char *q=x+1;return q-p;}", 16)
+        ty = parse_body("struct {char a;int b;} x[2];").locals[0].ty
+        self.assertEqual((ty.size, ty.align), (32, 8))
+
     def test_struct_members(self):
         for source, expected in [
             ("int main(){struct {char a;int b;char c;} x;x.a=1;x.b=2;x.c=3;return x.a+x.b+x.c;}", 6),
@@ -52,10 +67,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         program = parse_body("struct {char a;int b;} x;return sizeof(x);")
         ty = program.locals[0].ty
-        self.assertEqual(ty.size, 9)
-        self.assertEqual([member.offset for member in ty.members], [0, 1])
+        self.assertEqual(ty.size, 16)
+        self.assertEqual([member.offset for member in ty.members], [0, 8])
         assembly = compile_program("int main(){struct {char a;int b;} x;x.b=42;return x.b;}")
-        self.assertIn("  add $1, %rax\n", assembly.stdout)
+        self.assertIn("  add $8, %rax\n", assembly.stdout)
         for source, message in [
             ("int main(){int x;return x.a;}", "not a struct"),
             ("int main(){struct {int x;} a;return a.y;}", "no such member"),

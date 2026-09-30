@@ -9,8 +9,8 @@ from dataclasses import replace
 from common import CompileError, Type
 
 
-ty_char = Type("CHAR", size=1)
-ty_int = Type("INT", size=8)
+ty_char = Type("CHAR", size=1, align=1)
+ty_int = Type("INT", size=8, align=8)
 
 
 def is_integer(ty):
@@ -22,7 +22,7 @@ def copy_type(ty):
 
 
 def pointer_to(base):
-    return Type("PTR", base, size=8)
+    return Type("PTR", base, size=8, align=8)
 
 
 def func_type(return_ty):
@@ -30,7 +30,7 @@ def func_type(return_ty):
 
 
 def array_of(base, length):
-    return Type("ARRAY", base, size=base.size * length, array_len=length)
+    return Type("ARRAY", base, size=base.size * length, array_len=length, align=base.align)
 
 
 def add_type(node):

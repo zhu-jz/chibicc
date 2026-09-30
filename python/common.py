@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+def align_to(value, alignment):
+    return (value + alignment - 1) // alignment * alignment
+
+
 @dataclass
 class Token:
     kind: str
@@ -40,6 +44,7 @@ class Type:
     size: int = 0
     array_len: int = 0
     members: list["Member"] = field(default_factory=list)
+    align: int = 0
 
 
 @dataclass

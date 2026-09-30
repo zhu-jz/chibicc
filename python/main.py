@@ -1,6 +1,6 @@
-"""Lesson 49: Anonymous structs and member access.
+"""Lesson 50: Struct member alignment.
 
-Based on chibicc commit f814033d04c4cefdbcf8174d65011d484d69303c.
+Based on chibicc commit 9443e4b8bc587b670f9b448b03842530cd355760.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

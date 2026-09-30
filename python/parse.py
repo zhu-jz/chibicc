@@ -7,7 +7,7 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
-from common import CompileError, Member, Node, Obj, Type
+from common import CompileError, Member, Node, Obj, Type, align_to
 from type import add_type, array_of, copy_type, func_type, is_integer, pointer_to, ty_char, ty_int
 
 
@@ -322,10 +322,14 @@ class Parser:
                 members.append(Member(ty, ty.name))
             position += 1
         offset = 0
+        alignment = 1
         for member in members:
+            offset = align_to(offset, member.ty.align)
             member.offset = offset
             offset += member.ty.size
-        return Type("STRUCT", size=offset, members=members), position + 1
+            alignment = max(alignment, member.ty.align)
+        return Type("STRUCT", size=align_to(offset, alignment), align=alignment,
+                    members=members), position + 1
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
     def func_params(self, position, ty):

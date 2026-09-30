@@ -5,7 +5,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 
-from common import CompileError
+from common import CompileError, align_to
 
 
 ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
@@ -196,7 +196,7 @@ class CodeGenerator:
             for var in function.locals:
                 offset += var.ty.size
                 var.offset = -offset
-            function.stack_size = (offset + 15) // 16 * 16
+            function.stack_size = align_to(offset, 16)
             self.current_fn = function
             self.assembly.extend([f"  .globl {function.name}", "  .text", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",

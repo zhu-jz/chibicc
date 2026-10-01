@@ -1,6 +1,6 @@
-"""Lesson 198: Pass overflow arguments on the stack.
+"""Lesson 199: Receive stack-passed parameters.
 
-Based on chibicc commit b29f0521025c95ff331ddb58258b1083f8efd9ff.
+Based on chibicc commit 9021f7f5decea3e7954f138e9bac4cfea26292be.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

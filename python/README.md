@@ -1,40 +1,34 @@
-# Lesson 198: Pass overflow arguments on the stack
+# Lesson 199: Receive stack-passed parameters
 
-Original chibicc commit: [`b29f0521025c95ff331ddb58258b1083f8efd9ff`](https://github.com/rui314/chibicc/commit/b29f0521025c95ff331ddb58258b1083f8efd9ff).
+Original chibicc commit: [`9021f7f5decea3e7954f138e9bac4cfea26292be`](https://github.com/rui314/chibicc/commit/9021f7f5decea3e7954f138e9bac4cfea26292be).
 Earlier explanations are available in Git history.
 
-Calls now use up to six general-purpose registers and eight floating registers,
-then pass additional scalar arguments in eight-byte stack slots. Register
-counts are independent. Stack arguments are evaluated right to left first;
-register arguments follow in a second right-to-left pass. C leaves argument
-evaluation order unspecified; this preserves the original two-pass choice.
+Function definitions now recognize parameters whose register class is full.
+They assign those parameters positive frame offsets, beginning at rbp+16:
+the return address and saved frame pointer occupy the preceding words. Each
+following parameter starts on an eight-byte boundary. Locals and parameters
+received in registers retain negative offsets in the callee's allocated frame.
 
-Padding is reserved before argument evaluation so the final argument area ends
-on a sixteen-byte boundary, including when an outer expression already has a
-saved temporary. After the call the compiler removes stack arguments and
-padding. It holds the function address in r10 and sets rax to the number of
-floating registers used, supplying the required variadic AL value.
-
-This commit changes callers only. Python-generated definitions still reject
-parameters exceeding the register limits until their receiving logic advances.
-Aggregate arguments and the bundled va_arg stack reader remain unsupported.
-Tests call GCC-compiled helpers to exercise the new ABI without adding later
-callee features. Python lists replace the recursive C argument-list traversal.
+The prologue saves only register parameters; stack parameters are accessed
+directly in the incoming argument area. This completes scalar caller/callee
+stack support from the preceding lesson. Python recomputes negative offsets
+when generating the same tree again, so repeated generation retains the frame
+size; the original C code assumes one generation pass. Aggregate argument
+classification and the bundled variadic stack reader still await their own steps.
 
 ```sh
-printf 'int sum7(int,int,int,int,int,int,int);int main(void){return sum7(1,2,3,4,5,6,21);}\n' > /tmp/lesson.c
-printf 'int sum7(int a,int b,int c,int d,int e,int f,int g){return a+b+c+d+e+f+g;}\n' > /tmp/helper.c
+printf 'int sum7(int a,int b,int c,int d,int e,int f,int g){return a+b+c+d+e+f+g;}int main(void){return sum7(1,2,3,4,5,6,21);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s /tmp/helper.c
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The seventh integer is pushed, six others are restored into argument registers,
-and the indirect call uses r10. Its result is returned in rax. Tests cover ten
-integer/float/double arguments, nested-expression alignment, an external
-variadic function with ten doubles, floating register count, two-pass evaluation,
-existing calls and the original mixed variadic sprintf fixture.
+The caller pushes the seventh value. In sum7, its address is rbp+16; the other
+six values are loaded from saved local slots. Addition leaves 42 in rax before
+return. Tests cover ten integer/float/double parameters, GCC callers, small
+stack parameters, offsets, frame size, repeat generation, existing definitions
+and the upstream mixed-register/stack functions.
 
 ## Tests and attribution
 

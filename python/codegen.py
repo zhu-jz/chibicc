@@ -509,8 +509,22 @@ class CodeGenerator:
         for function in program:
             if not function.is_function or not function.is_definition:
                 continue
+            top, gp, fp = 16, 0, 0
+            for var in function.params:
+                if var.ty.kind in ("FLOAT", "DOUBLE"):
+                    on_stack = fp >= FP_MAX
+                    fp += 1
+                else:
+                    on_stack = gp >= GP_MAX
+                    gp += 1
+                if on_stack:
+                    top = align_to(top, 8)
+                    var.offset = top
+                    top += var.ty.size
             offset = 0
             for var in function.locals:
+                if var.offset > 0:
+                    continue
                 offset += var.ty.size
                 offset = align_to(offset, var.align)
                 var.offset = -offset
@@ -534,6 +548,8 @@ class CodeGenerator:
                     self.assembly.append(f"  movsd %xmm{index}, {offset + 72 + index * 8}(%rbp)")
             gp, fp = 0, 0
             for var in function.params:
+                if var.offset > 0:
+                    continue
                 if var.ty.kind in ("FLOAT", "DOUBLE"):
                     if fp >= 8:
                         raise CompileError(var.ty.name, "at most 8 floating parameters are supported")

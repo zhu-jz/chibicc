@@ -77,6 +77,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_stack_parameter_definitions(self):
+        for spelling in ('int', 'float', 'double'):
+            parameters = ','.join(f'{spelling} x{i}' for i in range(1, 11))
+            expression = '+'.join(f'x{i}' for i in range(1, 11))
+            definition = f'{spelling} sum10({parameters}){{return {expression};}}'
+            self.assert_program_returns(definition + 'int main(void){return sum10(1,2,3,4,5,6,7,8,9,10);}', 55)
+            self.assert_program_returns(definition + 'int call(void);int main(void){return call();}', 55,
+                                        f'{spelling} sum10({parameters});int call(void){{return sum10(1,2,3,4,5,6,7,8,9,10);}}')
+        self.assert_program_returns('int f(char a,char b,char c,char d,char e,char f,char g,char h){return g/h;}int main(void){return f(1,2,3,4,5,6,40,10);}', 4)
+        program = parse(tokenize('int f(int a,int b,int c,int d,int e,int f,int g,int h){int local=1;return g+h+local;}'))
+        assembly = CodeGenerator().generate(program)
+        function = next(obj for obj in program if obj.is_function)
+        self.assertEqual([var.offset for var in function.params[-2:]], [16, 24])
+        self.assertEqual(function.stack_size, 32)
+        self.assertEqual(CodeGenerator().generate(program), assembly)
+        self.assertIn('  lea 16(%rbp), %rax\n', assembly)
+
     def test_stack_argument_calls(self):
         for spelling in ('int', 'float', 'double'):
             parameters = ','.join(f'{spelling} x{i}' for i in range(1, 11))
@@ -2866,7 +2883,7 @@ int main(void){return 42;}
         self.assertEqual([var.name for var in function.locals], ["z", "x", "y"])
         assembly = CodeGenerator().generate([function])
         self.assertIn("  mov %edi, -8(%rbp)\n  mov %esi, -12(%rbp)\n", assembly)
-        self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 1)
+        self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 0)
         result = compile_program("int f();int main(void){return f(*3);}")
         self.assertIn("invalid pointer dereference", result.stderr)
 

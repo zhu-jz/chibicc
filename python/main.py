@@ -1,6 +1,6 @@
-"""Lesson 199: Receive stack-passed parameters.
+"""Lesson 200: Pass struct and union arguments.
 
-Based on chibicc commit 9021f7f5decea3e7954f138e9bac4cfea26292be.
+Based on chibicc commit 5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

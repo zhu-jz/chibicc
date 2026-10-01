@@ -77,6 +77,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aggregate_argument_calls(self):
+        for declaration, initializer, expression in [
+            ('struct T{int a;double b;};', '{12,30}', 'x.a+x.b'),
+            ('struct T{double a[2];};', '{{12,30}}', 'x.a[0]+x.a[1]'),
+            ('struct T{char a[3];};', '{{12,15,15}}', 'x.a[0]+x.a[1]+x.a[2]'),
+            ('struct T{long a,b,c;};', '{12,15,15}', 'x.a+x.b+x.c'),
+            ('union T{long a;double b;};', '{42}', 'x.a'),
+        ]:
+            kind = declaration.split()[0]
+            source = declaration + f'int f({kind} T);int main(void){{{kind} T x={initializer};return f(x);}}'
+            helper = declaration + f'int f({kind} T x){{return {expression};}}'
+            self.assert_program_returns(source, 42, helper)
+        assembly = compile_program('struct T{long a,b,c;};int f(struct T);int main(void){struct T x={12,15,15};return f(x);}').stdout
+        self.assertIn('  sub $24, %rsp\n', assembly)
+        self.assertIn('  mov %r10b, 23(%rsp)\n', assembly)
+        self.assertIn('  add $32, %rsp\n', assembly)
+
     def test_stack_parameter_definitions(self):
         for spelling in ('int', 'float', 'double'):
             parameters = ','.join(f'{spelling} x{i}' for i in range(1, 11))
@@ -2119,8 +2136,7 @@ int main(void){return 42;}
         self.assertIn("  movsxd %eax, %rax\n", assembly)
         for kind in ("struct", "union"):
             result = compile_program(f"{kind} T{{int x;}};int f({kind} T x);int main(void){{{kind} T a;return f(a);}}")
-            self.assertIn("passing struct or union is not supported yet", result.stderr)
-            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_return_conversions(self):
         for source, expected in [

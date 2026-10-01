@@ -1,34 +1,34 @@
-# Lesson 199: Receive stack-passed parameters
+# Lesson 200: Pass struct and union arguments
 
-Original chibicc commit: [`9021f7f5decea3e7954f138e9bac4cfea26292be`](https://github.com/rui314/chibicc/commit/9021f7f5decea3e7954f138e9bac4cfea26292be).
+Original chibicc commit: [`5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3`](https://github.com/rui314/chibicc/commit/5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3).
 Earlier explanations are available in Git history.
 
-Function definitions now recognize parameters whose register class is full.
-They assign those parameters positive frame offsets, beginning at rbp+16:
-the return address and saved frame pointer occupy the preceding words. Each
-following parameter starts on an eight-byte boundary. Locals and parameters
-received in registers retain negative offsets in the callee's allocated frame.
+Calls now copy aggregates instead of casting them to a scalar. Values larger
+than sixteen bytes go on the stack, rounded to eight-byte slots. Smaller ones
+are classified recursively in two eight-byte ranges: an all-floating range
+uses XMM, and any integer or pointer member makes its range use a GP register.
+Arrays and nested aggregates participate in the same classification.
 
-The prologue saves only register parameters; stack parameters are accessed
-directly in the incoming argument area. This completes scalar caller/callee
-stack support from the preceding lesson. Python recomputes negative offsets
-when generating the same tree again, so repeated generation retains the frame
-size; the original C code assumes one generation pass. Aggregate argument
-classification and the bundled variadic stack reader still await their own steps.
+The generated code copies each byte into a temporary stack area, then pops
+register chunks into argument registers. Stack chunks stay until the call
+returns. This commit changes callers only; GCC helper functions exercise the
+receiving side. Python uses loops and lists instead of recursive C linked lists.
+We retain this commit's strict register-limit comparisons and classification
+of an empty second range; boundary cases await the corresponding original fix.
 
 ```sh
-printf 'int sum7(int a,int b,int c,int d,int e,int f,int g){return a+b+c+d+e+f+g;}int main(void){return sum7(1,2,3,4,5,6,21);}\n' > /tmp/lesson.c
+printf 'struct T{long a,b,c;};int f(struct T);int main(void){struct T x={12,15,15};return f(x);}\n' > /tmp/lesson.c
+printf 'struct T{long a,b,c;};int f(struct T x){return x.a+x.b+x.c;}\n' > /tmp/helper.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s /tmp/helper.c
 /tmp/lesson
 echo $?  # 42
 ```
 
-The caller pushes the seventh value. In sum7, its address is rbp+16; the other
-six values are loaded from saved local slots. Addition leaves 42 in rax before
-return. Tests cover ten integer/float/double parameters, GCC callers, small
-stack parameters, offsets, frame size, repeat generation, existing definitions
-and the upstream mixed-register/stack functions.
+Here sub $24 reserves the aggregate copy, byte moves fill it, and the caller
+removes thirty-two bytes including alignment padding after the call. Tests
+cover mixed integer/double structs, floating arrays, a three-byte struct, a
+large stack struct, a union, assembly cleanup, and the original C fixtures.
 
 ## Tests and attribution
 

@@ -55,6 +55,17 @@ CAST_TABLE = (
 )
 
 
+def has_flonum(ty, lo, hi, offset=0):
+    """Whether every member starting in this byte range is floating point."""
+    if ty.kind in ("STRUCT", "UNION"):
+        return all(has_flonum(member.ty, lo, hi, offset + member.offset)
+                   for member in ty.members)
+    if ty.kind == "ARRAY":
+        return all(has_flonum(ty.base, lo, hi, offset + ty.base.size * i)
+                   for i in range(ty.array_len))
+    return offset < lo or hi <= offset or ty.kind in ("FLOAT", "DOUBLE")
+
+
 class CodeGenerator:
     def __init__(self):
         self.assembly = []
@@ -141,14 +152,25 @@ class CodeGenerator:
     def push_args(self, args):
         stack, gp, fp = 0, 0, 0
         for arg in args:
-            if arg.ty.kind in ("FLOAT", "DOUBLE"):
+            ty = arg.ty
+            arg.pass_by_stack = False
+            if ty.kind in ("STRUCT", "UNION"):
+                if ty.size <= 16:
+                    fp1, fp2 = has_flonum(ty, 0, 8), has_flonum(ty, 8, 16)
+                    if fp + fp1 + fp2 < FP_MAX and gp + (not fp1) + (not fp2) < GP_MAX:
+                        fp += fp1 + fp2
+                        gp += (not fp1) + (not fp2)
+                        continue
+                arg.pass_by_stack = True
+                stack += align_to(ty.size, 8) // 8
+            elif ty.kind in ("FLOAT", "DOUBLE"):
                 arg.pass_by_stack = fp >= FP_MAX
                 fp += 1
+                stack += arg.pass_by_stack
             else:
                 arg.pass_by_stack = gp >= GP_MAX
                 gp += 1
-            if arg.pass_by_stack:
-                stack += 1
+                stack += arg.pass_by_stack
         if (self.depth + stack) % 2:
             self.assembly.append("  sub $8, %rsp")
             self.depth += 1
@@ -158,7 +180,14 @@ class CodeGenerator:
                 if arg.pass_by_stack != pass_by_stack:
                     continue
                 self.gen_expr(arg)
-                if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                if arg.ty.kind in ("STRUCT", "UNION"):
+                    size = align_to(arg.ty.size, 8)
+                    self.assembly.append(f"  sub ${size}, %rsp")
+                    self.depth += size // 8
+                    for offset in range(arg.ty.size):
+                        self.assembly.extend((f"  mov {offset}(%rax), %r10b",
+                                              f"  mov %r10b, {offset}(%rsp)"))
+                elif arg.ty.kind in ("FLOAT", "DOUBLE"):
                     self.pushf()
                 else:
                     self.push()
@@ -249,7 +278,26 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             gp, fp = 0, 0
             for arg in node.args:
-                if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                ty = arg.ty
+                if ty.kind in ("STRUCT", "UNION"):
+                    if ty.size > 16:
+                        continue
+                    fp1, fp2 = has_flonum(ty, 0, 8), has_flonum(ty, 8, 16)
+                    if fp + fp1 + fp2 < FP_MAX and gp + (not fp1) + (not fp2) < GP_MAX:
+                        if fp1:
+                            self.popf(fp)
+                            fp += 1
+                        else:
+                            self.pop(ARGREG[gp])
+                            gp += 1
+                        if ty.size > 8:
+                            if fp2:
+                                self.popf(fp)
+                                fp += 1
+                            else:
+                                self.pop(ARGREG[gp])
+                                gp += 1
+                elif ty.kind in ("FLOAT", "DOUBLE"):
                     if fp < FP_MAX:
                         self.popf(fp)
                         fp += 1

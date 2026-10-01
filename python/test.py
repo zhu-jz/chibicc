@@ -60,6 +60,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_string_initializers(self):
+        for source, expected in [
+            ('int main(){char a[4]="abc";return a[2];}', 99),
+            ('int main(){char a[4]="abc";return a[3];}', 0),
+            ('int main(){char a[7]="abc";return a[6];}', 0),
+            ('int main(){char a[2]="abc";return a[1];}', 98),
+            ('int main(){char a[2][4]={"abc","def"};return a[1][2];}', 102),
+            (r'int main(){char a[2]="\x80";return a[0]<0;}', 1),
+            (r'int main(){int a[2]="\x80";return a[0]<0;}', 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program('int main(){char a[4]="abc";return a[0];}').stdout
+        self.assertIn("  mov $97, %rax\n", assembly)
+        self.assertIn("  mov %al, (%rdi)\n", assembly)
+        self.assertNotIn("  .data\n", assembly)
+
     def test_excess_initializer_elements(self):
         for source, expected in [
             ("int main(){int a[1]={42,3,4};return a[0];}", 42),

@@ -836,23 +836,37 @@ class Parser:
         _, position = self.assign(position)
         return position
 
+    def string_initializer(self, position, init):
+        token = self.tokens[position]
+        count = min(init.ty.array_len, len(token.str))
+        for index in range(count):
+            byte = token.str[index]
+            value = byte if byte < 128 else byte - 256
+            init.children[index].expr = Node("NUM", value=value, tok=token)
+        return position + 1
+
+    def array_initializer(self, position, init):
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position], "expected '{'")
+        position += 1
+        index = 0
+        while self.tokens[position].text != "}":
+            if index:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            if index < len(init.children):
+                position = self.initializer2(position, init.children[index])
+            else:
+                position = self.skip_excess_element(position)
+            index += 1
+        return position + 1
+
     def initializer2(self, position, init):
+        if init.ty.kind == "ARRAY" and self.tokens[position].kind == "STR":
+            return self.string_initializer(position, init)
         if init.ty.kind == "ARRAY":
-            if self.tokens[position].text != "{":
-                raise CompileError(self.tokens[position], "expected '{'")
-            position += 1
-            index = 0
-            while self.tokens[position].text != "}":
-                if index:
-                    if self.tokens[position].text != ",":
-                        raise CompileError(self.tokens[position], "expected ','")
-                    position += 1
-                if index < len(init.children):
-                    position = self.initializer2(position, init.children[index])
-                else:
-                    position = self.skip_excess_element(position)
-                index += 1
-            return position + 1
+            return self.array_initializer(position, init)
         init.expr, position = self.assign(position)
         return position
 

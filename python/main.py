@@ -1,6 +1,6 @@
-"""Lesson 99: Discard excess initializer elements.
+"""Lesson 100: String literal array initializers.
 
-Based on chibicc commit a754732c046939cd87ac9fc8e9483ae9b3369449.
+Based on chibicc commit 0d717373cc9e247fc6f6a0e02b0bbd424f0d70b0.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

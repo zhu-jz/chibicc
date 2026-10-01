@@ -1,34 +1,31 @@
-# Lesson 178: Add macro token pasting
+# Lesson 179: Use the Python preprocessor for every upstream test
 
-Original chibicc commit: [`8f561aed9b7a47c38afd8c1cc75bc9a700ae97b5`](https://github.com/rui314/chibicc/commit/8f561aed9b7a47c38afd8c1cc75bc9a700ae97b5).
+Original chibicc commit: [`769b5a0941694ccdcfe61528053c3d93cb53de80`](https://github.com/rui314/chibicc/commit/769b5a0941694ccdcfe61528053c3d93cb53de80).
 Earlier explanations are available in Git history.
 
-In function-like replacement bodies, `##` joins the neighboring token texts
-and tokenizes the result. Exactly one resulting token is required. It can form
-numbers, operators or identifiers. Pasting uses unexpanded argument tokens;
-a multi-token left argument supplies its last token, while a right argument
-supplies its first token. Remaining tokens retain their order.
+Every upstream C test now enters the Python compiler as its original source
+file. The test runner no longer asks GCC to preprocess ordinary fixtures first.
+Includes, ASSERT parameter substitution and stringizing all run through our
+own preprocessor. The original macro test switches to the shared test header.
 
-Empty arguments contribute no token and leave the other side intact. Pasted
-results are rescanned for macros. Invalid results and a pasting operator at
-an expansion's start or end are diagnosed. As in this original commit,
-object-like bodies do not run the substitution helper, so pasting is currently
-handled only in function-like macros. Python also diagnoses an empty argument
-followed by a trailing operator instead of following a null token pointer.
+This original commit changes the build/test workflow rather than the compiler
+algorithm. Python applies the same change to its unittest fixture runner;
+its packaged entry point uses that same runner. GCC assembles and links the
+emitted assembly with the unchanged C support helper. The helper supplies
+runtime assertions and is not the original compiler.
 
 ```sh
-printf '#define PASTE(x,y) x##y\nint main(void){int answer42=42;return PASTE(answer,42);}\n' > /tmp/lesson.c
-python3 python/main.py -E /tmp/lesson.c
+printf '#include "%s/python/test/test.h"\nint main(void){ASSERT(42,6*7);return 42;}\n' "$PWD" > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s -xc python/test/common
 /tmp/lesson
 echo $?  # 42
 ```
 
-The pasted identifier refers to a local variable. Assembly loads that stack
-slot into `%rax` and returns. Tests cover decimal and hexadecimal numbers,
-identifiers, empty arguments, raw multi-token arguments, chained pastes and
-invalid operators. The upstream fixture is copied without edits.
+ASSERT becomes a call with the expected value, actual expression and a generated
+string. Assembly multiplies 6 by 7 and passes arguments to the assertion helper,
+then returns 42 in `%rax`. All upstream programs are assembled, linked and run
+through both the source and packaged Python compiler entry points.
 
 ## Tests and attribution
 

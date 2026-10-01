@@ -1,6 +1,6 @@
-"""Lesson 178: Add macro token pasting.
+"""Lesson 179: Use the Python preprocessor for every upstream test.
 
-Based on chibicc commit 8f561aed9b7a47c38afd8c1cc75bc9a700ae97b5.
+Based on chibicc commit 769b5a0941694ccdcfe61528053c3d93cb53de80.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

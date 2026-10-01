@@ -2207,13 +2207,7 @@ int main(void){return 42;}
         with tempfile.TemporaryDirectory() as directory:
             for source in sorted(fixtures.glob("*.c")):
                 with self.subTest(source=source.name):
-                    if source.name == "macro.c":
-                        compiled = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
-                    else:
-                        preprocessed = subprocess.run(
-                            ["gcc", "-E", "-P", "-C", str(source)],
-                            capture_output=True, text=True, check=True)
-                        compiled = compile_program(preprocessed.stdout)
+                    compiled = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
                     self.assertEqual(compiled.returncode, 0, compiled.stderr)
                     assembly = Path(directory) / (source.stem + ".s")
                     executable = Path(directory) / source.stem

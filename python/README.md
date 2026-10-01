@@ -1,27 +1,27 @@
-# Lesson 247: Read GNU preprocessor line markers
+# Lesson 248: Expand file modification timestamps
 
-Original chibicc commit: [`aaf20fb96eaf21ead775fde6bad00d8e71650b5a`](https://github.com/rui314/chibicc/commit/aaf20fb96eaf21ead775fde6bad00d8e71650b5a).
+Original chibicc commit: [`922604ae1e29fd1283fcc557e294a7272116c094`](https://github.com/rui314/chibicc/commit/922604ae1e29fd1283fcc557e294a7272116c094).
 Earlier explanations are available in Git history.
 
-A numeric preprocessing token immediately after `#` now selects the line-marker
-parser. This accepts the GNU output form without the `line` keyword, including
-optional trailing flags. The same file state and token snapshots from the last
-lesson handle the logical line and filename changes.
+The GNU `__TIMESTAMP__` macro now becomes a 24-character string describing the
+physical file's last modification time in local time. Failed file lookup, such
+as standard input, yields the original placeholder `??? ??? ?? ??:??:?? ????`.
+A logical filename set by `#line` does not change the file used for this lookup.
 
 ```sh
-printf '# 41 "virtual.c" 2 3\nint main(void){return __LINE__;}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof(__TIMESTAMP__)+17;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The marker disappears during preprocessing and `__LINE__` becomes 42, which the
-assembly loads into the return register. Tests exercise both filename forms,
-invalid non-int marker numbers and the expanded original line.c fixture.
-Trailing flags are consumed with the directive but have no effect in this
-original implementation. The previous historical off-by-one rule remains.
-Python dispatches on the token kind string instead of C's token-kind enum.
+The timestamp occupies 25 bytes including its terminator. `sizeof` becomes 25,
+so assembly adds 17 and returns 42. Tests set known file times, check the stdin
+placeholder, and verify macro definitions in headers use the defining file's
+mtime, matching this original handler's lack of origin traversal.
+Python uses os.stat and time.ctime; C uses stat and ctime_r. Both format local
+time. Original C fixtures include a runtime length check for the new macro.
 
 ## Tests and attribution
 

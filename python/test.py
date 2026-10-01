@@ -3,6 +3,7 @@
 from pathlib import Path
 from dataclasses import replace
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_timestamp_macro(self):
+        self.assertEqual(tokenize('__TIMESTAMP__')[0].str, b'??? ??? ?? ??:??:?? ????\0')
+        self.assert_program_returns('int main(void){return sizeof(__TIMESTAMP__)+17;}', 42)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'stamp.c'
+            source.write_text('#line 10 "virtual.c"\n__TIMESTAMP__\n')
+            os.utime(source, (946684800, 946684800))
+            token = preprocess(tokenize_file(source, []))[0]
+            self.assertEqual(token.str, time.ctime(946684800).encode() + b'\0')
+            header = Path(directory) / 'stamp.h'
+            header.write_text('#define TS __TIMESTAMP__\n')
+            os.utime(header, (1000000000, 1000000000))
+            source.write_text('#include "stamp.h"\nTS\n')
+            token = preprocess(tokenize_file(source, []))[0]
+            self.assertEqual(token.str, time.ctime(1000000000).encode() + b'\0')
+
     def test_gnu_line_markers(self):
         self.assert_program_returns('# 41 "virtual.c" 2 3\nint main(void){return __LINE__+(__FILE__[0]!=118);}', 42)
         self.assert_program_returns('# 41\nint main(void){return __LINE__;}', 42)

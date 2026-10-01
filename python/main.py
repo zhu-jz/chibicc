@@ -1,6 +1,6 @@
-"""Lesson 247: Read GNU preprocessor line markers.
+"""Lesson 248: Expand file modification timestamps.
 
-Based on chibicc commit aaf20fb96eaf21ead775fde6bad00d8e71650b5a.
+Based on chibicc commit 922604ae1e29fd1283fcc557e294a7272116c094.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -501,6 +501,14 @@ def line_macro(template):
     return new_num_token(template.line_no + (template.file.line_delta if template.file else 0), template)
 
 
+def timestamp_macro(template):
+    try:
+        modified = os.stat(template.file.name).st_mtime
+    except OSError:
+        return new_str_token("??? ??? ?? ??:??:?? ????", template)
+    return new_str_token(time.ctime(modified)[:24], template)
+
+
 def undef_macro(macros, name):
     macros.pop(name, None)
 
@@ -573,6 +581,7 @@ def init_macros():
         return token
 
     macros["__COUNTER__"] = Macro("__COUNTER__", [], handler=counter_macro)
+    macros["__TIMESTAMP__"] = Macro("__TIMESTAMP__", [], handler=timestamp_macro)
     now = time.localtime()
     months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")

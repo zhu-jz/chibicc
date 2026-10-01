@@ -194,6 +194,8 @@ class Node:
     brk_label: Optional[str] = field(default=None, compare=False)
     cont_label: Optional[str] = field(default=None, compare=False)
     cases: list["Node"] = field(default_factory=list, compare=False)
+    begin: int = 0
+    end: int = 0
     default_case: Optional["Node"] = field(default=None, compare=False)
     fvalue: float = 0.0
     asm_str: str = ""

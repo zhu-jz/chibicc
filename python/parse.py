@@ -655,14 +655,20 @@ class Parser:
         if token.text in ("case", "default"):
             if self.current_switch is None:
                 raise CompileError(token, "stray " + token.text)
-            value = 0
+            value = end = 0
             position += 1
             if token.text == "case":
                 value, position = self.const_expr(position)
                 value = to_int32(value)
+                end = value
+                if self.tokens[position].text == "...":
+                    end, position = self.const_expr(position + 1)
+                    end = to_int32(end)
+                    if end < value:
+                        raise CompileError(self.tokens[position], "empty case range specified")
             if self.tokens[position].text != ":":
                 raise CompileError(self.tokens[position], "expected ':'")
-            node = Node("CASE", value=value, label=self.new_unique_name(), tok=token)
+            node = Node("CASE", begin=value, end=end, label=self.new_unique_name(), tok=token)
             node.lhs, position = self.stmt(position + 1)
             if token.text == "case":
                 self.current_switch.cases.insert(0, node)

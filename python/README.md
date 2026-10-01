@@ -1,35 +1,27 @@
-# Lesson 280: Add long double with x87 arithmetic
+# Lesson 281: Support GNU case ranges
 
-Original chibicc commit: [`e0bf168041ef60687b5d4454a93fc78c4f3acc48`](https://github.com/rui314/chibicc/commit/e0bf168041ef60687b5d4454a93fc78c4f3acc48).
+Original chibicc commit: [`d90c73b6058af4b22a4edd610713f75b2478e356`](https://github.com/rui314/chibicc/commit/d90c73b6058af4b22a4edd610713f75b2478e356).
 Earlier explanations are available in Git history.
 
-long double is now a distinct 16-byte, 16-byte-aligned type. Its value uses the x87
-80-bit floating format in st(0), rather than the SSE xmm0 register used for float
-and double. Arithmetic, comparisons, negation and casts use x87 instructions.
-Arguments occupy 16 bytes on the stack; functions return their value in st(0).
+A case label can now specify an inclusive range: case 6 ... 20. The parser stores
+both endpoints and rejects an inverted range. A one-value case keeps the existing
+comparison. A range subtracts its lower bound from a copy of the switch value,
+then uses an unsigned comparison against the range width.
 
 ```sh
-printf 'long double f(long double x){return x+2.0L;}int main(void){return f(40.0L);}\n' > /tmp/lesson.c
+printf 'int main(void){switch(7){case 0 ... 5:return 1;case 6 ... 20:return 42;}return 0;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly loads constants with fldt, places the argument on the stack with fstpt,
-adds using faddp, and converts the returned value using fistpl. The integer cast
-temporarily selects truncation in the x87 control word, then restores it. Tests
-cover arithmetic, conditions, literals beyond double precision and calls in both
-directions with GCC-compiled helpers, plus the original C fixtures.
-
-Python uses Fraction for exact decimal/hexadecimal L literals and rounds their
-ratios to an 80-bit significand/exponent with ties to even. The six padding bytes
-are zero. Ordinary floating literals and constant evaluation still use Python's
-double precision. C's initializer evaluator also returns double; this commit does
-not add long-double global initialization, so Python reports unsupported size.
-The original predefined __SIZEOF_LONG_DOUBLE__ still says 8 despite sizeof being
-16. Historical narrow-integer cast instructions and x87 expression-stack limits
-are preserved; this step does not introduce later corrections.
+Assembly computes 7-6 and checks whether the unsigned result is at most 14 using
+jbe. A value below 6 wraps to a large unsigned number and fails the comparison.
+Tests cover both endpoints, values outside the range, negative bounds, a single
+value, 64-bit switches and the empty-range diagnostic, plus original control.c.
+Python stores case nodes in a list where C links them; both check newest cases
+first and convert the endpoints through a signed 32-bit int in this commit.
 
 ## Tests and attribution
 

@@ -87,6 +87,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_case_ranges(self):
+        for value in (-4, -3, 0, 2, 3):
+            self.assert_program_returns(f'int main(void){{switch({value}){{case -3 ... 2:return 42;default:return 7;}}}}', 42 if -3 <= value <= 2 else 7)
+        self.assert_program_returns('int main(void){long x=7;switch(x){case 7 ... 7:return 42;default:return 0;}}', 42)
+        result = compile_program('int main(void){switch(3){case 5 ... 2:return 0;}return 42;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('empty case range specified', result.stderr)
+        assembly = compile_program('int main(void){switch(7){case 6 ... 20:return 42;}return 0;}').stdout
+        self.assertIn('  sub $6, %edi\n  cmp $14, %edi\n  jbe ', assembly)
+
     def test_long_double_x87(self):
         for source, expected in [
             ('int main(void){long double x=20.5L,y=21.5L;return x+y;}', 42),

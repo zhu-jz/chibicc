@@ -1,6 +1,6 @@
-"""Lesson 280: Add long double with x87 arithmetic.
+"""Lesson 281: Support GNU case ranges.
 
-Based on chibicc commit e0bf168041ef60687b5d4454a93fc78c4f3acc48.
+Based on chibicc commit d90c73b6058af4b22a4edd610713f75b2478e356.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -704,7 +704,12 @@ class CodeGenerator:
             self.gen_expr(node.cond)
             register = "%rax" if node.cond.ty.size == 8 else "%eax"
             for case in node.cases:
-                self.assembly.extend((f"  cmp ${case.value}, {register}", f"  je {case.label}"))
+                if case.begin == case.end:
+                    self.assembly.extend((f"  cmp ${case.begin}, {register}", f"  je {case.label}"))
+                else:
+                    di = "%rdi" if node.cond.ty.size == 8 else "%edi"
+                    self.assembly.extend((f"  mov {register}, {di}", f"  sub ${case.begin}, {di}",
+                                          f"  cmp ${case.end - case.begin}, {di}", f"  jbe {case.label}"))
             if node.default_case is not None:
                 self.assembly.append(f"  jmp {node.default_case.label}")
             self.assembly.append(f"  jmp {node.brk_label}")

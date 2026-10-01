@@ -79,6 +79,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_wide_string_literals(self):
+        for text in ('','abc','日本語','🍣'):
+            token = tokenize('L"' + text + '"')[0]
+            self.assertEqual(token.str,text.encode('utf-32-le')+b'\0\0\0\0')
+            self.assertEqual((token.ty.base.size,token.ty.base.is_unsigned),(4,False))
+        self.assert_program_returns('int main(void){return L"βb"[0]-904;}',42)
+        self.assert_program_returns(r'int main(void){return (L"\xffffffff"[0]>>31)==-1;}',1)
+        self.assertEqual(tokenize('#define S(x) #x\nS(L"a")')[0].str,b'L"a"\0')
+
     def test_utf32_string_literals(self):
         for text in ('','abc','日本語','🍣'):
             token = tokenize('U"' + text + '"')[0]

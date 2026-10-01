@@ -1,6 +1,6 @@
-"""Lesson 230: Transcode U-prefixed strings to UTF-32.
+"""Lesson 231: Read L-prefixed wide strings.
 
-Based on chibicc commit c467ee665de0c385170850ecc895add04b52b8a3.
+Based on chibicc commit cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

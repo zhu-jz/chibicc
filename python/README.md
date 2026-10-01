@@ -1,16 +1,16 @@
-# Lesson 230: Transcode U-prefixed strings to UTF-32
+# Lesson 231: Read L-prefixed wide strings
 
-Original chibicc commit: [`c467ee665de0c385170850ecc895add04b52b8a3`](https://github.com/rui314/chibicc/commit/c467ee665de0c385170850ecc895add04b52b8a3).
+Original chibicc commit: [`cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8`](https://github.com/rui314/chibicc/commit/cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8).
 Earlier explanations are available in Git history.
 
-U-prefixed strings now use one little-endian four-byte unit per code point,
-plus a four-byte zero terminator. Their type is an unsigned-int array. Numeric
-escapes keep their low 32 bits; indexed access scales by four and follows
-unsigned integer rules. Source spelling remains available for stringizing.
+L-prefixed strings reuse the UTF-32 reader with signed int elements. On this
+x86-64 Linux target, wide strings therefore use four-byte little-endian units
+and a four-byte zero terminator. Their payload bytes can match U strings, but
+arithmetic and shifts follow signed rather than unsigned integer rules.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return U"🍣"[0]-127801;}
+int main(void){return L"βb"[0]-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,13 +18,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The data section stores code point 127843 as four bytes. Main loads that unit
-and subtracts 127801 to return 42. Tests inspect empty/ASCII/Japanese/emoji
-bytes and sizes, indexed terminators, unsigned escape shifts, stringizing and
-original memcmp fixtures. Python serializes ord values explicitly in little
-endian instead of writing through uint32_t pointers. As in the preceding
-step, array initialization and concatenation have not yet gained full handling
-for wider element sizes.
+An indexed four-byte load obtains 946; subtraction returns 42. Tests inspect
+payload bytes and element signedness, run a signed high-bit shift, preserve
+macro stringizing and execute original fixtures. Python passes ty_int into
+its existing UTF-32 reader, mirroring the C reuse. This deliberately targets
+Linux wide characters; Windows uses a different representation. Wider array
+initializer and concatenation paths still retain their earlier limitations.
 
 ## Tests and attribution
 

@@ -403,6 +403,10 @@ def tokenize(source):
             token, position = read_utf32_string_literal(source, position, position + 1, ty_uint)
             append_token(token)
             continue
+        if source.startswith('L"', position):
+            token, position = read_utf32_string_literal(source, position, position + 1, ty_int)
+            append_token(token)
+            continue
 
         if character == "'":
             token, position = read_char_literal(source, position)

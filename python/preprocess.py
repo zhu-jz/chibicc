@@ -75,6 +75,9 @@ def eval_const_expr(tokens, position, files, macros, conditions):
     preprocess2(expression, files, macros, conditions)
     if expression[0].kind == "EOF":
         raise CompileError(start, "no expression")
+    for index, token in enumerate(expression):
+        if token.kind == "IDENT":
+            expression[index] = new_num_token(0, token)
     value, rest = const_expr(expression)
     if expression[rest].kind != "EOF":
         raise CompileError(expression[rest], "extra token")

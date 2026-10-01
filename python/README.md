@@ -1,21 +1,21 @@
-# Lesson 180: Add the defined operator
+# Lesson 181: Replace remaining conditional identifiers with zero
 
-Original chibicc commit: [`5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a`](https://github.com/rui314/chibicc/commit/5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a).
+Original chibicc commit: [`a8d76ad435891deee9deebbc3a825062fd6cd45a`](https://github.com/rui314/chibicc/commit/a8d76ad435891deee9deebbc3a825062fd6cd45a).
 Earlier explanations are available in Git history.
 
-Conditional expressions now recognize `defined NAME` and `defined(NAME)`.
-The operand must be an identifier. It becomes a numeric token containing 1
-when the macro exists and 0 otherwise, before the rest of the expression is
-macro-expanded. The operand's replacement body is never expanded for this test.
+After processing `defined` and expanding macros in a conditional expression,
+any remaining identifier becomes an integer token with value zero. This lets
+`#if UNKNOWN` select its alternate branch and `#if UNKNOWN == 0` select its
+first branch. A self-referential macro's surviving name becomes zero too.
 
-The rewrite uses the existing tokenizer to create an ordinary integer token
-with its C type and synthetic source information. Arithmetic and logical
-operators then work through the usual constant-expression parser. This
-operator applies only in `#if` and `#elif` expressions; `#ifdef` remains a direct
-name lookup. Unknown ordinary identifiers still produce an error at this step.
+The rewrite applies only to preprocessing constant expressions. Undeclared
+identifiers in program code continue to produce diagnostics. Tokens retain C
+integer typing through the existing numeric-token helper; Python does not
+interpret the expression itself. The earlier unknown-condition error test is
+updated to expect the new behavior.
 
 ```sh
-printf '#define PRESENT\n#if defined(PRESENT) && !defined(ABSENT)\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#if UNKNOWN == 0\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -23,10 +23,10 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The condition becomes `1 && !0` and selects the function. Assembly loads 42 into
-`%rax` and returns, with no runtime definition checks. Tests cover both syntaxes,
-logical/arithmetic combinations, function-like and undefined names, undefinition,
-unexpanded operands and malformed syntax.
+The condition becomes `0 == 0` before parsing the program. Assembly loads 42
+into `%rax` and returns, with no runtime identifier checks. Tests cover logical
+and arithmetic use, unknown names in alternative branches, recursive macros,
+and unchanged errors for undeclared names in actual code.
 
 ## Tests and attribution
 

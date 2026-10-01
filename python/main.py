@@ -1,6 +1,6 @@
-"""Lesson 180: Add the defined operator.
+"""Lesson 181: Replace remaining conditional identifiers with zero.
 
-Based on chibicc commit 5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a.
+Based on chibicc commit a8d76ad435891deee9deebbc3a825062fd6cd45a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

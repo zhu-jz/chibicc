@@ -72,6 +72,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_undefined_names_in_conditions(self):
+        for expression in ('UNKNOWN==0', '!UNKNOWN', 'UNKNOWN+2==2', 'KNOWN&&!UNKNOWN'):
+            self.assert_program_returns('#define KNOWN 1\n#if ' + expression +
+                                        '\nint main(void){return 42;}\n#else\ninvalid\n#endif\n', 42)
+        self.assert_program_returns('#if UNKNOWN\ninvalid\n#elif ALSO_UNKNOWN\ninvalid\n#else\nint main(void){return 7;}\n#endif\n', 7)
+        self.assert_program_returns('#define SELF SELF\n#if SELF==0\nint main(void){return 11;}\n#endif\n', 11)
+        result = compile_program('int main(void){return UNKNOWN;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('undefined variable', result.stderr)
+
     def test_defined_operator(self):
         for expression in ('defined VALUE', 'defined(VALUE)', 'defined(VALUE)&&!defined(UNKNOWN)',
                            'defined(FUNCTION)', 'defined(VALUE)+defined(UNKNOWN)==1'):
@@ -224,9 +234,7 @@ invalid
         result = compile_program('#define EMPTY\n#if EMPTY\n#endif\n')
         self.assertEqual(result.returncode, 1)
         self.assertIn('no expression', result.stderr)
-        result = compile_program('#if UNKNOWN\n#endif\n')
-        self.assertEqual(result.returncode, 1)
-        self.assertIn('undefined variable', result.stderr)
+        self.assert_program_returns('#if UNKNOWN\ninvalid\n#else\nint main(void){return 11;}\n#endif\n', 11)
 
     def test_undef_directives(self):
         self.assert_program_returns('#define VALUE 7\n#define VALUE 11\n#undef VALUE\nint main(void){int VALUE=42;return VALUE;}\n', 42)

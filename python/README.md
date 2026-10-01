@@ -1,29 +1,26 @@
-# Lesson 233: Initialize UTF-32 and wide arrays
+# Lesson 234: Advertise UTF character encodings
 
-Original chibicc commit: [`6adba75af879d8ac2bc43a7337b02e64d10e60f1`](https://github.com/rui314/chibicc/commit/6adba75af879d8ac2bc43a7337b02e64d10e60f1).
+Original chibicc commit: [`e4491b811510d08f880d0f9c7553ecfd18635469`](https://github.com/rui314/chibicc/commit/e4491b811510d08f880d0f9c7553ecfd18635469).
 Earlier explanations are available in Git history.
 
-String initialization now handles four-byte array elements too. It reads
-uint32-sized units from the literal payload, then normal assignment or global
-serialization converts to the destination's signed or unsigned type. Both
-U strings and Linux L wide strings can initialize complete arrays.
+Two predefined object-like macros, __STDC_UTF_16__ and __STDC_UTF_32__, now
+expand to 1. They let source and headers select code for the u and U character
+and string encodings introduced in the preceding lessons. Normal command-line
+-D/-U and source #define/#undef behavior also applies to these names.
 
 ```sh
-cat > /tmp/lesson.c <<'C'
-int main(void){unsigned int x[]=U"β";return x[0]-904;}
-C
+printf 'int main(void){return __STDC_UTF_16__+__STDC_UTF_32__+40;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Four-byte stores initialize 946 and zero. The indexed load and subtraction
-return 42. Tests cover local/global unsigned and signed arrays, supplementary
-characters, inferred and truncated bounds, high-bit shifts and original fixtures.
-Python extends its existing little-endian unit reader to size 4 rather than
-adding pointer casts. Adjacent wide-string concatenation still has its earlier
-one-byte assumptions until that original step is reached.
+Preprocessing replaces each macro with 1; the usual arithmetic instructions
+return 42. Tests check values, defined/#if selection, -U removal and original
+fixtures. Python adds two entries to the explicit predefined dictionary where
+C calls define_macro twice. This commit advertises the historical encoding
+support; it changes no parser, payload or assembly-generation algorithm.
 
 ## Tests and attribution
 

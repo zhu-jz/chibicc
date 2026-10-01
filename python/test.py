@@ -79,6 +79,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_utf_encoding_predefined_macros(self):
+        self.assertEqual([t.value for t in tokenize('__STDC_UTF_16__;__STDC_UTF_32__') if t.kind=='NUM'],[1,1])
+        self.assert_program_returns('#if defined(__STDC_UTF_16__)&&__STDC_UTF_16__&&defined(__STDC_UTF_32__)&&__STDC_UTF_32__\nint main(void){return 42;}\n#else\n#error missing encoding macros\n#endif',42)
+        result = subprocess.run([sys.executable,str(COMPILER),'-U__STDC_UTF_16__','-E','-'],input='__STDC_UTF_16__',capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,'__STDC_UTF_16__\n')
+
     def test_utf32_array_initializers(self):
         for prefix,spelling in [('U','unsigned int'),('L','int')]:
             self.assert_program_returns(f'int main(void){{{spelling} x[]={prefix}"🤔x";return x[0]==129300&&x[1]==120&&x[2]==0&&sizeof(x)==12;}}',1)

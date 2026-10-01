@@ -511,6 +511,8 @@ def init_macros():
         '__STDC_NO_COMPLEX__': '1',
         '__STDC_NO_THREADS__': '1',
         '__STDC_NO_VLA__': '1',
+        '__STDC_UTF_16__': '1',
+        '__STDC_UTF_32__': '1',
         '__STDC_VERSION__': '201112L',
         '__STDC__': '1',
         '__USER_LABEL_PREFIX__': '',

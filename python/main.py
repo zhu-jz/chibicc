@@ -1,6 +1,6 @@
-"""Lesson 233: Initialize UTF-32 and wide arrays.
+"""Lesson 234: Advertise UTF character encodings.
 
-Based on chibicc commit 6adba75af879d8ac2bc43a7337b02e64d10e60f1.
+Based on chibicc commit e4491b811510d08f880d0f9c7553ecfd18635469.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

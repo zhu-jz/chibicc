@@ -1,6 +1,6 @@
-"""Lesson 217: Check build warnings and non-returning helpers.
+"""Lesson 218: Align large array variables to sixteen bytes.
 
-Based on chibicc commit 2c91da54dff93a365feec5a34f8eaeccca3e3a70.
+Based on chibicc commit 5257ee0f202a5f9c4e5bcb576646cefe70f3ae91.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

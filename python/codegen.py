@@ -622,9 +622,10 @@ class CodeGenerator:
             self.assembly.append(f'  .file {file.file_no} "{name}"')
         for var in program:
             if not var.is_function and var.is_definition:
+                alignment = max(16, var.align) if var.ty.kind == "ARRAY" and var.ty.size >= 16 else var.align
                 section = ".data" if var.init_data is not None else ".bss"
                 visibility = ".local" if var.is_static else ".globl"
-                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {var.align}",
+                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}",
                                       f"  {section}", f"{var.name}:"])
                 if var.init_data is not None:
                     relocations = {rel.offset: rel for rel in var.relocations}
@@ -669,7 +670,8 @@ class CodeGenerator:
                 if var.offset > 0:
                     continue
                 offset += var.ty.size
-                offset = align_to(offset, var.align)
+                alignment = max(16, var.align) if var.ty.kind == "ARRAY" and var.ty.size >= 16 else var.align
+                offset = align_to(offset, alignment)
                 var.offset = -offset
             function.stack_size = align_to(offset, 16)
             self.current_fn = function

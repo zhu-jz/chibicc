@@ -77,6 +77,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_large_array_variable_alignment(self):
+        for size in (16,17,100,101):
+            self.assert_program_returns(f'int main(void){{char x[{size}];return (unsigned long)&x%16;}}',0)
+        program = parse(tokenize('int main(void){_Alignas(32)char x[17];return 0;}'))
+        CodeGenerator().generate(program)
+        function = next(var for var in program if var.is_function)
+        self.assertEqual(next(var.offset for var in function.locals if var.name == 'x') % 32, 0)
+        self.assert_program_returns('int main(void){char x[17];return _Alignof(x);}',1)
+        assembly = compile_program('char x[17];').stdout
+        self.assertIn('  .globl x\n  .align 16\n', assembly)
+        self.assertIn('  .globl x\n  .align 1\n', compile_program('char x[15];').stdout)
+
     def test_ignored_driver_flags(self):
         options = ['-O','-O2','-Wall','-Werror','-g','-g3','-std=c11',
                    '-ffreestanding','-fno-builtin','-fno-omit-frame-pointer',

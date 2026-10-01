@@ -1,29 +1,30 @@
-# Lesson 217: Check build warnings and non-returning helpers
+# Lesson 218: Align large array variables to sixteen bytes
 
-Original chibicc commit: [`2c91da54dff93a365feec5a34f8eaeccca3e3a70`](https://github.com/rui314/chibicc/commit/2c91da54dff93a365feec5a34f8eaeccca3e3a70).
+Original chibicc commit: [`5257ee0f202a5f9c4e5bcb576646cefe70f3ae91`](https://github.com/rui314/chibicc/commit/5257ee0f202a5f9c4e5bcb576646cefe70f3ae91).
 Earlier explanations are available in Git history.
 
-The original enables GCC warnings for the compiler's own build and marks its
-fatal error helpers noreturn. Python has no C compiler-warning pass, so the
-corresponding build target checks every Python module with py_compile and
-warnings treated as errors. make all and make test-all include this check.
-The always-exiting usage helper is annotated with typing.NoReturn.
+Local and global array variables occupying at least sixteen bytes now request
+alignment of at least sixteen bytes. A larger explicit alignment is preserved.
+The array type itself keeps its element alignment, so _Alignof(char[17]) is
+still 1. Local slot allocation applies the stronger variable alignment, and
+global assembly uses a stronger .align directive.
 
 ```sh
-make -C python check all
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/build/chibicc.pyz -S -o /tmp/lesson.s /tmp/lesson.c
+printf 'int main(void){char x[17];return (unsigned long)&x%%16+42;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-This build-quality lesson does not change generated instructions; main still
-places 42 in rax and returns. Validation checks syntax/warnings, archive build,
-the packaged multi-file pipeline and original C fixtures. Python's check is
-an explicit adaptation, not a substitute claim that GCC's -Wall analysis runs
-on Python or that py_compile is a static type checker. Compiler errors already
-raise exceptions, preserving the original non-returning control flow.
+The local array starts at a frame offset divisible by sixteen; rbp is aligned
+too, so the remainder is zero. Tests run four large lengths, explicit 32-byte
+alignment, unchanged type alignment, global directives and original fixtures.
+Python uses max and integer alignment arithmetic. This commit changes the
+alignment value only; the original placement of global .align before the
+section directive is retained and can affect globals when sections change.
+Larger explicit local alignments round the frame offset; the prologue still
+guarantees only sixteen-byte frame-base alignment, as in the original.
 
 ## Tests and attribution
 

@@ -235,6 +235,36 @@ class CodeGenerator:
                     self.assembly.extend((f"  mov {small}, {var.offset + i}(%rbp)",
                                           f"  shr $8, {full}"))
 
+    def copy_struct_reg(self):
+        ty = self.current_fn.ty.return_ty
+        gp, fp = 0, 0
+        self.assembly.append("  mov %rax, %rdi")
+        if has_flonum(ty, 0, 8):
+            instruction = "movss" if ty.size == 4 else "movsd"
+            self.assembly.append(f"  {instruction} (%rdi), %xmm0")
+            fp += 1
+        else:
+            self.assembly.append("  mov $0, %rax")
+            for i in reversed(range(min(8, ty.size))):
+                self.assembly.extend(("  shl $8, %rax", f"  mov {i}(%rdi), %al"))
+            gp += 1
+        if ty.size > 8:
+            if has_flonum(ty, 8, 16):
+                instruction = "movss" if ty.size == 4 else "movsd"
+                self.assembly.append(f"  {instruction} 8(%rdi), %xmm{fp}")
+            else:
+                small, full = ("%al", "%rax") if gp == 0 else ("%dl", "%rdx")
+                self.assembly.append(f"  mov $0, {full}")
+                for i in reversed(range(8, min(16, ty.size))):
+                    self.assembly.extend((f"  shl $8, {full}", f"  mov {i}(%rdi), {small}"))
+
+    def copy_struct_mem(self):
+        ty = self.current_fn.ty.return_ty
+        var = self.current_fn.params[0]
+        self.assembly.append(f"  mov {var.offset}(%rbp), %rdi")
+        for i in range(ty.size):
+            self.assembly.extend((f"  mov {i}(%rax), %dl", f"  mov %dl, {i}(%rdi)"))
+
     def cmp_zero(self, ty):
         if ty.kind in ("FLOAT", "DOUBLE"):
             suffix = "ss" if ty.kind == "FLOAT" else "sd"
@@ -547,6 +577,11 @@ class CodeGenerator:
         if node.kind == "RETURN":
             if node.lhs is not None:
                 self.gen_expr(node.lhs)
+                if node.lhs.ty.kind in ("STRUCT", "UNION"):
+                    if node.lhs.ty.size <= 16:
+                        self.copy_struct_reg()
+                    else:
+                        self.copy_struct_mem()
             self.assembly.append(f"  jmp .L.return.{self.current_fn.name}")
             return
         if node.kind == "GOTO":

@@ -1,6 +1,6 @@
-"""Lesson 202: Call functions returning aggregates.
+"""Lesson 203: Define functions returning aggregates.
 
-Based on chibicc commit c72df1c9be535bdfd5b46609996bf1eaf540aced.
+Based on chibicc commit d7bad961146b9f2fd918f05fd59a50f3f65bf325.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

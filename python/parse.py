@@ -512,7 +512,9 @@ class Parser:
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position], "expected ';'")
-            node = new_cast(node, self.current_fn.ty.return_ty)
+            add_type(node)
+            if self.current_fn.ty.return_ty.kind not in ("STRUCT", "UNION"):
+                node = new_cast(node, self.current_fn.ty.return_ty)
             return Node("RETURN", lhs=node, tok=token), position + 1
         if self.tokens[position].text == "if":
             position += 1
@@ -1299,6 +1301,9 @@ class Parser:
             if param.name is None:
                 raise CompileError(param.name_pos, "parameter name omitted")
             self.new_lvar(param.name.text, param)
+        rty = function.ty.return_ty
+        if rty.kind in ("STRUCT", "UNION") and rty.size > 16:
+            self.new_lvar("", pointer_to(rty))
         function.params = self.locals.copy()
         if ty.is_variadic:
             function.va_area = self.new_lvar("__va_area__", array_of(ty_char, 136))

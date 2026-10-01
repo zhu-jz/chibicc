@@ -77,6 +77,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aggregate_return_definitions(self):
+        for declaration, initializer, expression in [
+            ('struct T{int a;double b;};', '{12,30}', 'f().a+f().b'),
+            ('struct T{double a;long b;};', '{12,30}', 'f().a+f().b'),
+            ('struct T{double a[2];};', '{{12,30}}', 'f().a[0]+f().a[1]'),
+            ('struct T{char a[3];};', '{{12,15,15}}', 'f().a[0]+f().a[1]+f().a[2]'),
+            ('struct T{long a,b,c;};', '{12,15,15}', 'f().a+f().b+f().c'),
+            ('union T{long a;double b;};', '{42}', 'f().a'),
+        ]:
+            kind = declaration.split()[0]
+            definition = declaration + f'{kind} T f(void){{return ({kind} T){initializer};}}'
+            self.assert_program_returns(definition + f'int main(void){{return {expression};}}', 42)
+            self.assert_program_returns(definition + 'int call(void);int main(void){return call();}', 42,
+                                        declaration + f'{kind} T f(void);int call(void){{{kind} T x=f();return ' + expression.replace('f()', 'x') + ';}')
+        self.assert_program_returns('struct T{long a,b,c;};struct T f(int a,int b,int c,int d,int e,int f,int g){return (struct T){a+b+c,d+e+f,g};}int main(void){struct T x=f(1,2,3,4,5,6,21);return x.a+x.b+x.c;}', 42)
+
     def test_aggregate_return_calls(self):
         for declaration, initializer, expression in [
             ('struct T{int a;double b;};', '{12,30}', 'f().a+f().b'),

@@ -1,27 +1,29 @@
-# Lesson 249: Remember the main translation unit filename
+# Lesson 250: Include optional tokens in variadic macros
 
-Original chibicc commit: [`3a10c8aa44250e51dfe33e50b3121d6061faee4b`](https://github.com/rui314/chibicc/commit/3a10c8aa44250e51dfe33e50b3121d6061faee4b).
+Original chibicc commit: [`338144869fa82097d7767a032cbaac616ba0cd01`](https://github.com/rui314/chibicc/commit/338144869fa82097d7767a032cbaac616ba0cd01).
 Earlier explanations are available in Git history.
 
-The GNU `__BASE_FILE__` macro now expands to the original input filename even
-inside included headers. Unlike `__FILE__`, it does not change after `#line`.
-The driver supplies the current translation unit's path when its internal Python
-compiler process initializes predefined macros.
+During function-like macro substitution, `__VA_OPT__(tokens)` now keeps its
+parenthesized tokens only when the raw `__VA_ARGS__` token list is nonempty.
+Balanced parentheses allow nested expressions and commas inside that token list.
+This lets a variadic macro insert a separator only when extra arguments exist.
 
 ```sh
-printf 'int main(void){return __BASE_FILE__[0]==47?42:0;}\n' > /tmp/lesson.c
+printf '#define SUM(x,...) x __VA_OPT__(+) __VA_ARGS__\nint main(void){return SUM(12,30);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The absolute input path begins with slash (ASCII 47). Assembly loads its first
-byte, compares it and returns 42 for the true branch. Tests distinguish the root
-path, header path and logical filename, check stdin and command-line override,
-and run the original macro.c assertion using its relative input path.
-Python captures the base path in a per-compilation macro handler instead of C's
-global base_file. This also keeps independent preprocessing calls isolated.
+Preprocessing produces `12+30`. Assembly loads the operands, adds them and
+returns 42. Tests check empty and nonempty arguments, nested parentheses, optional
+separators and the original sprintf fixtures. Python copies tokens into a list
+where C links them into the output chain.
+This historical implementation tests raw emptiness, so an argument macro that
+later expands to nothing still counts as present. It copies the optional body
+without substituting named parameters inside it; that limitation is preserved
+and explicitly tested rather than claiming full modern standard behavior.
 
 ## Tests and attribution
 

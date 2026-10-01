@@ -280,6 +280,15 @@ def subst(body, args, files, macros, conditions, include_paths):
                 result[-1] = paste(result[-1], rhs)
             position += 2
             continue
+        if token.text == "__VA_OPT__" and body[position + 1].text == "(":
+            optional, position = read_macro_arg_one(body, position + 2, read_rest=True)
+            varargs = args.get("__VA_ARGS__")
+            if varargs is not None and varargs[0].kind != "EOF":
+                result.extend(replace(tok) for tok in optional[:-1])
+            if body[position].text != ")":
+                raise CompileError(body[position], "expected ')'")
+            position += 1
+            continue
         argument = args.get(token.text)
         if argument is not None and body[position + 1].text == "##":
             rhs = body[position + 2]

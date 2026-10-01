@@ -1,6 +1,6 @@
-"""Lesson 249: Remember the main translation unit filename.
+"""Lesson 250: Include optional tokens in variadic macros.
 
-Based on chibicc commit 3a10c8aa44250e51dfe33e50b3121d6061faee4b.
+Based on chibicc commit 338144869fa82097d7767a032cbaac616ba0cd01.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

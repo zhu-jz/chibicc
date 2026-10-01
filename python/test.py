@@ -81,6 +81,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_va_opt(self):
+        self.assert_program_returns('#define M(...) 40 __VA_OPT__(+2)\nint main(void){return M();}', 40)
+        self.assert_program_returns('#define M(...) 40 __VA_OPT__(+2)\nint main(void){return M(99);}', 42)
+        self.assert_program_returns('#define E\n#define M(...) 40 __VA_OPT__(+2)\nint main(void){return M(E);}', 42)
+        self.assert_program_returns('#define M(...) 40 __VA_OPT__(+(1,2))\nint main(void){return M(a,b);}', 42)
+        self.assert_program_returns('#define M(x,...) x __VA_OPT__(+) __VA_ARGS__\nint main(void){return M(12,30);}', 42)
+        tokens = tokenize('#define M(x,...) __VA_OPT__(x)\nM(42,1)\n')
+        self.assertEqual(tokens[0].text, 'x')
+
     def test_base_file_macro(self):
         self.assertEqual(tokenize('__BASE_FILE__')[0].str, b'-\0')
         with tempfile.TemporaryDirectory() as directory:

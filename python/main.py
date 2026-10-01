@@ -1,6 +1,6 @@
-"""Lesson 93: Switch and case statements.
+"""Lesson 94: Shift operators.
 
-Based on chibicc commit 044d9ae07ba700c52d8342e4eee26e07eea11619.
+Based on chibicc commit d0c0cb74b21f431c62f7eeb8dbc0d6e14c1eff14.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

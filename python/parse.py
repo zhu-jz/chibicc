@@ -140,7 +140,7 @@ class Parser:
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             node = Node("ASSIGN", node, rhs, tok=token)
-        elif self.tokens[position].text in ("+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="):
+        elif self.tokens[position].text in ("+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="):
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
             if token.text == "+=":
@@ -148,7 +148,7 @@ class Parser:
             elif token.text == "-=":
                 binary = new_sub(node, rhs, token)
             else:
-                binary = Node(token.text[0], node, rhs, tok=token)
+                binary = Node(token.text[:-1], node, rhs, tok=token)
             node = self.to_assign(binary)
         return node, position
 
@@ -207,19 +207,28 @@ class Parser:
             node = Node(operator, node, rhs, tok=token)
         return node, position
 
-    # relational = add (("<" | "<=" | ">" | ">=") add)*
+    # relational = shift (("<" | "<=" | ">" | ">=") shift)*
     def relational(self, position):
-        node, position = self.add(position)
+        node, position = self.shift(position)
         while self.tokens[position].text in ("<", "<=", ">", ">="):
             token = self.tokens[position]
             operator = self.tokens[position].text
-            rhs, position = self.add(position + 1)
+            rhs, position = self.shift(position + 1)
             if operator == ">":
                 node = Node("<", rhs, node, tok=token)
             elif operator == ">=":
                 node = Node("<=", rhs, node, tok=token)
             else:
                 node = Node(operator, node, rhs, tok=token)
+        return node, position
+
+    # shift = add (("<<" | ">>") add)*
+    def shift(self, position):
+        node, position = self.add(position)
+        while self.tokens[position].text in ("<<", ">>"):
+            token = self.tokens[position]
+            rhs, position = self.add(position + 1)
+            node = Node(token.text, node, rhs, tok=token)
         return node, position
 
     # add = mul (("+" | "-") mul)*

@@ -58,6 +58,23 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_shift_operators(self):
+        for source, expected in [
+            ("int main(){return 1<<2+1;}", 8),
+            ("int main(){return 16>>1>>1;}", 4),
+            ("int main(){return -8>>1;}", 252),
+            ("int main(){return 1<<3<9;}", 1),
+            ("int main(){long x=1;x<<=32;return x>>32;}", 1),
+            ("int main(){int a[1];a[0]=3;int i=0;a[i++]<<=1;return i+a[0];}", 7),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertEqual([token.text for token in tokenize("<<= >>= << >>")[:-1]], ["<<=", ">>=", "<<", ">>"])
+        for spelling, register in (("int", "%eax"), ("long", "%rax")):
+            assembly = compile_program(f"int main(){{{spelling} x=-8;return x>>1;}}").stdout
+            self.assertIn(f"  mov %rdi, %rcx\n  sar %cl, {register}\n", assembly)
+        node = parse_body("return (char)1<<1;").body.body[0].lhs.lhs
+        self.assertEqual((node.kind, node.ty.kind), ("<<", "CHAR"))
+
     def test_switch_cases(self):
         for source, expected in [
             ("int main(){switch(1){case 0:return 3;case 1:return 42;}return 7;}", 42),

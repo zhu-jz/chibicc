@@ -197,6 +197,10 @@ class CodeGenerator:
         elif node.kind in ("&", "|", "^"):
             instruction = {"&": "and", "|": "or", "^": "xor"}[node.kind]
             self.assembly.append(f"  {instruction} %rdi, %rax")
+        elif node.kind in ("<<", ">>"):
+            self.assembly.append("  mov %rdi, %rcx")
+            instruction = "shl" if node.kind == "<<" else "sar"
+            self.assembly.append(f"  {instruction} %cl, {ax}")
         elif node.kind in ("/", "%"):
             self.assembly.append("  cqo" if node.lhs.ty.size == 8 else "  cdq")
             self.assembly.append(f"  idiv {di}")

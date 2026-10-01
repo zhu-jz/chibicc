@@ -96,7 +96,7 @@ def add_type(node):
         node.ty = ty_long
     elif node.kind in ("NOT", "LOGAND", "LOGOR"):
         node.ty = ty_int
-    elif node.kind == "BITNOT":
+    elif node.kind in ("BITNOT", "<<", ">>"):
         node.ty = node.lhs.ty
     elif node.kind == "VAR":
         node.ty = node.var.ty

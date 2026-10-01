@@ -143,6 +143,15 @@ def add_line_numbers(source, tokens):
         token.line_no = line_no
 
 
+def read_punct(source, position):
+    operators = ("<<=", ">>=", "==", "!=", "<=", ">=", "->", "+=", "-=",
+                 "*=", "/=", "++", "--", "%=", "&=", "|=", "^=", "&&", "||", "<<", ">>")
+    for operator in operators:
+        if source.startswith(operator, position):
+            return operator
+    return source[position] if source[position] in string.punctuation else None
+
+
 def tokenize(source):
     tokens = []
     position = 0
@@ -189,14 +198,10 @@ def tokenize(source):
             tokens.append(Token("IDENT", source[start:position], start))
             continue
 
-        if source.startswith(("==", "!=", "<=", ">=", "->", "+=", "-=", "*=", "/=", "++", "--", "%=", "&=", "|=", "^=", "&&", "||"), position):
-            tokens.append(Token("PUNCT", source[position:position + 2], position))
-            position += 2
-            continue
-
-        if character in string.punctuation:
-            tokens.append(Token("PUNCT", character, position))
-            position += 1
+        operator = read_punct(source, position)
+        if operator is not None:
+            tokens.append(Token("PUNCT", operator, position))
+            position += len(operator)
             continue
 
         raise CompileError(position, "invalid token")

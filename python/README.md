@@ -1,27 +1,29 @@
-# Lesson 281: Support GNU case ranges
+# Lesson 282: Support GNU array range designators
 
-Original chibicc commit: [`d90c73b6058af4b22a4edd610713f75b2478e356`](https://github.com/rui314/chibicc/commit/d90c73b6058af4b22a4edd610713f75b2478e356).
+Original chibicc commit: [`3d5550e29a92708613c3a351c0857aea90e147a5`](https://github.com/rui314/chibicc/commit/3d5550e29a92708613c3a351c0857aea90e147a5).
 Earlier explanations are available in Git history.
 
-A case label can now specify an inclusive range: case 6 ... 20. The parser stores
-both endpoints and rejects an inverted range. A one-value case keeps the existing
-comparison. A range subtracts its lower bound from a copy of the switch value,
-then uses an unsigned comparison against the range width.
+An initializer can now select an inclusive array range with [2 ... 4]=7. The parser
+reads both bounds, applies the following initializer to each selected child and
+continues after the range. The existing inferred-bound scan already recognizes
+the final range endpoint, so unsized arrays receive sufficient storage.
 
 ```sh
-printf 'int main(void){switch(7){case 0 ... 5:return 1;case 6 ... 20:return 42;}return 0;}\n' > /tmp/lesson.c
+printf 'int main(void){int x[]={[2 ... 4]=7,21};return x[2]+x[3]+x[4]+x[5];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly computes 7-6 and checks whether the unsigned result is at most 14 using
-jbe. A value below 6 wraps to a large unsigned number and fails the comparison.
-Tests cover both endpoints, values outside the range, negative bounds, a single
-value, 64-bit switches and the empty-range diagnostic, plus original control.c.
-Python stores case nodes in a list where C links them; both check newest cases
-first and convert the endpoints through a signed 32-bit int in this commit.
+Assembly zeroes the local array, writes 7 into elements 2 through 4 and 21 into
+element 5, then adds them. Tests cover inferred bounds, overwrites, global arrays,
+member designators, range errors and the original initializer fixture.
+This original implementation reparses the value for each element, so a local
+side effect such as ++i runs once per selected element; GNU's usual single-evaluation
+rule is not implemented yet. Nested designation resumes at begin+1 as in C.
+Python retains its explicit negative-index rejection instead of indexing before
+C's children array; its diagnostics point at the opening bracket.
 
 ## Tests and attribution
 

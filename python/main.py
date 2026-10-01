@@ -1,6 +1,6 @@
-"""Lesson 281: Support GNU case ranges.
+"""Lesson 282: Support GNU array range designators.
 
-Based on chibicc commit d90c73b6058af4b22a4edd610713f75b2478e356.
+Based on chibicc commit 3d5550e29a92708613c3a351c0857aea90e147a5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

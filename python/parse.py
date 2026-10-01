@@ -1237,9 +1237,16 @@ class Parser:
         index, position = self.const_expr(position + 1)
         if index < 0 or index >= ty.array_len:
             raise CompileError(start, "array designator index exceeds array bounds")
+        end = index
+        if self.tokens[position].text == "...":
+            end, position = self.const_expr(position + 1)
+            if end < 0 or end >= ty.array_len:
+                raise CompileError(start, "array designator index exceeds array bounds")
+            if end < index:
+                raise CompileError(start, f"array designator range [{index}, {end}] is empty")
         if self.tokens[position].text != "]":
             raise CompileError(self.tokens[position], "expected ']'")
-        return index, position + 1
+        return index, end, position + 1
 
     def struct_designator(self, position, ty):
         token = self.tokens[position + 1]
@@ -1258,9 +1265,10 @@ class Parser:
         if self.tokens[position].text == "[":
             if init.ty.kind != "ARRAY":
                 raise CompileError(self.tokens[position], "array index in non-array initializer")
-            index, position = self.array_designator(position, init.ty)
-            position = self.designation(position, init.children[index])
-            return self.array_initializer_without_braces(position, init, index + 1)
+            begin, end, position = self.array_designator(position, init.ty)
+            for index in range(begin, end + 1):
+                rest = self.designation(position, init.children[index])
+            return self.array_initializer_without_braces(rest, init, begin + 1)
         if self.tokens[position].text == "." and init.ty.kind == "STRUCT":
             member, position = self.struct_designator(position, init.ty)
             position = self.designation(position, init.children[member.idx])
@@ -1316,8 +1324,11 @@ class Parser:
                 position += 1
             first = False
             if self.tokens[position].text == "[":
-                index, position = self.array_designator(position, init.ty)
-                position = self.designation(position, init.children[index])
+                begin, end, position = self.array_designator(position, init.ty)
+                for index in range(begin, end + 1):
+                    rest = self.designation(position, init.children[index])
+                position = rest
+                index = end
             elif index < len(init.children):
                 position = self.initializer2(position, init.children[index])
             else:

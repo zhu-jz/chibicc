@@ -87,6 +87,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_array_range_designators(self):
+        for source, expected in [
+            ('int main(void){int x[]={[2 ... 4]=7,9};return sizeof(x)==24&&x[2]==7&&x[4]==7&&x[5]==9?42:0;}', 42),
+            ('int x[6]={[1 ... 4]=7,[2]=9};int main(void){return x[0]==0&&x[1]==7&&x[2]==9&&x[4]==7&&x[5]==0?42:0;}', 42),
+            ('int main(void){struct T{int x,y;};struct T a[3]={[0 ... 2].y=42};return a[2].y;}', 42),
+            ('int main(void){int i=0;int x[3]={[0 ... 2]=++i};return i==3&&x[0]==1&&x[1]==2&&x[2]==3?42:0;}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        for expression, message in [('[2 ... 1]', 'is empty'), ('[0 ... 3]', 'exceeds array bounds')]:
+            result = compile_program(f'int main(void){{int x[3]={{{expression}=1}};return 0;}}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_case_ranges(self):
         for value in (-4, -3, 0, 2, 3):
             self.assert_program_returns(f'int main(void){{switch({value}){{case -3 ... 2:return 42;default:return 7;}}}}', 42 if -3 <= value <= 2 else 7)

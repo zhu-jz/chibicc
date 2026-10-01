@@ -1,33 +1,36 @@
-# Lesson 137: Ignored keywords in array dimensions
+# Lesson 138: Unnamed prototype parameters
 
-Original chibicc commit: [`93d12771d009924fb598b088dc4bd9b67fd9a09a`](https://github.com/rui314/chibicc/commit/93d12771d009924fb598b088dc4bd9b67fd9a09a).
+Original chibicc commit: [`1fad2595d6fa67e57cd795d4faac4306e42e72c5`](https://github.com/rui314/chibicc/commit/1fad2595d6fa67e57cd795d4faac4306e42e72c5).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Array dimension parsing now skips repeated static and restrict before a bound.
-This accepts parameter spelling such as `int a[restrict static 3]`; its array
-type still adjusts to an int pointer as before. The keywords impose no minimum
-length checks or extra runtime behavior in this historical compiler.
+Declarators may now omit their identifier, allowing prototypes such as
+`int f(int, char *);`. Types record name_pos even when name is absent. Variable,
+typedef, function and definition-parameter contexts explicitly require names
+and report the appropriate missing-name diagnostic. Prototype parameters need
+only their types.
 
-The original title mentions const, but its actual diff handles static and
-restrict only. Python follows that diff, so `[const 3]` remains rejected. Existing
-type/declaration qualifier support does not automatically apply inside brackets.
+Python uses optional Token fields and preserves name_pos during array-to-pointer
+parameter adjustment; that gives a readable error for an omitted array parameter
+name instead of dereferencing a null diagnostic token. Representative object
+token metadata is added as upstream does, ready for later uses. There are no
+changes to argument passing or type conversion.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}\n' > /tmp/lesson137.c
-python3 python/main.py /tmp/lesson137.c > /tmp/lesson137.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson137 /tmp/lesson137.s
-/tmp/lesson137
+printf 'int f(int);int main(void){return f(42);}int f(int x){return x;}\n' > /tmp/lesson138.c
+python3 python/main.py /tmp/lesson138.c > /tmp/lesson138.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson138 /tmp/lesson138.s
+/tmp/lesson138
 echo $?
 ```
 
-The caller passes the array address in rdi. f stores that pointer, adds eight
-bytes for index two, and returns 42. Tests check accepted keyword order,
-parameter pointer adjustment, emitted register storage, the actual const
-limitation, execution, and the original compatibility program.
+The prototype emits no function body. Main passes 42 in edi, and the later named
+parameter definition returns it, giving exit status 42. Tests cover unnamed
+scalar/pointer/array prototypes, preserved token positions, required-name errors,
+updated declaration diagnostics, emitted calls, execution, and original C code.
 
 ## Tests and attribution
 

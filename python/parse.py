@@ -817,8 +817,10 @@ class Parser:
             param, position = self.declarator(position, basety)
             if param.kind == "ARRAY":
                 name = param.name
+                name_pos = param.name_pos
                 param = pointer_to(param.base)
                 param.name = name
+                param.name_pos = name_pos
             params.append(copy_type(param))
         ty = func_type(ty)
         ty.params = params
@@ -865,13 +867,15 @@ class Parser:
             ty, _ = self.declarator(start, ty)
             return ty, position
         token = self.tokens[position]
-        if token.kind != "IDENT":
-            raise CompileError(token, "expected a variable name")
+        name = token if token.kind == "IDENT" else None
+        if name is not None:
+            position += 1
         # Keep the declaration name without mutating the shared integer type.
-        ty, position = self.type_suffix(position + 1, ty)
+        ty, position = self.type_suffix(position, ty)
         if ty.kind not in ("STRUCT", "UNION"):
             ty = copy_type(ty)
-        ty.name = token
+        ty.name = name
+        ty.name_pos = token
         return ty, position
 
     # abstract-declarator = "*"* ("(" abstract-declarator ")")? type-suffix
@@ -955,6 +959,8 @@ class Parser:
             ty, position = self.declarator(position, basety)
             if ty.kind == "VOID":
                 raise CompileError(self.tokens[position], "variable declared void")
+            if ty.name is None:
+                raise CompileError(ty.name_pos, "variable name omitted")
             if attr is not None and attr.is_static:
                 var = self.new_gvar(self.new_unique_name(), ty)
                 self.push_scope(ty.name.text).var = var
@@ -1243,6 +1249,8 @@ class Parser:
 
     def function(self, position, basety, attr):
         ty, position = self.declarator(position, basety)
+        if ty.name is None:
+            raise CompileError(ty.name_pos, "function name omitted")
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
         function.is_definition = False
@@ -1254,6 +1262,8 @@ class Parser:
         self.locals = []
         self.enter_scope()
         for param in reversed(ty.params):
+            if param.name is None:
+                raise CompileError(param.name_pos, "parameter name omitted")
             self.new_lvar(param.name.text, param)
         function.params = self.locals.copy()
         if ty.is_variadic:
@@ -1275,6 +1285,8 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
+            if ty.name is None:
+                raise CompileError(ty.name_pos, "variable name omitted")
             var = self.new_gvar(ty.name.text, ty)
             var.is_definition = not attr.is_extern
             var.is_static = attr.is_static
@@ -1299,6 +1311,8 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
+            if ty.name is None:
+                raise CompileError(ty.name_pos, "typedef name omitted")
             self.push_scope(ty.name.text).type_def = ty
         return position + 1
 

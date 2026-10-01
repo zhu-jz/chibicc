@@ -44,6 +44,7 @@ class Type:
     kind: str
     base: Optional["Type"] = None
     name: Optional[Token] = field(default=None, compare=False)
+    name_pos: Optional[Token] = field(default=None, compare=False)
     return_ty: Optional["Type"] = None
     params: list["Type"] = field(default_factory=list)
     size: int = 0
@@ -89,6 +90,7 @@ class Obj:
     relocations: list[Relocation] = field(default_factory=list)
     align: int = field(default=0, compare=False)
     va_area: Optional["Obj"] = field(default=None, compare=False)
+    tok: Optional[Token] = field(default=None, compare=False)
 
 
 @dataclass

@@ -60,6 +60,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unnamed_prototype_parameters(self):
+        self.assert_program_returns("int f(int,int*);int main(void){int x=20;return f(22,&x);}", 42, "int f(int a,int *b){return a+*b;}")
+        function = parse(tokenize("int f(int,char*,int[3]);"))[0]
+        self.assertEqual([param.kind for param in function.ty.params], ["INT", "PTR", "PTR"])
+        self.assertTrue(all(param.name is None for param in function.ty.params))
+        self.assertTrue(all(param.name_pos is not None for param in function.ty.params))
+        for source, message in [
+            ("int f(int){return 42;}", "parameter name omitted"),
+            ("int main(void){int *;}", "variable name omitted"),
+            ("typedef int *;", "typedef name omitted"),
+            ("int ()();", "function name omitted"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+        self.assertIn("  call f\n", compile_program("int f(int);int main(void){return f(42);}").stdout)
+
     def test_array_dimension_keywords(self):
         self.assert_program_returns("int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}", 42)
         function = parse(tokenize("int f(int a[static restrict 3]);"))[0]
@@ -380,7 +397,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(function.params, [])
         assembly = compile_program("int f(void){return 42;}int main(void){return f();}").stdout
         self.assertIn("  call f\n", assembly)
-        self.assertEqual(compile_program("int f(void,int x);int main(void){return 0;}").returncode, 1)
+        self.assertEqual(compile_program("int f(void int x);int main(void){return 0;}").returncode, 1)
 
     def test_flexible_array_member_initializers(self):
         for source, expected in [
@@ -1250,7 +1267,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(assembly.splitlines().count("f:"), 1)
         self.assertNotIn("  .data", assembly)
         self.assertEqual(compile_program("int printf();").stdout, '.file 1 "-"\n')
-        self.assertEqual(compile_program("int f(int); ").returncode, 1)
+        self.assertEqual(compile_program("int f(int); ").returncode, 0)
 
     def test_nested_declarators(self):
         for source, expected in [
@@ -2616,10 +2633,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ('int main(void){x=3;}', 15, "undefined variable"),
             ('int main(void){return x; int x;}', 22, "undefined variable"),
             ('int main(void){int x=y;}', 21, "undefined variable"),
-            ('int main(void){int 3;}', 19, "expected a variable name"),
-            ('int main(void){int *;}', 20, "expected a variable name"),
+            ('int main(void){int 3;}', 19, "variable name omitted"),
+            ('int main(void){int *;}', 20, "variable name omitted"),
             ('int main(void){int x y;}', 21, "expected ','"),
-            ('int main(void){int x,;}', 21, "expected a variable name"),
+            ('int main(void){int x,;}', 21, "variable name omitted"),
             ('int main(void){int x=;}', 21, "expected an expression"),
             ('int main(void){return *1;}', 22, "invalid pointer dereference"),
             ('int main(void){int x=3; return *x;}', 31, "invalid pointer dereference"),

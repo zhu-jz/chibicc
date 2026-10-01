@@ -1,6 +1,6 @@
-"""Lesson 137: Ignored keywords in array dimensions.
+"""Lesson 138: Unnamed prototype parameters.
 
-Based on chibicc commit 93d12771d009924fb598b088dc4bd9b67fd9a09a.
+Based on chibicc commit 1fad2595d6fa67e57cd795d4faac4306e42e72c5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

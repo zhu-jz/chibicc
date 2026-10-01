@@ -1,6 +1,6 @@
-"""Lesson 98: Zero omitted initializer elements.
+"""Lesson 99: Discard excess initializer elements.
 
-Based on chibicc commit ae0a37dc4b39018a95616836ae4aaf4c8bfd779b.
+Based on chibicc commit a754732c046939cd87ac9fc8e9483ae9b3369449.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

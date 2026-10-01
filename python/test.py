@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_excess_initializer_elements(self):
+        for source, expected in [
+            ("int main(){int a[1]={42,3,4};return a[0];}", 42),
+            ("int main(){int i=0;int a[1]={42,++i};return a[0]+i;}", 42),
+            ("int main(){int a[1]={42,{{3}}};return a[0];}", 42),
+            ("int main(){int a[1][1]={{42,3},{4}};return a[0][0];}", 42),
+            ("int f();int main(){int a[1]={42,f()};return a[0];}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int f();int main(){int a[1]={42,f()};return a[0];}").stdout
+        self.assertNotIn("  call f\n", assembly)
+        for source in ("int main(){int a[1]={42,missing};}",
+                       "int main(){int a[1]={42,{3,4}};}"):
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_partial_array_initializers(self):
         for source, expected in [
             ("int main(){int a[3]={42};return a[0]+a[1]+a[2];}", 42),
@@ -91,9 +106,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual((node.lhs.rhs.kind, node.rhs.kind), ("ASSIGN", "ASSIGN"))
         assembly = compile_program("int main(){int a[2]={3,4};return a[1];}").stdout
         self.assertIn("  mov %eax, (%rdi)\n", assembly)
-        for source in ("int main(){int a[1]={1,2};}",
-                       "int main(){int a[1]={1,};}"):
-            self.assertEqual(compile_program(source).returncode, 1)
+        self.assertEqual(compile_program("int main(){int a[1]={1,};}").returncode, 1)
 
     def test_constant_expressions(self):
         for source, expected in [

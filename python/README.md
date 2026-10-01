@@ -1,39 +1,36 @@
-# Lesson 98: Zero omitted initializer elements
+# Lesson 99: Discard excess initializer elements
 
-Original chibicc commit: [`ae0a37dc4b39018a95616836ae4aaf4c8bfd779b`](https://github.com/rui314/chibicc/commit/ae0a37dc4b39018a95616836ae4aaf4c8bfd779b).
+Original chibicc commit: [`a754732c046939cd87ac9fc8e9483ae9b3369449`](https://github.com/rui314/chibicc/commit/a754732c046939cd87ac9fc8e9483ae9b3369449).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Array initializer lists may end before filling every element, including an empty
-list. The parser first builds a MEMZERO expression for the whole local object,
-then emits assignments for the provided leaves. Missing leaves become NULL_EXPR
-and generate no assignment. Nested omitted arrays remain zero because the entire
-object was cleared. All explicit local initializers, even scalar ones, take this
-zero-then-assign path in the original commit.
+An array initializer now reads to its closing brace rather than stopping after
+the declared element count. Elements that fit populate the initializer tree;
+excess elements are parsed but discarded. Their runtime side effects and calls
+are never emitted. Omitted elements still become zero. This original commit
+silently discards excess values, unlike GCC's usual diagnostic for excess items.
 
-The emitter implements clearing with rep stosb: rcx is the byte count, rdi is the
-address, and al is zero. Python emits that instruction instead of clearing a
-Python data structure. Grammar-only test comparisons strip generated casts and
-initialization clearing; dedicated tests inspect the actual MEMZERO tree and
-instructions, and execute programs to check omitted elements. Excess supplied
-elements and trailing commas are still rejected at this stage.
+Python's skip_excess_element returns the next token index; C returns a Token
+pointer. The historical helper accepts an expression optionally wrapped in nested
+single-element braces; it does not yet skip an arbitrary comma-separated list
+inside an excess braced aggregate. Trailing commas remain unsupported.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[3]={42};return a[0]+a[1]+a[2];}\n' > /tmp/lesson98.c
-python3 python/main.py /tmp/lesson98.c > /tmp/lesson98.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson98 /tmp/lesson98.s
-/tmp/lesson98
+printf 'int main(){int i=0;int a[1]={42,++i};return a[0]+i;}\n' > /tmp/lesson99.c
+python3 python/main.py /tmp/lesson99.c > /tmp/lesson99.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson99 /tmp/lesson99.s
+/tmp/lesson99
 echo $?
 ```
 
-`mov $12, %rcx`, `lea ...(%rbp), %rdi`, `mov $0, %al`, and `rep stosb` clear all
-twelve bytes before a[0] receives 42. The omitted elements load zero, so the shell
-displays 42. Tests cover empty and nested partial lists, neighboring objects,
-clearing before user expressions, tree metadata, assembly, original initializer
-programs, and the complete existing regression suite.
+The emitter clears/stores a[0]; it emits no increment for the discarded ++i.
+Main returns 42. Parsing can still allocate compiler temporaries or report
+undefined names in discarded input. Tests cover excess scalar/nested values,
+skipped increments and unresolved external calls, malformed excess input,
+assembly omission, real executables, and all original fixture programs.
 
 ## Tests and attribution
 

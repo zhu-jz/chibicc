@@ -827,21 +827,31 @@ class Parser:
             statements.append(Node("EXPR_STMT", lhs=expression, tok=token))
         return Node("BLOCK", body=statements, tok=self.tokens[position]), position + 1
 
+    def skip_excess_element(self, position):
+        if self.tokens[position].text == "{":
+            position = self.skip_excess_element(position + 1)
+            if self.tokens[position].text != "}":
+                raise CompileError(self.tokens[position], "expected '}'")
+            return position + 1
+        _, position = self.assign(position)
+        return position
+
     def initializer2(self, position, init):
         if init.ty.kind == "ARRAY":
             if self.tokens[position].text != "{":
                 raise CompileError(self.tokens[position], "expected '{'")
             position += 1
-            for index, child in enumerate(init.children):
-                if self.tokens[position].text == "}":
-                    break
+            index = 0
+            while self.tokens[position].text != "}":
                 if index:
                     if self.tokens[position].text != ",":
                         raise CompileError(self.tokens[position], "expected ','")
                     position += 1
-                position = self.initializer2(position, child)
-            if self.tokens[position].text != "}":
-                raise CompileError(self.tokens[position], "expected '}'")
+                if index < len(init.children):
+                    position = self.initializer2(position, init.children[index])
+                else:
+                    position = self.skip_excess_element(position)
+                index += 1
             return position + 1
         init.expr, position = self.assign(position)
         return position

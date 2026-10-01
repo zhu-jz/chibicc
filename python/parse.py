@@ -12,7 +12,7 @@ from dataclasses import replace
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer
-from type import ty_uchar, ty_ushort, ty_uint, ty_ulong
+from type import ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
@@ -636,12 +636,13 @@ class Parser:
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
                                               "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
-                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn") or self.find_typedef(position) is not None
+                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
     def declspec(self, position, attr=None):
         combinations = {
+            ("float",): ty_float, ("double",): ty_double,
             ("void",): ty_void,
             ("_Bool",): ty_bool, ("char",): ty_char,
             ("short",): ty_short, ("int", "short"): ty_short,

@@ -23,16 +23,33 @@ I16 = "movswl %ax, %eax"
 U16 = "movzwl %ax, %eax"
 I64 = "movsxd %eax, %rax"
 U64 = "mov %eax, %eax"
-# Columns and rows: signed 8/16/32/64, unsigned 8/16/32/64.
+I32_F32 = "cvtsi2ssl %eax, %xmm0"
+I32_F64 = "cvtsi2sdl %eax, %xmm0"
+I64_F32 = "cvtsi2ssq %rax, %xmm0"
+I64_F64 = "cvtsi2sdq %rax, %xmm0"
+U32_F32 = "mov %eax, %eax; cvtsi2ssq %rax, %xmm0"
+U32_F64 = "mov %eax, %eax; cvtsi2sdq %rax, %xmm0"
+U64_F64 = ("test %rax,%rax; js 1f; pxor %xmm0,%xmm0; cvtsi2sd %rax,%xmm0; jmp 2f; "
+           "1: mov %rax,%rdi; and $1,%eax; pxor %xmm0,%xmm0; shr %rdi; "
+           "or %rax,%rdi; cvtsi2sd %rdi,%xmm0; addsd %xmm0,%xmm0; 2:")
+F32_I32 = "cvttss2sil %xmm0, %eax"
+F32_I64 = "cvttss2siq %xmm0, %rax"
+F64_I32 = "cvttsd2sil %xmm0, %eax"
+F64_I64 = "cvttsd2siq %xmm0, %rax"
+# Columns and rows: signed 8/16/32/64, unsigned 8/16/32/64, float/double.
 CAST_TABLE = (
-    (None, None, None, I64, U8, U16, None, I64),
-    (I8, None, None, I64, U8, U16, None, I64),
-    (I8, I16, None, I64, U8, U16, None, I64),
-    (I8, I16, None, None, U8, U16, None, None),
-    (I8, None, None, I64, None, None, None, I64),
-    (I8, I16, None, I64, U8, None, None, I64),
-    (I8, I16, None, U64, U8, U16, None, U64),
-    (I8, I16, None, None, U8, U16, None, None),
+    (None, None, None, I64, U8, U16, None, I64, I32_F32, I32_F64),
+    (I8, None, None, I64, U8, U16, None, I64, I32_F32, I32_F64),
+    (I8, I16, None, I64, U8, U16, None, I64, I32_F32, I32_F64),
+    (I8, I16, None, None, U8, U16, None, None, I64_F32, I64_F64),
+    (I8, None, None, I64, None, None, None, I64, I32_F32, I32_F64),
+    (I8, I16, None, I64, U8, None, None, I64, I32_F32, I32_F64),
+    (I8, I16, None, U64, U8, U16, None, U64, U32_F32, U32_F64),
+    (I8, I16, None, None, U8, U16, None, None, I64_F32, U64_F64),
+    (F32_I32+"; "+I8, F32_I32+"; "+I16, F32_I32, F32_I64,
+     F32_I32+"; "+U8, F32_I32+"; "+U16, F32_I64, F32_I64, None, "cvtss2sd %xmm0, %xmm0"),
+    (F64_I32+"; "+I8, F64_I32+"; "+I16, F64_I32, F64_I64,
+     F64_I32+"; "+U8, F64_I32+"; "+U16, F64_I64, F64_I64, "cvtsd2ss %xmm0, %xmm0", None),
 )
 
 
@@ -74,6 +91,10 @@ class CodeGenerator:
     def load(self, ty):
         if ty.kind in ("ARRAY", "STRUCT", "UNION"):
             return
+        if ty.kind in ("FLOAT", "DOUBLE"):
+            instruction = "movss" if ty.kind == "FLOAT" else "movsd"
+            self.assembly.append(f"  {instruction} (%rax), %xmm0")
+            return
         if ty.size == 1:
             instruction = "movzbl" if ty.is_unsigned else "movsbl"
             self.assembly.append(f"  {instruction} (%rax), %eax")
@@ -87,6 +108,10 @@ class CodeGenerator:
 
     def store(self, ty):
         self.pop("%rdi")
+        if ty.kind in ("FLOAT", "DOUBLE"):
+            instruction = "movss" if ty.kind == "FLOAT" else "movsd"
+            self.assembly.append(f"  {instruction} %xmm0, (%rdi)")
+            return
         if ty.kind in ("STRUCT", "UNION"):
             for offset in range(ty.size):
                 self.assembly.append(f"  mov {offset}(%rax), %r8b")
@@ -115,9 +140,13 @@ class CodeGenerator:
         type_ids = {"CHAR": 0, "SHORT": 1, "INT": 2, "LONG": 3}
         source = type_ids[from_ty.kind] + (4 if from_ty.is_unsigned else 0) if from_ty.kind in type_ids else 7
         target = type_ids[to_ty.kind] + (4 if to_ty.is_unsigned else 0) if to_ty.kind in type_ids else 7
+        if from_ty.kind in ("FLOAT", "DOUBLE"):
+            source = 8 if from_ty.kind == "FLOAT" else 9
+        if to_ty.kind in ("FLOAT", "DOUBLE"):
+            target = 8 if to_ty.kind == "FLOAT" else 9
         instruction = CAST_TABLE[source][target]
         if instruction is not None:
-            self.assembly.append("  " + instruction)
+            self.assembly.extend("  " + part for part in instruction.split("; "))
 
     def gen_expr(self, node):
         if node.tok is not None:

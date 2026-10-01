@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_locals_and_casts(self):
+        for source, expected in [
+            ("int main(void){float x=42.9f;return (int)x;}", 42),
+            ("int main(void){double x=42.9;float y=x;return (int)y;}", 42),
+            ("int main(void){int x=-42;double y=x;return (int)y;}", 214),
+            ("int main(void){unsigned x=0xffffffff;double y=x;return (long)y==4294967295;}", 1),
+            ("int main(void){float a[2]={1.0f,42.0f};return (int)a[1];}", 42),
+            ("int main(void){return (short)42.9;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(void){float x=42.9f;return (int)x;}").stdout
+        for instruction in ("  movss %xmm0, (%rdi)\n", "  movss (%rax), %xmm0\n", "  cvttss2sil %xmm0, %eax\n"):
+            self.assertIn(instruction, assembly)
+        self.assertEqual(compile_program("int main(void){long double x;}").returncode, 1)
+
     def test_floating_literal_bits(self):
         for spelling, kind, value in (("1.5f", "FLOAT", 1.5), (".1E4f", "FLOAT", 1000.0),
                                       ("0x10.1p0", "DOUBLE", 16.0625), ("8f", "FLOAT", 8.0),

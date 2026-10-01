@@ -1,6 +1,6 @@
-"""Lesson 139: Floating-point literals.
+"""Lesson 140: Floating locals and casts.
 
-Based on chibicc commit 1e57f72d8adf15937856a3ca3ca0e16ccb37421e.
+Based on chibicc commit 29de46aed47e5308db9a0aef6e13610dea8fb389.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

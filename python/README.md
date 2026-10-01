@@ -1,42 +1,43 @@
-# Lesson 139: Floating-point literals
+# Lesson 140: Floating locals and casts
 
-Original chibicc commit: [`1e57f72d8adf15937856a3ca3ca0e16ccb37421e`](https://github.com/rui314/chibicc/commit/1e57f72d8adf15937856a3ca3ca0e16ccb37421e).
+Original chibicc commit: [`29de46aed47e5308db9a0aef6e13610dea8fb389`](https://github.com/rui314/chibicc/commit/29de46aed47e5308db9a0aef6e13610dea8fb389).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Numeric tokens and nodes now carry fvalue alongside integer value. Decimal
-fractions/exponents and hexadecimal fractions can form floating constants; f/F
-chooses four-byte float, while no suffix or l/L chooses eight-byte double.
-The emitter places the IEEE bit pattern in an integer register and moves it into
-xmm0. sizeof can inspect these literal types.
+float and double become declaration keywords. Local floating values load/store
+through xmm0 using movss or movsd. The cast matrix grows to ten types, using
+cvtsi2ss/cvtsi2sd for integer-to-floating conversion and cvttss2si/cvttsd2si for
+truncating floating-to-integer conversion. Float/double conversion uses cvtss2sd
+or cvtsd2ss. Assignment and return casts reuse that matrix automatically.
 
-Python uses float/float.fromhex and struct.pack with explicit little-endian
-encoding, replacing C strtod and union bit reinterpretation. Float32 overflow
-becomes infinity like a target float conversion. Integer overflow remains a port
-diagnostic. As upstream, integer trial parsing no longer rejects leftover letters;
-malformed integer spellings are rejected later by the parser.
+Python splits multi-instruction cast entries into assembly lines instead of C's
+semicolon-separated strings. The unsigned-long-to-double path handles values
+with the top bit set by halving and then doubling the converted value. The
+historical unsigned-long-to-float path still uses signed conversion. Out-of-range
+floating-to-integer behavior follows the emitted SSE instructions; full C
+semantics for such conversions are not newly promised.
 
-This step adds constants only. Floating type keywords, arithmetic, conversions,
-variables and floating function signatures are not yet fully implemented. The
-historical scanner recognizes hex floats when a fraction triggers float parsing;
-hex exponent-only spellings are not added ahead of the original history.
+This commit adds local storage and casts. Floating arithmetic, general condition
+checks, global floating initializers and floating argument-register handling
+remain incomplete. Long double declarations are not supported; literal L still
+selects double as introduced in lesson 139.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){1.5f;return sizeof(1.5f);}\n' > /tmp/lesson139.c
-python3 python/main.py /tmp/lesson139.c > /tmp/lesson139.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson139 /tmp/lesson139.s
-/tmp/lesson139
+printf 'int main(void){double x=42.9;float y=x;return (int)y;}\n' > /tmp/lesson140.c
+python3 python/main.py /tmp/lesson140.c > /tmp/lesson140.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson140 /tmp/lesson140.s
+/tmp/lesson140
 echo $?
 ```
 
-The literal emits `mov $1069547520,%eax` followed by `movq %rax,%xmm0`, encoding
-float32 1.5. Main's integer return is sizeof(float), so exit status is 4. Tests
-inspect actual xmm0 bits with a small assembly helper, check decimal/hex spellings,
-suffix types, exact instructions, sizeof, malformed integers, execution, and the
-updated original literal program.
+Assembly stores x with movsd, converts it with cvtsd2ss and stores y with movss.
+cvttss2sil truncates y toward zero for the return, giving exit status 42. Tests
+cover local scalars and arrays, both floating widths, signed/unsigned integer
+casts, narrowing, exact SSE load/store/conversion instructions, execution, and
+original cast/float/sizeof programs.
 
 ## Tests and attribution
 

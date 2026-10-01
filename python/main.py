@@ -1,10 +1,11 @@
-"""Lesson 153: Common types for function expressions.
+"""Lesson 154: Separate the driver and compiler process.
 
-Based on chibicc commit 53e81033ce18fd94fcdcde9010b7c9d41f30aa2c.
+Based on chibicc commit f3d96136f292dea83fd760098d189a6884f59eb0.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import sys
+import subprocess
 
 from codegen import codegen
 from common import CompileError
@@ -20,9 +21,19 @@ def usage(status):
 def parse_args(arguments):
     input_path = None
     output_path = None
+    opt_cc1 = False
+    opt_trace = False
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-cc1":
+            opt_cc1 = True
+            position += 1
+            continue
+        if argument == "-###":
+            opt_trace = True
+            position += 1
+            continue
         if argument == "--help":
             usage(0)
         if argument == "-o":
@@ -39,7 +50,7 @@ def parse_args(arguments):
         position += 1
     if input_path is None:
         raise CompileError(None, "no input files")
-    return input_path, output_path
+    return input_path, output_path, opt_cc1, opt_trace
 
 
 def write_output(path, assembly):
@@ -54,9 +65,8 @@ def write_output(path, assembly):
         raise CompileError(None, f"cannot open output file: {path}: {error.strerror}") from None
 
 
-def main():
+def cc1(filename, output_path):
     try:
-        filename, output_path = parse_args(sys.argv[1:])
         source = read_file(filename)
         tokens = tokenize(source)
         program = parse(tokens)
@@ -81,6 +91,28 @@ def main():
         return 1
 
     return 0
+
+
+def run_cc1(arguments, trace):
+    command = [sys.executable, sys.argv[0], *arguments, "-cc1"]
+    if trace:
+        print(" ".join(command), file=sys.stderr)
+    try:
+        result = subprocess.run(command)
+    except OSError as error:
+        raise CompileError(None, f"exec failed: {command[0]}: {error.strerror}") from None
+    return 0 if result.returncode == 0 else 1
+
+
+def main():
+    try:
+        filename, output_path, opt_cc1, opt_trace = parse_args(sys.argv[1:])
+        if opt_cc1:
+            return cc1(filename, output_path)
+        return run_cc1(sys.argv[1:], opt_trace)
+    except CompileError as error:
+        print(error, file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

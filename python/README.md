@@ -1,34 +1,35 @@
-# Lesson 153: Common types for function expressions
+# Lesson 154: Separate the driver and compiler process
 
-Original chibicc commit: [`53e81033ce18fd94fcdcde9010b7c9d41f30aa2c`](https://github.com/rui314/chibicc/commit/53e81033ce18fd94fcdcde9010b7c9d41f30aa2c).
+Original chibicc commit: [`f3d96136f292dea83fd760098d189a6884f59eb0`](https://github.com/rui314/chibicc/commit/f3d96136f292dea83fd760098d189a6884f59eb0).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-After its existing pointer rule, the common-type helper now turns a function
-operand into a pointer to that function type. Arithmetic conversions used by
-conditional expressions and comparisons therefore retain a callable type instead
-of losing the function signature when combining a function with zero.
+The normal entry point now launches a child invocation of the same Python compiler
+with -cc1. That internal mode reads, tokenizes, parses, and generates assembly.
+The driver inherits stdin/stdout/stderr for the child, waits for it, and reports
+success or failure. -### prints the child command to stderr while still running it.
+It is a trace option at this historical point, not a dry run.
 
-Python adds two explicit branches, matching the original rule order. This is the
-historical common-type implementation; its existing first-pointer rule still
-takes priority. Cast nodes retain the chosen signature, and function evaluation
-already produces an address from the preceding lesson.
+Python's subprocess.run replaces the C fork/exec/wait sequence. It invokes the
+same Python source or archive entry point, never the original C compiler. Child
+errors retain their diagnostics and become driver status 1; launch failures
+receive a readable error. Compilation and emitted assembly are unchanged.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void){return 42;}int main(void){return (1?f:(void*)0)();}\n' > /tmp/lesson153.c
-python3 python/main.py /tmp/lesson153.c > /tmp/lesson153.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson153 /tmp/lesson153.s
-/tmp/lesson153
+printf 'int main(void){return 42;}\n' > /tmp/lesson154.c
+python3 python/main.py -### /tmp/lesson154.c > /tmp/lesson154.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson154 /tmp/lesson154.s
+/tmp/lesson154
 echo $?
 ```
 
-The conditional branch selects f's address in rax, and call *%rax invokes it.
-It returns 42, which the shell displays as the exit status. Tests cover conditional
-calls, function comparisons, global pointer initialization, the selected tree
-type, indirect assembly, execution, and the original usual-conversion example.
+The displayed child command includes -cc1. Its assembly still places 42 in rax
+and returns through main's epilogue, so the shell displays exit status 42. Tests
+compare driver and direct -cc1 assembly, verify tracing and failure propagation,
+exercise output files and stdin, run the packaged compiler, and execute upstream.
 
 ## Tests and attribution
 

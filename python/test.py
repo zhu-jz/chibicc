@@ -61,6 +61,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_driver_and_cc1_split(self):
+        source = "int main(void){return 42;}"
+        direct = subprocess.run([sys.executable, str(COMPILER), "-cc1", "-"],
+                                input=source, capture_output=True, text=True)
+        driver = compile_program(source)
+        self.assertEqual(direct.returncode, 0, direct.stderr)
+        self.assertEqual(driver.returncode, 0, driver.stderr)
+        self.assertEqual(driver.stdout, direct.stdout)
+        traced = subprocess.run([sys.executable, str(COMPILER), "-###", "-"],
+                                input=source, capture_output=True, text=True)
+        self.assertEqual(traced.returncode, 0, traced.stderr)
+        self.assertEqual(traced.stdout, direct.stdout)
+        self.assertIn("-cc1", traced.stderr)
+        self.assertIn(str(COMPILER), traced.stderr)
+        invalid = compile_program("int main(void){return missing;}")
+        self.assertEqual(invalid.returncode, 1)
+        self.assertEqual(invalid.stdout, "")
+        self.assertEqual(invalid.stderr.count("undefined variable"), 1)
+        self.assert_program_returns(source, 42)
+
     def test_function_pointer_common_type(self):
         for source, expected in [
             ("int f(void){return 42;}int main(void){return (1?f:(void*)0)();}", 42),

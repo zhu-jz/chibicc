@@ -87,6 +87,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependency_phony_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header, source, deps = root/'answer.h', root/'main.c', root/'deps.mk'
+            header.write_text('#define ANSWER 42\n')
+            source.write_text('#include "answer.h"\nint main(void){return ANSWER;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-M', '-MP', '-MF', str(deps), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(str(header) + ':\n\n', deps.read_text())
+            self.assertNotIn(str(source) + ':\n', deps.read_text())
+            header.unlink()
+            result = subprocess.run(['make', '-f', str(deps), '-n', 'main.o'], cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_dependency_output_file_option(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory)/'main.c'

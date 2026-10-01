@@ -1,16 +1,17 @@
-# Lesson 290: Choose a dependency output file with -MF
+# Lesson 291: Emit dummy header targets with -MP
 
-Original chibicc commit: [`95d5a46234f98f3793c965bebe036361cbb1978e`](https://github.com/rui314/chibicc/commit/95d5a46234f98f3793c965bebe036361cbb1978e).
+Original chibicc commit: [`57c1d4ec0290d49fa1e954ff3e7a51e24d71a3a1`](https://github.com/rui314/chibicc/commit/57c1d4ec0290d49fa1e954ff3e7a51e24d71a3a1).
 Earlier explanations are available in Git history.
 
--MF FILE selects the destination for -M dependency text. It takes precedence over
--o, otherwise the previous -o or stdout behavior remains. -MF by itself does not
-enable dependency generation. The original accepts a separate argument, and a
-missing argument is diagnosed before processing input files.
+With -M, -MP appends an empty Make rule for each opened file after the first one.
+These dummy targets let Make continue when a previously included header has been
+removed, rather than failing because no rule can build that old prerequisite.
+-MP alone does not request dependency output, and -MF still chooses its destination.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -M -MF /tmp/lesson.d /tmp/lesson.c
+printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
+printf '#include "lesson-answer.h"\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
+python3 python/main.py -M -MP -MF /tmp/lesson.d /tmp/lesson.c
 cat /tmp/lesson.d
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,11 +19,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The dependency file contains a lesson.o rule pointing at /tmp/lesson.c. Normal
-compilation still emits a main function returning 42. Tests check destination
-selection over -o, -MF - for stdout and a missing argument, plus existing -M tests.
-Python passes the selected option explicitly to cc1 instead of C's global pointer;
-an omitted option is None, while the literal '-' means stdout as before.
+The dependency file now includes an empty /tmp/lesson-answer.h: rule. Ordinary
+assembly still returns the expanded value 42. Tests generate a rule, remove the
+header and ask Make to dry-run the object target; existing dependency tests remain.
+Python appends strings where C prints lines. As in the original, the first opened
+file is skipped by position, which can be a forced include rather than the source.
+These are empty rules, not .PHONY declarations, and filenames are not escaped yet.
 
 ## Tests and attribution
 

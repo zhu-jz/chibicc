@@ -1,6 +1,6 @@
-"""Lesson 288: Use hash sets for keyword lookup.
+"""Lesson 289: Emit Make dependencies with -M.
 
-Based on chibicc commit f6944133d211ec6fb71c41f118905e16a752135b.
+Based on chibicc commit d0c4667b6bccf35ddf069c777689cd18c6a632b3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -45,6 +45,7 @@ def parse_args(arguments):
     opt_S = False
     opt_c = False
     opt_E = False
+    opt_M = False
     opt_fcommon = True
     opt_x = None
     ld_extra_args = []
@@ -61,6 +62,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-M":
+            opt_M = True
+            position += 1
+            continue
         if argument == "-hashmap-test":
             from hashmap import hashmap_test
             hashmap_test()
@@ -165,7 +170,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M
 
 
 def parse_opt_x(language):
@@ -215,7 +220,14 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=()):
+def print_dependencies(filename, files, output_path):
+    text = replace_extension(filename, ".o") + ":"
+    for file in files:
+        text += " \\\n  " + file.name
+    write_output(output_path, text + "\n\n")
+
+
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False):
     files = []
     try:
         tokens = []
@@ -228,6 +240,9 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
         if macros is None:
             macros = init_macros(filename)
         tokens = preprocess(tokens, files, include_paths, macros)
+        if opt_M:
+            print_dependencies(filename, files, opt_o)
+            return 0
         if opt_E:
             print_tokens(tokens, opt_o)
             return 0
@@ -305,12 +320,12 @@ def run_linker(inputs, output, trace, extra_args=()):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []
@@ -330,7 +345,7 @@ def main():
                         if status:
                             return status
                     continue
-                if opt_E:
+                if opt_E or opt_M:
                     status = run_cc1(sys.argv[1:], filename, None, opt_trace)
                 elif opt_S:
                     status = run_cc1(sys.argv[1:], filename, output_path, opt_trace)

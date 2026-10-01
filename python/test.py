@@ -87,6 +87,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependency_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second, source = root/'one.h', root/'two.h', root/'main.c'
+            first.write_text('#include "two.h"\n')
+            second.write_text('#define ANSWER 42\n')
+            source.write_text('#include "one.h"\nnot valid C\n')
+            expected = 'main.o:' + ''.join(' \\\n  ' + str(path) for path in (source, first, second)) + '\n\n'
+            result = subprocess.run([sys.executable, str(COMPILER), '-M', str(source)], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (0, expected), result.stderr)
+            output = root/'deps.mk'
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', '-M', '-o', str(output), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output.read_text(), expected)
+            self.assertFalse((root/'main.o').exists())
+
     def test_keyword_hash_lookup(self):
         tokens = tokenize('int intx typeof typeofx return returnx _Thread_local _Thread_localx')
         self.assertEqual([token.kind for token in tokens[:-1]], ['KEYWORD', 'IDENT'] * 4)

@@ -1,27 +1,28 @@
-# Lesson 288: Use hash sets for keyword lookup
+# Lesson 289: Emit Make dependencies with -M
 
-Original chibicc commit: [`f6944133d211ec6fb71c41f118905e16a752135b`](https://github.com/rui314/chibicc/commit/f6944133d211ec6fb71c41f118905e16a752135b).
+Original chibicc commit: [`d0c4667b6bccf35ddf069c777689cd18c6a632b3`](https://github.com/rui314/chibicc/commit/d0c4667b6bccf35ddf069c777689cd18c6a632b3).
 Earlier explanations are available in Git history.
 
-The lexer keyword list and parser type-keyword list are now immutable frozensets.
-Membership uses hashing instead of scanning a tuple for every token. Type-name
-recognition still checks visible typedefs when the spelling is not a built-in
-keyword, so scope-dependent parsing remains intact.
+-M stops after preprocessing and prints a Make rule listing the source and every
+opened include file. The target is the source basename with an .o suffix. Each
+prerequisite appears on a continued line. -o redirects this dependency text; -M
+takes precedence over -E. Parsing and assembly generation are skipped in this mode.
 
 ```sh
-printf 'typedef int T;int main(void){int integer=20;T value=22;return integer+value;}\n' > /tmp/lesson.c
+printf '#include <stddef.h>\nint main(void){return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -M /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Keyword lookup happens while compiling. Assembly stores 20 and 22 in local slots,
-loads them and adds them for the return. Tests distinguish keyword spellings from
-longer identifiers and confirm typedef-based declarations, plus original fixtures.
-Python uses frozenset because these maps contain only membership information;
-C uses lazily initialized HashMap entries with a dummy value. The port keeps its
-existing classification of inline as a keyword; its parsing behavior is unchanged.
+The rule starts with lesson.o and lists /tmp/lesson.c and python/include/stddef.h.
+Normal compilation still emits main returning 42; dependency output itself is
+text for Make rather than machine instructions. Tests check nested includes,
+file order, output redirection, -M/-E precedence and preprocessing invalid C text.
+Python uses the existing File list instead of C's global input-file array. This
+initial step does not escape special Make characters or deduplicate opened files.
 
 ## Tests and attribution
 

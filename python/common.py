@@ -181,6 +181,7 @@ class Initializer:
     tok: Optional[Token] = None
     expr: Optional[Node] = None
     children: list["Initializer"] = field(default_factory=list)
+    member: Optional[Member] = None
     is_flexible: bool = False
 
 

@@ -1,35 +1,28 @@
-# Lesson 242: Select struct fields in initializers
+# Lesson 243: Choose a union member in an initializer
 
-Original chibicc commit: [`67f5834378660abf271722a16294a634106d047e`](https://github.com/rui314/chibicc/commit/67f5834378660abf271722a16294a634106d047e).
+Original chibicc commit: [`31dc1dfa211ee27e74907ce3aa3986401dcedb82`](https://github.com/rui314/chibicc/commit/31dc1dfa211ee27e74907ce3aa3986401dcedb82).
 Earlier explanations are available in Git history.
 
-Struct initializers now accept .field designators, including nested chains
-such as .part.value and combinations such as [1].value or .items[2]. Values
-after a selected field continue through the enclosing initializer. A field
-write into an earlier whole-struct copy clears that copy expression so the
-explicit field initializer and zero-filled remaining fields take effect.
+A union stores all its members at the same address. Initializers now record
+which member was selected by a `.field` designator instead of always writing
+the first member. Nested array and struct designators can select a union member
+too. Without a designator, the first member is still the default.
 
 ```sh
-printf 'int main(void){struct T{int a,b,c;}x={.c=30,.a=12};return x.a+x.b+x.c;}\n' > /tmp/lesson.c
+printf 'int main(void){union T{int a;char b[4];}x={.b[1]=42};return x.b[1];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The initializer tree assigns a=12 and c=30; local zeroing leaves b=0. Ordinary
-member stores and loads produce the assembly and return 42. Tests cover globals,
-nested fields and arrays, inferred arrays of structs, replacement of a prior
-copy, bitfields, optional equals syntax, diagnostics and original fixtures.
-Python uses member indices to resume its list rather than C next pointers,
-and reports missing names safely instead of dereferencing unnamed members.
-This commit supports named struct fields only: union field designators and
-anonymous-member designator lookup are not added ahead of their original steps.
-The original brace-free continuation parser's comma behavior is retained.
-
-This finishes lessons 193–242, fifty consecutive original commits. This README
-explains the current lesson; earlier explanations remain in Git history.
-For full source and packaged-compiler verification, run make -C python test-all.
+Local assembly zeroes the union, then stores one byte at its base address plus
+one. Loading that byte and returning it gives exit status 42. Global initializers
+write the selected member into the shared byte buffer instead. Tests also cover
+empty global arrays of unions and nested selections, alongside original fixtures.
+Python stores the selected Member object or None instead of a nullable C pointer.
+The original restriction to a single initializer inside a union is preserved;
+a trailing comma in the designated form is not accepted at this step.
 
 ## Tests and attribution
 

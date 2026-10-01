@@ -1,6 +1,6 @@
-"""Lesson 242: Select struct fields in initializers.
+"""Lesson 243: Choose a union member in an initializer.
 
-Based on chibicc commit 67f5834378660abf271722a16294a634106d047e.
+Based on chibicc commit 31dc1dfa211ee27e74907ce3aa3986401dcedb82.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

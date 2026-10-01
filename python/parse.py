@@ -1111,6 +1111,10 @@ class Parser:
             position = self.designation(position, init.children[member.idx])
             init.expr = None
             return self.struct_initializer_without_braces(position, init, member.idx + 1)
+        if self.tokens[position].text == "." and init.ty.kind == "UNION":
+            member, position = self.struct_designator(position, init.ty)
+            init.member = member
+            return self.designation(position, init.children[member.idx])
         if self.tokens[position].text == ".":
             raise CompileError(self.tokens[position], "field name not in struct or union initializer")
         if self.tokens[position].text == "=":
@@ -1226,6 +1230,14 @@ class Parser:
     def union_initializer(self, position, init):
         if not init.children:
             raise CompileError(self.tokens[position], "union has no members")
+        if self.tokens[position].text == "{" and self.tokens[position + 1].text == ".":
+            member, position = self.struct_designator(position + 1, init.ty)
+            init.member = member
+            position = self.designation(position, init.children[member.idx])
+            if self.tokens[position].text != "}":
+                raise CompileError(self.tokens[position], "expected '}'")
+            return position + 1
+        init.member = init.ty.members[0]
         if self.tokens[position].text != "{":
             return self.initializer2(position, init.children[0])
         position = self.initializer2(position + 1, init.children[0])
@@ -1299,9 +1311,9 @@ class Parser:
                 expression = Node("COMMA", expression, assignment, tok=token)
             return expression
         if ty.kind == "UNION":
-            member = ty.members[0]
+            member = init.member or ty.members[0]
             child_designation = InitDesg(parent=designation, member=member)
-            return self.create_lvar_init(init.children[0], member.ty, child_designation, token)
+            return self.create_lvar_init(init.children[member.idx], member.ty, child_designation, token)
         if init.expr is None:
             return Node("NULL_EXPR", tok=token)
         target = self.init_desg_expr(designation, token)
@@ -1337,7 +1349,9 @@ class Parser:
                                          offset + member.offset, relocations)
             return
         if ty.kind == "UNION":
-            self.write_gvar_data(init.children[0], ty.members[0].ty, buffer, offset, relocations)
+            if init.member is not None:
+                member = init.member
+                self.write_gvar_data(init.children[member.idx], member.ty, buffer, offset, relocations)
             return
         if init.expr is not None:
             if ty.kind in ("FLOAT", "DOUBLE"):

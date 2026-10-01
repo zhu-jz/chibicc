@@ -415,6 +415,8 @@ class Parser:
                 if param_ty.kind in ("STRUCT", "UNION"):
                     raise CompileError(arg.tok, "passing struct or union is not supported yet")
                 arg = new_cast(arg, param_ty)
+            elif arg.ty.kind == "FLOAT":
+                arg = new_cast(arg, ty_double)
             args.append(arg)
         if len(args) < len(function_ty.params):
             raise CompileError(self.tokens[position], "too few arguments")

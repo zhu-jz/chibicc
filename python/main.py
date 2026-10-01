@@ -1,6 +1,6 @@
-"""Lesson 145: Definitions with floating parameters.
+"""Lesson 146: Default float argument promotion.
 
-Based on chibicc commit c6b30568b407e7b60b6fc2929801669434e4f91a.
+Based on chibicc commit 8b14859f63a8389882bdb9330de592a112affa18.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

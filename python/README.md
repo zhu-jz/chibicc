@@ -1,36 +1,36 @@
-# Lesson 145: Definitions with floating parameters
+# Lesson 146: Default float argument promotion
 
-Original chibicc commit: [`c6b30568b407e7b60b6fc2929801669434e4f91a`](https://github.com/rui314/chibicc/commit/c6b30568b407e7b60b6fc2929801669434e4f91a).
+Original chibicc commit: [`8b14859f63a8389882bdb9330de592a112affa18`](https://github.com/rui314/chibicc/commit/8b14859f63a8389882bdb9330de592a112affa18).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Function prologues classify each parameter independently as integer/pointer or
-floating. movss saves four-byte float parameters and movsd saves eight-byte double
-parameters from xmm registers into their local stack slots. Integer parameters
-continue to use the six general-purpose argument registers. Returning a floating
-expression leaves its result in xmm0 through the normal epilogue.
+When a call runs out of declared parameter types, a float argument now receives
+an explicit cast to double. This applies to variadic trailing arguments and to
+old-style empty parameter lists. Fixed float parameters still receive float.
+The syntax tree records the cast; cvtss2sd performs the conversion at runtime.
 
-Python uses two counters in a simple loop instead of traversing a linked list.
-Its explicit register-limit errors avoid an out-of-bounds register lookup in the
-original implementation. Variadic register-save bookkeeping remains at the
-historical implementation for this commit; this step concerns fixed parameters.
+Python implements this as one extra parser branch, matching the original C.
+This step adds the floating promotion only. The historical caller still leaves
+the variadic SSE-register count in al unspecified; promotion itself can be tested
+reliably by calling a GCC helper through an old-style declaration and inspecting
+the variadic argument tree.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'double add(double x,float y){return x+y;}int main(void){return add(20.5,21.5);}\n' > /tmp/lesson145.c
-python3 python/main.py /tmp/lesson145.c > /tmp/lesson145.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson145 /tmp/lesson145.s
-/tmp/lesson145
+printf 'int add();int main(void){float x=20.5f;return add(x,21.5f);}\n' > /tmp/lesson146.c
+printf 'int add(double x,double y){return x+y;}\n' > /tmp/lesson146-helper.c
+python3 python/main.py /tmp/lesson146.c > /tmp/lesson146.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson146 /tmp/lesson146.s /tmp/lesson146-helper.c
+/tmp/lesson146
 echo $?
 ```
 
-add saves xmm0 with movsd and xmm1 with movss. Its body loads both values,
-converts y to double, and adds them. Main converts the returned 42.0 to int, and
-the shell displays exit status 42. Tests cover both widths, mixed parameters,
-eight floating registers, recursion, calls from GCC-generated code, prologue
-instructions, real execution, and the original function examples.
+Each float converts to double before being saved and restored into xmm0/xmm1.
+The helper returns integer 42, which the shell shows as the executable's exit
+status. Tests check omitted, variadic, and fixed parameter types, the conversion
+instruction, linked execution, and the original sprintf example.
 
 ## Tests and attribution
 

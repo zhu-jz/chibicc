@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_default_float_argument_promotion(self):
+        self.assert_program_returns("int f();int main(void){float x=20.5f;return f(x,21.5f);}", 42,
+                                    "int f(double a,double b){return a+b;}")
+        for declaration, arguments, expected in [
+            ("int f(int,...);", "0,1.5f", ["INT", "DOUBLE"]),
+            ("int f();", "1.5f", ["DOUBLE"]),
+            ("int f(float);", "1.5f", ["FLOAT"]),
+        ]:
+            main = next(fn for fn in parse(tokenize(declaration + f"int main(void){{return f({arguments});}}")) if fn.name == "main")
+            call = main.body.body[0].lhs.lhs
+            self.assertEqual([arg.ty.kind for arg in call.args], expected)
+        self.assertIn("  cvtss2sd %xmm0, %xmm0\n", compile_program("int f();int main(void){return f(1.5f);}").stdout)
+
     def test_floating_parameter_definitions(self):
         for source, expected in [
             ("float f(float a,float b,float c){return a+b+c;}int main(void){return f(10.5,20.5,11);}", 42),

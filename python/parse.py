@@ -958,6 +958,11 @@ class Parser:
             return self.struct_initializer_without_braces(position, init)
         if init.ty.kind == "UNION":
             return self.union_initializer(position, init)
+        if self.tokens[position].text == "{":
+            position = self.initializer2(position + 1, init)
+            if self.tokens[position].text != "}":
+                raise CompileError(self.tokens[position], "expected '}'")
+            return position + 1
         init.expr, position = self.assign(position)
         return position
 

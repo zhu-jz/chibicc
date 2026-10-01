@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_scalar_initializer_braces(self):
+        for source in [
+            "int main(){int x={42};return x;}",
+            "int main(){int x={{{42}}};return x;}",
+            "int x={{42}};int main(){return x;}",
+            "int main(){int a[2]={{1},{{42}}};return a[1];}",
+            "int g=42;int *p={&g};int main(){return *p;}",
+        ]:
+            self.assert_program_returns(source, 42)
+        self.assertIn("  mov $42, %rax\n", compile_program("int main(){int x={42};return x;}").stdout)
+        for source in ("int main(){int x={};}", "int main(){int x={1,2};}"):
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_omitted_initializer_braces(self):
         for source, expected in [
             ("int main(){int a[2][2]={1,2,3,42};return a[1][1];}", 42),

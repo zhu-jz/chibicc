@@ -1,6 +1,6 @@
-"""Lesson 108: Omitting inner initializer braces.
+"""Lesson 109: Braces around scalar initializers.
 
-Based on chibicc commit efa0f3366ddb914cc29f96fcdf10f99ded61775c.
+Based on chibicc commit a58958ccb40a127a83e3383ef3887e4721352238.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

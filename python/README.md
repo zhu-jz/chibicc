@@ -1,36 +1,33 @@
-# Lesson 108: Omitting inner initializer braces
+# Lesson 109: Braces around scalar initializers
 
-Original chibicc commit: [`efa0f3366ddb914cc29f96fcdf10f99ded61775c`](https://github.com/rui314/chibicc/commit/efa0f3366ddb914cc29f96fcdf10f99ded61775c).
+Original chibicc commit: [`a58958ccb40a127a83e3383ef3887e4721352238`](https://github.com/rui314/chibicc/commit/a58958ccb40a127a83e3383ef3887e4721352238).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Nested array and struct initializers can omit inner braces. Each aggregate
-consumes enough values for its elements or members and leaves the next comma
-for its parent. Closing the parent's brace early leaves the remaining children
-zero. Struct-copy expressions still take precedence. Unions may initialize their
-first member without braces too.
+A scalar initializer can now be surrounded by braces, including repeated nested
+braces: `int x={{{42}}};`. The parser recursively unwraps each brace pair and
+stores the same assignment expression. This applies to pointer initializers too,
+so a global braced pointer still becomes a relocation.
 
-The original title says parentheses, but this change concerns `{}` braces.
-Python uses separate straightforward loops for braced and unbraced aggregates.
-It follows this commit's limited grammar; trailing commas and scalar braces are
-still unavailable. Initializer counting uses the same recursive parsing rules,
-so inferred outer dimensions count complete inner aggregates rather than scalars.
+The Python recursion directly follows the C parser. Empty scalar braces and
+multiple scalar values still produce errors, as do trailing commas at this step.
+No new expression or assembly operation is required.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[2][2]={1,2,3,42};return a[1][1];}\n' > /tmp/lesson108.c
-python3 python/main.py /tmp/lesson108.c > /tmp/lesson108.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson108 /tmp/lesson108.s
-/tmp/lesson108
+printf 'int main(){int x={42};return x;}\n' > /tmp/lesson109.c
+python3 python/main.py /tmp/lesson109.c > /tmp/lesson109.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson109 /tmp/lesson109.s
+/tmp/lesson109
 echo $?
 ```
 
-Assembly is unchanged: zero 16 bytes, then write four ints at consecutive
-four-byte offsets. The final element returns exit status 42. Tests cover flat
-nested arrays and structs, mixed braces, zero filling, inferred dimensions,
-brace-free unions, assembly sizing, and original initializer examples.
+Assembly clears the local int and stores 42 just as for an unbraced initializer.
+Main loads x and returns exit status 42. Tests cover repeated braces, globals,
+array elements, pointer relocations, malformed scalar lists, emitted assembly,
+and the original initializer program.
 
 ## Tests and attribution
 

@@ -1,40 +1,36 @@
-# Lesson 107: Global union initializers and relocations
+# Lesson 108: Omitting inner initializer braces
 
-Original chibicc commit: [`1eae5ae3678d079efc7d2807f10439e53932f811`](https://github.com/rui314/chibicc/commit/1eae5ae3678d079efc7d2807f10439e53932f811).
+Original chibicc commit: [`efa0f3366ddb914cc29f96fcdf10f99ded61775c`](https://github.com/rui314/chibicc/commit/efa0f3366ddb914cc29f96fcdf10f99ded61775c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Global union serialization writes the first member at offset zero. This original
-commit also adds address initializers. The evaluator now returns an integer
-addend plus an optional symbol, letting `g+1`, `&g.member`, string addresses,
-and nested array-member addresses become relocations. Arithmetic scales pointer
-steps to bytes before constant evaluation.
+Nested array and struct initializers can omit inner braces. Each aggregate
+consumes enough values for its elements or members and leaves the next comma
+for its parent. Closing the parent's brace early leaves the remaining children
+zero. Struct-copy expressions still take precedence. Unions may initialize their
+first member without braces too.
 
-Relocation records contain an offset within the initialized object, a symbol
-name, and an addend. The data emitter writes .quad at each relocation and .byte
-elsewhere. The assembler/linker resolves final addresses. Numeric-only constant
-contexts still reject addresses; ordinary global scalar reads cannot initialize
-another global. This step's address relocations assume eight-byte storage.
-
-Python tuples replace C's label output pointer, and lists replace linked
-relocation records. Byte serialization explicitly targets little-endian x86-64.
-The constant evaluator still preserves earlier historical cast behavior.
+The original title says parentheses, but this change concerns `{}` braces.
+Python uses separate straightforward loops for braced and unbraced aggregates.
+It follows this commit's limited grammar; trailing commas and scalar braces are
+still unavailable. Initializer counting uses the same recursive parsing rules,
+so inferred outer dimensions count complete inner aggregates rather than scalars.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int g[2]={1,42};int *p=g+1;int main(){return *p;}\n' > /tmp/lesson107.c
-python3 python/main.py /tmp/lesson107.c > /tmp/lesson107.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson107 /tmp/lesson107.s
-/tmp/lesson107
+printf 'int main(){int a[2][2]={1,2,3,42};return a[1][1];}\n' > /tmp/lesson108.c
+python3 python/main.py /tmp/lesson108.c > /tmp/lesson108.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson108 /tmp/lesson108.s
+/tmp/lesson108
 echo $?
 ```
 
-The data for p is `.quad g+4`, because each int occupies four bytes. Main loads
-p then dereferences it, returning 42. Tests cover signed addends, pointer arrays,
-member offsets, strings, conditional addresses, union data, relocation records,
-assembly, invalid scalar reads, and the expanded original C initializer suite.
+Assembly is unchanged: zero 16 bytes, then write four ints at consecutive
+four-byte offsets. The final element returns exit status 42. Tests cover flat
+nested arrays and structs, mixed braces, zero filling, inferred dimensions,
+brace-free unions, assembly sizing, and original initializer examples.
 
 ## Tests and attribution
 

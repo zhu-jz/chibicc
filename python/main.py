@@ -1,6 +1,6 @@
-"""Lesson 107: Global union initializers and relocations.
+"""Lesson 108: Omitting inner initializer braces.
 
-Based on chibicc commit 1eae5ae3678d079efc7d2807f10439e53932f811.
+Based on chibicc commit efa0f3366ddb914cc29f96fcdf10f99ded61775c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

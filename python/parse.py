@@ -905,11 +905,36 @@ class Parser:
             index += 1
         return position + 1
 
+    def array_initializer_without_braces(self, position, init):
+        if init.is_flexible:
+            count = self.count_array_init_elements(position, init.ty)
+            init.__dict__.update(new_initializer(array_of(init.ty.base, count)).__dict__)
+        for index in range(init.ty.array_len):
+            if self.tokens[position].text == "}":
+                break
+            if index:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            position = self.initializer2(position, init.children[index])
+        return position
+
+    def struct_initializer_without_braces(self, position, init):
+        for index, member in enumerate(init.ty.members):
+            if self.tokens[position].text == "}":
+                break
+            if index:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            position = self.initializer2(position, init.children[member.idx])
+        return position
+
     def union_initializer(self, position, init):
-        if self.tokens[position].text != "{":
-            raise CompileError(self.tokens[position], "expected '{'")
         if not init.children:
             raise CompileError(self.tokens[position], "union has no members")
+        if self.tokens[position].text != "{":
+            return self.initializer2(position, init.children[0])
         position = self.initializer2(position + 1, init.children[0])
         if self.tokens[position].text != "}":
             raise CompileError(self.tokens[position], "expected '}'")
@@ -919,15 +944,18 @@ class Parser:
         if init.ty.kind == "ARRAY" and self.tokens[position].kind == "STR":
             return self.string_initializer(position, init)
         if init.ty.kind == "ARRAY":
-            return self.array_initializer(position, init)
+            if self.tokens[position].text == "{":
+                return self.array_initializer(position, init)
+            return self.array_initializer_without_braces(position, init)
         if init.ty.kind == "STRUCT":
-            if self.tokens[position].text != "{":
-                expression, end = self.assign(position)
-                add_type(expression)
-                if expression.ty.kind == "STRUCT":
-                    init.expr = expression
-                    return end
-            return self.struct_initializer(position, init)
+            if self.tokens[position].text == "{":
+                return self.struct_initializer(position, init)
+            expression, end = self.assign(position)
+            add_type(expression)
+            if expression.ty.kind == "STRUCT":
+                init.expr = expression
+                return end
+            return self.struct_initializer_without_braces(position, init)
         if init.ty.kind == "UNION":
             return self.union_initializer(position, init)
         init.expr, position = self.assign(position)

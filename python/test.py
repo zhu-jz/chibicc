@@ -60,6 +60,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_omitted_initializer_braces(self):
+        for source, expected in [
+            ("int main(){int a[2][2]={1,2,3,42};return a[1][1];}", 42),
+            ("int main(){struct T{int a,b;} v[2]={1,2,3,42};return v[1].b;}", 42),
+            ("struct T{int a[2];} g[2]={{1,2},3,42};int main(){return g[1].a[1];}", 42),
+            ("int main(){union T{int a;long b;} x=42;return x.a;}", 42),
+            ("int main(){int a[2][2]={42};return a[0][0]+a[1][1];}", 42),
+            ('char g[][4]={97,98,99,0,100,101,102,0};int main(){return sizeof(g)+g[1][2];}', 110),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertIn("  mov $16, %rcx\n", compile_program("int main(){int a[2][2]={1,2,3,42};return a[1][1];}").stdout)
+
     def test_global_address_initializers(self):
         for source, expected in [
             ("int g=42;int *p=&g;int main(){return *p;}", 42),

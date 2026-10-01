@@ -1,36 +1,35 @@
-# Lesson 128: Variadic register save areas
+# Lesson 129: Checking function argument counts
 
-Original chibicc commit: [`754a24fafcea637cab8bc01bb2702069109a0358`](https://github.com/rui314/chibicc/commit/754a24fafcea637cab8bc01bb2702069109a0358).
+Original chibicc commit: [`197689a22b38df2ced90e03117914a2248238c20`](https://github.com/rui314/chibicc/commit/197689a22b38df2ced90e03117914a2248238c20).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Variadic definitions now reserve a 136-byte local named __va_area__. Its header
-stores the fixed integer-argument byte count as gp_offset and a pointer to saved
-registers. The prologue saves six general-purpose argument registers and eight
-low floating-register slots before the body runs. A user-declared va-list struct
-can copy that header and forward integer/pointer arguments to libc vsprintf.
+Calls now reject too few fixed arguments and too many arguments for nonvariadic
+functions. Variadic calls require all fixed arguments but allow extras. `f(void)`
+has zero fixed arguments and is nonvariadic. Old-style `f()` is represented as
+variadic, retaining its unspecified-parameter calling behavior; its definitions
+therefore also receive the register-save area introduced in lesson 128.
 
-Python loops emit the same saves as upstream's repeated instructions. The helper
-area is a local object separate from fixed parameters. This historical step has
-no builtin va_start or va_arg syntax: examples copy the exposed header manually.
-Overflow stack arguments and a complete floating-point variadic ABI are still
-unsupported; the area preserves upstream's layout and zero fp_offset.
+Python compares list lengths where upstream advances a parameter pointer.
+Tests that intend a zero-parameter function now spell `(void)`, keeping their
+stack and syntax-tree expectations precise. The original C fixtures retain their
+historical source verbatim. The new tests separately check old-style `()` behavior.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'typedef struct V{int gp,fp;void *overflow;void *regs;} V;int f(int x,...){V *v=(V*)__va_area__;char *p=v->regs;return *(int*)(p+v->gp);}int main(){return f(1,42);}\n' > /tmp/lesson128.c
-python3 python/main.py /tmp/lesson128.c > /tmp/lesson128.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson128 /tmp/lesson128.s
-/tmp/lesson128
+printf 'int f(int x){return x;}int main(void){return f(42);}\n' > /tmp/lesson129.c
+python3 python/main.py /tmp/lesson129.c > /tmp/lesson129.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson129 /tmp/lesson129.s
+/tmp/lesson129
 echo $?
 ```
 
-The fixed x consumes rdi, so gp is eight. Saved rsi at that offset contains 42,
-which f reads and returns. Tests cover fixed-parameter offsets, reading saved
-extras, forwarding to vsprintf, helper area size, separation from parameters,
-emitted integer and xmm saves, execution, and the updated function program.
+The valid call passes 42 in edi and exits with 42. Changing it to f() or f(1,2)
+now reports an argument-count error before emitting assembly. Tests cover both
+errors, void and variadic prototypes, unspecified old-style calls, variadic
+save-area flags, zero-argument fixtures, execution, and all original C programs.
 
 ## Tests and attribution
 

@@ -406,12 +406,16 @@ class Parser:
                 position += 1
             arg, position = self.assign(position)
             add_type(arg)
+            if len(args) >= len(function_ty.params) and not function_ty.is_variadic:
+                raise CompileError(self.tokens[position], "too many arguments")
             if len(args) < len(function_ty.params):
                 param_ty = function_ty.params[len(args)]
                 if param_ty.kind in ("STRUCT", "UNION"):
                     raise CompileError(arg.tok, "passing struct or union is not supported yet")
                 arg = new_cast(arg, param_ty)
             args.append(arg)
+        if len(args) < len(function_ty.params):
+            raise CompileError(self.tokens[position], "too few arguments")
         return Node("FUNCALL", funcname=token.text, args=args, tok=token,
                     ty=function_ty.return_ty, func_ty=function_ty), position + 1
 
@@ -792,7 +796,7 @@ class Parser:
             params.append(copy_type(param))
         ty = func_type(ty)
         ty.params = params
-        ty.is_variadic = is_variadic
+        ty.is_variadic = is_variadic or not params
         return ty, position + 1
 
     def array_dimensions(self, position, ty):

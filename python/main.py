@@ -1,6 +1,6 @@
-"""Lesson 128: Variadic register save areas.
+"""Lesson 129: Checking function argument counts.
 
-Based on chibicc commit 754a24fafcea637cab8bc01bb2702069109a0358.
+Based on chibicc commit 197689a22b38df2ced90e03117914a2248238c20.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

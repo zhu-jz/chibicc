@@ -1,6 +1,6 @@
-"""Lesson 219: Return zero when main reaches its end.
+"""Lesson 220: Expose anonymous struct and union members.
 
-Based on chibicc commit 9c36dd727c736dc3a3ffa6ce7ce473966d802068.
+Based on chibicc commit c3075b3030c0488df1e7aa9f600da0f66072186b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

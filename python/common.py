@@ -86,7 +86,7 @@ class Type:
 @dataclass
 class Member:
     ty: Type
-    name: Token
+    name: Optional[Token]
     offset: int = 0
     tok: Optional[Token] = field(default=None, compare=False)
     idx: int = 0

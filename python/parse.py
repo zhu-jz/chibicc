@@ -355,14 +355,28 @@ class Parser:
             return self.to_assign(binary), position
         return self.postfix(position)
 
+    def get_struct_member(self, ty, token):
+        for member in ty.members:
+            if member.name is None and member.ty.kind in ("STRUCT", "UNION"):
+                if self.get_struct_member(member.ty, token) is not None:
+                    return member
+            elif member.name is not None and member.name.text == token.text:
+                return member
+        return None
+
     def struct_ref(self, lhs, token):
         add_type(lhs)
         if lhs.ty.kind not in ("STRUCT", "UNION"):
             raise CompileError(lhs.tok, "not a struct nor a union")
-        for member in lhs.ty.members:
-            if member.name.text == token.text:
-                return Node("MEMBER", lhs=lhs, member=member, tok=token)
-        raise CompileError(token, "no such member")
+        ty = lhs.ty
+        while True:
+            member = self.get_struct_member(ty, token)
+            if member is None:
+                raise CompileError(token, "no such member")
+            lhs = Node("MEMBER", lhs=lhs, member=member, tok=token)
+            if member.name is not None:
+                return lhs
+            ty = member.ty
 
     def new_inc_dec(self, node, token, addend):
         add_type(node)
@@ -791,6 +805,10 @@ class Parser:
         while self.tokens[position].text != "}":
             attr = VarAttr()
             basety, position = self.declspec(position, attr)
+            if basety.kind in ("STRUCT", "UNION") and self.tokens[position].text == ";":
+                members.append(Member(basety, None, idx=len(members), align=attr.align or basety.align))
+                position += 1
+                continue
             first = True
             while self.tokens[position].text != ";":
                 if not first:

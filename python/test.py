@@ -77,6 +77,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_anonymous_aggregate_members(self):
+        for source, expected in [
+            ('int main(void){struct T{char pad;struct{int a;union{int b,c;};};}x={1,{12,{30}}};return x.a+x.c;}',42),
+            ('int main(void){union T{struct{unsigned char a,b,c,d;};long e;}x;x.e=0xdeadbeef;return x.c;}',173),
+            ('struct T{struct{int a;};int b;}g={{12},30};int main(void){struct T*p=&g;return p->a+p->b;}',42),
+            ('int main(void){struct T{struct{int a:10;};}x={{2}};return x.a+=40;}',42),
+        ]:
+            self.assert_program_returns(source,expected)
+        result = compile_program('int main(void){struct T{struct{int a;};}x;return x.missing;}')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('no such member',result.stderr)
+
     def test_main_implicit_zero(self):
         for source in ('int main(void){}', 'int main(void){42;}',
                        'int f(void){return 42;}int main(void){f();}'):

@@ -1,6 +1,6 @@
-"""Lesson 155: Assemble output unless -S is given.
+"""Lesson 156: Compile multiple input files.
 
-Based on chibicc commit 140b43358c33fb5e9f86789541dbca306bb64fcc.
+Based on chibicc commit b833cd0f297ba7979c23cff1b88c27beb4f2f737.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -21,11 +21,20 @@ def usage(status):
 
 
 def parse_args(arguments):
-    input_path = None
+    input_paths = []
     output_path = None
+    base_file = None
+    cc1_output = None
     opt_cc1 = False
     opt_trace = False
     opt_S = False
+    position = 0
+    while position < len(arguments):
+        if arguments[position] in ("-o", "-cc1-input", "-cc1-output"):
+            position += 1
+            if position == len(arguments):
+                usage(1)
+        position += 1
     position = 0
     while position < len(arguments):
         argument = arguments[position]
@@ -43,6 +52,14 @@ def parse_args(arguments):
             continue
         if argument == "--help":
             usage(0)
+        if argument in ("-cc1-input", "-cc1-output"):
+            position += 1
+            if argument == "-cc1-input":
+                base_file = arguments[position]
+            else:
+                cc1_output = arguments[position]
+            position += 1
+            continue
         if argument == "-o":
             position += 1
             if position == len(arguments):
@@ -53,11 +70,11 @@ def parse_args(arguments):
         elif argument.startswith("-") and argument != "-":
             raise CompileError(None, f"unknown argument: {argument}")
         else:
-            input_path = argument
+            input_paths.append(argument)
         position += 1
-    if input_path is None:
+    if not input_paths:
         raise CompileError(None, "no input files")
-    return input_path, output_path, opt_cc1, opt_trace, opt_S
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, base_file, cc1_output
 
 
 def write_output(path, assembly):
@@ -111,7 +128,8 @@ def run_subprocess(command, trace):
 
 
 def run_cc1(arguments, input_path, output_path, trace):
-    command = [sys.executable, sys.argv[0], *arguments, "-cc1", input_path, "-o", output_path]
+    command = [sys.executable, sys.argv[0], *arguments, "-cc1",
+               "-cc1-input", input_path, "-cc1-output", output_path]
     return run_subprocess(command, trace)
 
 
@@ -125,19 +143,26 @@ def replace_extension(filename, extension):
 
 def main():
     try:
-        filename, output_path, opt_cc1, opt_trace, opt_S = parse_args(sys.argv[1:])
+        inputs, opt_o, opt_cc1, opt_trace, opt_S, base_file, cc1_output = parse_args(sys.argv[1:])
         if opt_cc1:
-            return cc1(filename, output_path)
-        if output_path is None:
-            output_path = replace_extension(filename, ".s" if opt_S else ".o")
-        if opt_S:
-            return run_cc1(sys.argv[1:], filename, output_path, opt_trace)
-        with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
-            assembly_path = str(Path(directory) / "input.s")
-            status = run_cc1(sys.argv[1:], filename, assembly_path, opt_trace)
+            if base_file is None:
+                raise CompileError(None, "-cc1 requires -cc1-input")
+            return cc1(base_file, cc1_output)
+        if len(inputs) > 1 and opt_o is not None:
+            raise CompileError(None, "cannot specify '-o' with multiple files")
+        for filename in inputs:
+            output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
+            if opt_S:
+                status = run_cc1(sys.argv[1:], filename, output_path, opt_trace)
+            else:
+                with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
+                    assembly_path = str(Path(directory) / "input.s")
+                    status = run_cc1(sys.argv[1:], filename, assembly_path, opt_trace)
+                    if not status:
+                        status = run_subprocess(["as", "-c", assembly_path, "-o", output_path], opt_trace)
             if status:
                 return status
-            return run_subprocess(["as", "-c", assembly_path, "-o", output_path], opt_trace)
+        return 0
     except CompileError as error:
         print(error, file=sys.stderr)
         return 1

@@ -66,6 +66,32 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_multiple_driver_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "main.c"
+            second = Path(directory) / "answer.c"
+            first.write_text("int f(void);int main(void){return f();}\n")
+            second.write_text("int f(void){return 42;}\n")
+            result = subprocess.run([sys.executable, str(COMPILER), str(first), str(second)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            objects = [str(Path(directory) / name) for name in ("main.o", "answer.o")]
+            self.assertTrue(all(Path(name).read_bytes().startswith(b"\x7fELF") for name in objects))
+            executable = Path(directory) / "program"
+            subprocess.run(["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), *objects], check=True)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            result = subprocess.run([sys.executable, str(COMPILER), "-S", str(first), str(second)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f'.file 1 "{first}"', (Path(directory) / "main.s").read_text())
+            self.assertIn(f'.file 1 "{second}"', (Path(directory) / "answer.s").read_text())
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(executable), str(first), str(second)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot specify '-o' with multiple files", result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), "--help", "-o"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+
     def test_assembler_driver_stage(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "program.c"
@@ -87,7 +113,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("as -c ", result.stderr)
-            temporary = result.stderr.splitlines()[0].rsplit(" -o ", 1)[1]
+            temporary = result.stderr.splitlines()[0].rsplit(" -cc1-output ", 1)[1]
             self.assertFalse(Path(temporary).exists())
             result = subprocess.run([sys.executable, str(COMPILER), "-o", directory, str(source)],
                                     capture_output=True, text=True)
@@ -98,7 +124,7 @@ class ExpressionCompilerTests(unittest.TestCase):
 
     def test_driver_and_cc1_split(self):
         source = "int main(void){return 42;}"
-        direct = subprocess.run(compiler_command("-cc1", "-"),
+        direct = subprocess.run(compiler_command("-cc1", "-cc1-input", "-", "-"),
                                 input=source, capture_output=True, text=True)
         driver = compile_program(source)
         self.assertEqual(direct.returncode, 0, direct.stderr)

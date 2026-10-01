@@ -1,37 +1,36 @@
-# Lesson 155: Assemble output unless -S is given
+# Lesson 156: Compile multiple input files
 
-Original chibicc commit: [`140b43358c33fb5e9f86789541dbca306bb64fcc`](https://github.com/rui314/chibicc/commit/140b43358c33fb5e9f86789541dbca306bb64fcc).
+Original chibicc commit: [`b833cd0f297ba7979c23cff1b88c27beb4f2f737`](https://github.com/rui314/chibicc/commit/b833cd0f297ba7979c23cff1b88c27beb4f2f737).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The driver now writes a temporary assembly file and invokes GNU as to produce an
-object file. With -S, assembly itself is the final output. Without -o, it uses the
-input basename with .o or .s in the current directory. -S -o - writes assembly
-to stdout, and internal -cc1 remains the assembly-generating compiler process.
-The driver traces both child commands with -### and propagates their failures.
+The driver collects input paths in a Python list and compiles each file separately.
+Each child gets explicit -cc1-input and -cc1-output options so it selects the right
+translation unit even though the copied command line contains every input.
+Default output names use each basename; multiple inputs with a single -o are
+rejected. This step produces separate objects or assembly files and does not link.
 
-Python uses a TemporaryDirectory for automatic cleanup and a list of subprocess
-arguments instead of C's temporary-file array and fork/exec code. The C-to-assembly
-compiler remains our implementation; as assembles that text. GCC is used only
-by the examples and tests to link object files. Existing assembly tests now
-request -S explicitly so they continue to check the same compiler output.
+Option arguments are checked before processing help, matching the original -o
+precheck. Python also checks the new internal option arguments and missing
+-cc1-input explicitly, giving readable errors where C would use a null pointer.
+Temporary assembly files are cleaned up after each source is assembled.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson155.c
-python3 python/main.py -S -o /tmp/lesson155.s /tmp/lesson155.c
-python3 python/main.py -o /tmp/lesson155.o /tmp/lesson155.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson155 /tmp/lesson155.o
-/tmp/lesson155
+printf 'int f(void);int main(void){return f();}\n' > /tmp/lesson156-main.c
+printf 'int f(void){return 42;}\n' > /tmp/lesson156-answer.c
+(cd /tmp && python3 /home/zhu/chibicc/python/main.py lesson156-main.c lesson156-answer.c)
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson156 /tmp/lesson156-main.o /tmp/lesson156-answer.o
+/tmp/lesson156
 echo $?
 ```
 
-The assembly still places 42 in rax and returns. as turns it into an ELF relocatable
-object; GCC links it into an executable, whose shell exit status is 42. Tests
-check real object headers and execution, default names, explicit assembly output,
-tracing, temporary-file cleanup, assembler errors, and the original fixtures.
+The first object contains an indirect call to external f; the second defines f
+and returns 42. Linking resolves the address, and the executable exits with 42.
+Tests check both objects, their linked execution, separate .s outputs and source
+metadata, ambiguous -o rejection, option validation, and the original examples.
 
 ## Tests and attribution
 

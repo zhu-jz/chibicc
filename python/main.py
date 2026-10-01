@@ -1,6 +1,6 @@
-"""Lesson 185: Add include directory options.
+"""Lesson 186: Add default include paths.
 
-Based on chibicc commit a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467.
+Based on chibicc commit a939a7a90638631c296dfb63d857b24555b25327.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -20,6 +20,15 @@ from tokenizer import tokenize_file
 def usage(status):
     print("chibicc (Python): python3 python/main.py [ -o <path> ] <file>", file=sys.stderr)
     raise SystemExit(status)
+
+
+def add_default_include_paths(argv0, include_paths):
+    include_paths.extend([
+        str(Path(argv0).parent / "include"),
+        "/usr/local/include",
+        "/usr/include/x86_64-linux-gnu",
+        "/usr/include",
+    ])
 
 
 def parse_args(arguments):
@@ -200,6 +209,7 @@ def main():
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
          base_file, cc1_output, include_paths) = parse_args(sys.argv[1:])
         if opt_cc1:
+            add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
             return cc1(base_file, cc1_output, opt_E, opt_o, include_paths)

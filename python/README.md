@@ -1,32 +1,31 @@
-# Lesson 185: Add include directory options
+# Lesson 186: Add default include paths
 
-Original chibicc commit: [`a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467`](https://github.com/rui314/chibicc/commit/a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467).
+Original chibicc commit: [`a939a7a90638631c296dfb63d857b24555b25327`](https://github.com/rui314/chibicc/commit/a939a7a90638631c296dfb63d857b24555b25327).
 Earlier explanations are available in Git history.
 
-`-I<dir>` appends a directory to the include search list. Directories are tried
-in command-line order. A quoted filename first tries beside its source file;
-an angle-bracket filename goes directly to the search list. If no candidate
-exists, the literal filename is still tried as in the previous lesson.
+The internal compiler now appends default search directories after user `-I`
+entries: `include/` beside its entry point, `/usr/local/include`,
+`/usr/include/x86_64-linux-gnu`, and `/usr/include`. The order follows the C
+commit. Quoted includes still try their source directory first.
 
-The driver forwards its options when re-executing the compiler, and explicit
-Python function arguments carry the search list through preprocessing. The
-upstream fixture runner now supplies its test directory, matching the C
-Makefile. This historical CLI supports the attached form only: use `-I/tmp`,
-not a separate `-I /tmp` pair. A trailing bare `-I` is rejected by the precheck.
+For Python, the entry point is main.py or the packaged .pyz file, so each can
+find an adjacent include directory. Defaults are added only in the internal
+compilation process, avoiding duplicates in the driver. No new bundled headers
+are introduced in this original commit. Finding system headers does not imply
+that every header's language/preprocessor features are supported yet.
 
 ```sh
-mkdir -p /tmp/lesson-include
-printf '#define VALUE 42\n' > /tmp/lesson-include/answer.h
-printf '#include <answer.h>\nint main(void){return VALUE;}\n' > /tmp/lesson.c
-python3 python/main.py -I/tmp/lesson-include -S -o /tmp/lesson.s /tmp/lesson.c
+printf '#include <linux/limits.h>\nint main(void){return PATH_MAX/128;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 32 on Ubuntu, where PATH_MAX is 4096
 ```
 
-The selected header defines VALUE; the function assembly loads 42 into `%rax`
-and returns. Tests check quote versus angle precedence, directory ordering,
-option forwarding, failed lookup and a missing option operand.
+The header's constant expands into integer division. Assembly computes its
+quotient, leaves 32 in `%rax`, and returns. Tests verify search ordering, an
+adjacent header for a freshly packaged compiler, and Ubuntu's Linux limits
+header when installed. Original C sources remain unchanged.
 
 ## Tests and attribution
 

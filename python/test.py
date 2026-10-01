@@ -14,6 +14,7 @@ from parse import parse
 from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
+from main import add_default_include_paths
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -72,6 +73,31 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_default_include_paths(self):
+        paths = ['/custom']
+        add_default_include_paths('/tmp/compiler/main.py', paths)
+        self.assertEqual(paths, ['/custom', '/tmp/compiler/include', '/usr/local/include',
+                                 '/usr/include/x86_64-linux-gnu', '/usr/include'])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / 'compiler.pyz'
+            headers = root / 'include'
+            headers.mkdir()
+            (headers / 'answer.h').write_text('int main(void){return 42;}\n')
+            built = subprocess.run([sys.executable, str(Path(__file__).with_name('build.py')), '-o', str(archive)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            result = subprocess.run([sys.executable, str(archive), '-E', '-'],
+                                    input='#include <answer.h>\n', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assert_program_returns(result.stdout, 42)
+        if Path('/usr/include/linux/limits.h').exists():
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                    input='#include <linux/limits.h>\nint main(void){return PATH_MAX/128;}\n',
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assert_program_returns(result.stdout, 32)
+
     def test_include_directory_option(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

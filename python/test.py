@@ -81,6 +81,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_offsetof_macro(self):
+        declaration = '#include <stddef.h>\ntypedef struct{int a;char b;int c;double d;}T;'
+        for member, expected in [('a', 0), ('b', 4), ('c', 8), ('d', 16)]:
+            self.assert_program_returns(declaration + 'int main(void){return offsetof(T,' + member + ');}', expected)
+        self.assert_program_returns(declaration + 'enum{N=offsetof(T,d)};int main(void){return N+26;}', 42)
+        self.assert_program_returns('#include <stddef.h>\ntypedef struct{int a[3];struct{int b;}s;}T;int main(void){return offsetof(T,a[2])+offsetof(T,s.b);}', 20)
+        self.assert_program_returns(declaration + 'int main(void){return sizeof(offsetof(T,d));}', 8)
+
     def test_idirafter_option(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / 'first'

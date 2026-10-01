@@ -1,6 +1,6 @@
-"""Lesson 263: Accept the historical idirafter driver option.
+"""Lesson 264: Provide offsetof in stddef.h.
 
-Based on chibicc commit 11fc259b01c4a855e53ffdb2b86c1030f9c18586.
+Based on chibicc commit 1b99badce48083c5fa6b8b5872e899c7d1a47f9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -95,6 +95,11 @@ def evaluate_constant(node):
     if kind == "CAST":
         value = evaluate_constant(node.lhs)
         return cast_constant(value, node.ty)
+    if kind == "ADDR":
+        value, label = evaluate_address(node.lhs)
+        if label is not None:
+            raise CompileError(node.tok, "not a compile-time constant")
+        return value
     if kind not in ("+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", "==", "!=", "<", "<="):
         raise CompileError(node.tok, "not a compile-time constant")
     left = evaluate_constant(node.lhs)

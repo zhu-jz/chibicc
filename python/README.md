@@ -1,29 +1,32 @@
-# Lesson 263: Accept the historical idirafter driver option
+# Lesson 264: Provide offsetof in stddef.h
 
-Original chibicc commit: [`11fc259b01c4a855e53ffdb2b86c1030f9c18586`](https://github.com/rui314/chibicc/commit/11fc259b01c4a855e53ffdb2b86c1030f9c18586).
+Original chibicc commit: [`1b99badce48083c5fa6b8b5872e899c7d1a47f9a`](https://github.com/rui314/chibicc/commit/1b99badce48083c5fa6b8b5872e899c7d1a47f9a).
 Earlier explanations are available in Git history.
 
-The driver recognizes `-idirafter DIR`, consumes its argument and appends entries
-after explicitly requested -I directories. This original patch mistakenly stores
-the literal option text `-idirafter`, not DIR. We retain the actual historical
-behavior, including searching a directory literally named -idirafter if present.
-Default system include paths are appended later by the internal compiler stage.
+The bundled stddef.h now defines offsetof(type,member) using a cast of zero to
+an aggregate pointer, a member reference and its address, cast to size_t. Existing
+layout and address-expression code already provide the implementation. There
+is no new builtin or parser rule in this original commit.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -idirafter /tmp -S -o /tmp/lesson.s /tmp/lesson.c
+printf '#include <stddef.h>\ntypedef struct{int a;char b;int c;double d;}T;int main(void){return offsetof(T,d)+26;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-This input needs no include, so assembly loads and returns 42 normally. Tests
-reproduce the original driver priority checks, then additionally show that DIR
-alone is not searched and the literal option directory is. A missing argument
-reports usage rather than indexing past the argument list.
-Python separates a deferred list from its ordinary include-path list as C does
-with StringArray. This step records the original implementation's bug honestly;
-it does not claim working standard idirafter semantics that the commit lacks.
+Layout aligns d to offset 16. Assembly computes its address from a zero base
+without loading memory at that address, then adds 26 and returns 42. Tests cover
+all four offsets, nested fields and array members, constant-expression use,
+size_t width and the original offsetof.c fixture.
+The header is copied byte-for-byte from this original revision. Python's member
+objects carry offsets where C uses Member pointers; the macro's C spelling and
+meaning are otherwise unchanged.
+Python's separate constant evaluator now also handles numeric address constants,
+which the original shared eval2 routine already supported. This lets offsetof
+work in enum values as well as runtime expressions, without accepting unresolved
+global symbol addresses as integer constants.
 
 ## Tests and attribution
 

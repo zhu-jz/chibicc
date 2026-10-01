@@ -1,6 +1,6 @@
-"""Lesson 115: Global alignment directives.
+"""Lesson 116: Extern global declarations.
 
-Based on chibicc commit 157356c769d777b1721da8218724608081137fe2.
+Based on chibicc commit 006a45ccd475296ee19ec87891523d89ce3f2f24.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

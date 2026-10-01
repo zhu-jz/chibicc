@@ -1,35 +1,38 @@
-# Lesson 115: Global alignment directives
+# Lesson 116: Extern global declarations
 
-Original chibicc commit: [`157356c769d777b1721da8218724608081137fe2`](https://github.com/rui314/chibicc/commit/157356c769d777b1721da8218724608081137fe2).
+Original chibicc commit: [`006a45ccd475296ee19ec87891523d89ce3f2f24`](https://github.com/rui314/chibicc/commit/006a45ccd475296ee19ec87891523d89ce3f2f24).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The data emitter now writes `.align N` for each global object's type alignment.
-Consecutive objects within a section can therefore receive padding before
-naturally aligned int, long, pointer, and aggregate storage. Local alignment was
-already handled while assigning stack offsets.
+`extern int g;` now declares a global without defining storage. References still
+use its symbol; the linker supplies its definition from another object. Objects
+track is_definition, ordinary globals and string objects set it, and data emission
+skips declarations. Function prototypes remain nondefinitions too.
 
-Python emits the same byte-based GNU assembler directive as upstream. The exact
-historical ordering places .align before the section directive; when switching
-between .data and .bss it consequently aligns the previously selected section.
-This commit does not yet fix that ordering. Tests check directives and actual
-addresses for consecutive objects within one section.
+Python booleans and fields mirror upstream storage attributes. This step handles
+file-scope extern variables; block-scope behavior is unchanged. An extern with
+an initializer also remains a nondefinition in this historical parser. Upstream's
+new storage-class check rejects typedef only when both static and extern are
+also present, so it temporarily accepts some invalid two-class combinations.
+Tests preserve that exact change instead of implementing later validation.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'long g=42;char pad=1;int main(){return g;}\n' > /tmp/lesson115.c
-python3 python/main.py /tmp/lesson115.c > /tmp/lesson115.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson115 /tmp/lesson115.s
-/tmp/lesson115
+printf 'extern int g;int main(){return g;}\n' > /tmp/lesson116.c
+printf 'int g=42;\n' > /tmp/lesson116-helper.c
+python3 python/main.py /tmp/lesson116.c > /tmp/lesson116.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson116 /tmp/lesson116.s /tmp/lesson116-helper.c
+/tmp/lesson116
 echo $?
 ```
 
-The emitter's global order places pad first, then `.align 8` before g, adding
-padding in .data. Main loads g and returns exit status 42. Tests verify byte
-alignment directives for all scalar widths, real global addresses in .data and
-.bss, section expectations, execution, and all original C examples.
+Python emits no g label or data storage, but main loads g through RIP-relative
+addressing. GCC compiles the separate helper and links both; exit status is 42.
+Tests cover external variables and pointers, omitted data labels, definition
+flags, prototypes, historical storage combinations, and the new upstream extern
+program. The Python compiler itself never invokes GCC.
 
 ## Tests and attribution
 

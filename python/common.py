@@ -99,6 +99,7 @@ class VarScope:
 class VarAttr:
     is_typedef: bool = False
     is_static: bool = False
+    is_extern: bool = False
 
 
 @dataclass

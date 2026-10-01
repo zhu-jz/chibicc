@@ -60,6 +60,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_extern_global_declarations(self):
+        source = "extern int g;extern int *p;int main(){return g+*p;}"
+        self.assert_program_returns(source, 42, "int g=21;int *p=&g;")
+        assembly = compile_program(source).stdout
+        self.assertNotIn("g:\n", assembly)
+        self.assertNotIn("p:\n", assembly)
+        self.assertIn("  lea g(%rip), %rax\n", assembly)
+        objects = parse(tokenize("extern int g;int x;int f(void);"))
+        self.assertEqual({var.name: var.is_definition for var in objects}, {"g": False, "x": True, "f": False})
+        self.assert_program_returns("typedef static int T;int main(){T x=42;return x;}", 42)
+
     def test_global_alignment_directives(self):
         for source in [
             "long g;char pad;int main(){return (long)&g%8;}",
@@ -677,8 +688,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertTrue(prototype.is_static)
         self.assertFalse(prototype.is_definition)
         for source, message in [
-            ("typedef static int T;", "typedef and static may not be used together"),
-            ("static typedef int T;", "typedef and static may not be used together"),
+            ("typedef static extern int T;", "typedef may not be used together with static or extern"),
             ("int f(static int x);", "storage class specifier is not allowed"),
         ]:
             result = compile_program(source)

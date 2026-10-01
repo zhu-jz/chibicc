@@ -97,7 +97,7 @@ class Parser:
         return var
 
     def new_gvar(self, name, ty):
-        var = Obj(name, ty=ty)
+        var = Obj(name, ty=ty, is_definition=True)
         self.globals.insert(0, var)
         self.push_scope(name).var = var
         return var
@@ -581,7 +581,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static", "extern") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -598,15 +598,17 @@ class Parser:
         specifiers = []
         while self.is_typename(position):
             token = self.tokens[position]
-            if token.text in ("typedef", "static"):
+            if token.text in ("typedef", "static", "extern"):
                 if attr is None:
                     raise CompileError(token, "storage class specifier is not allowed in this context")
                 if token.text == "typedef":
                     attr.is_typedef = True
-                else:
+                elif token.text == "static":
                     attr.is_static = True
-                if attr.is_typedef and attr.is_static:
-                    raise CompileError(token, "typedef and static may not be used together")
+                else:
+                    attr.is_extern = True
+                if attr.is_typedef and attr.is_static + attr.is_extern > 1:
+                    raise CompileError(token, "typedef may not be used together with static or extern")
                 position += 1
                 continue
             type_def = self.find_typedef(position)
@@ -1120,6 +1122,7 @@ class Parser:
         ty, position = self.declarator(position, basety)
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
+        function.is_definition = False
         function.is_static = attr.is_static
         if self.tokens[position].text == ";":
             return position + 1
@@ -1138,7 +1141,7 @@ class Parser:
         self.resolve_goto_labels()
         return position
 
-    def global_variable(self, position, basety):
+    def global_variable(self, position, basety, attr):
         first = True
         while self.tokens[position].text != ";":
             if not first:
@@ -1148,6 +1151,7 @@ class Parser:
             first = False
             ty, position = self.declarator(position, basety)
             var = self.new_gvar(ty.name.text, ty)
+            var.is_definition = not attr.is_extern
             if self.tokens[position].text == "=":
                 position = self.gvar_initializer(position + 1, var)
         return position + 1
@@ -1182,7 +1186,7 @@ class Parser:
             if self.is_function(position):
                 position = self.function(position, basety, attr)
             else:
-                position = self.global_variable(position, basety)
+                position = self.global_variable(position, basety, attr)
         return self.globals
 
 

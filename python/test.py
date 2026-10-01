@@ -58,6 +58,24 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_local_array_initializers(self):
+        for source, expected in [
+            ("int main(){int a[3]={1,2,42};return a[2];}", 42),
+            ("int main(){int a[2][3]={{1,2,3},{4,5,42}};return a[1][2];}", 42),
+            ("int main(){int i=0;int a[3]={++i,++i,++i};return a[0]+2*a[1]+3*a[2];}", 14),
+            ("int main(){char a[2]={255,42};return a[0]<0;}", 1),
+            ("int main(){int x=42;int *a[1]={&x};return *a[0];}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = without_implicit_casts(parse_body("int a[2]={3,4};").body.body[0].body[0].lhs)
+        self.assertEqual((node.kind, node.lhs.kind, node.lhs.lhs.kind), ("COMMA", "COMMA", "NULL_EXPR"))
+        self.assertEqual((node.lhs.rhs.kind, node.rhs.kind), ("ASSIGN", "ASSIGN"))
+        assembly = compile_program("int main(){int a[2]={3,4};return a[1];}").stdout
+        self.assertIn("  mov %eax, (%rdi)\n", assembly)
+        for source in ("int main(){int a[2]={1};}", "int main(){int a[1]={1,2};}",
+                       "int main(){int a[1]={1,};}"):
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_constant_expressions(self):
         for source, expected in [
             ("enum{N=3*2};int main(){char a[N+1];return sizeof(a);}", 7),

@@ -107,6 +107,8 @@ class CodeGenerator:
     def gen_expr(self, node):
         if node.tok is not None:
             self.assembly.append(f"  .loc 1 {node.tok.line_no}")
+        if node.kind == "NULL_EXPR":
+            return
         if node.kind == "NUM":
             self.assembly.append(f"  mov ${node.value}, %rax")
             return

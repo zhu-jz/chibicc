@@ -1,45 +1,38 @@
-# Lesson 96: Compile-time constant expressions
+# Lesson 97: Local array initializers
 
-Original chibicc commit: [`79f5de21eb706ea5486fd682a83ffbde7e4d16a9`](https://github.com/rui314/chibicc/commit/79f5de21eb706ea5486fd682a83ffbde7e4d16a9).
+Original chibicc commit: [`22dd560ecf06e9ac4a4c1be33be74bac7924f06a`](https://github.com/rui314/chibicc/commit/22dd560ecf06e9ac4a4c1be33be74bac7924f06a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Array bounds, enumerator initializers, and case labels now parse conditional
-expressions and evaluate their typed syntax trees at compile time. Arithmetic,
-comparisons, bitwise operations, shifts, casts, comma, and conditional/logical
-operators are supported. Short-circuit branches skip unused nodes, and comma
-evaluates only its right operand. Variables and function calls in evaluated
-positions report `not a compile-time constant`.
+Local initializers now have an intermediate tree: arrays contain child
+initializers, while each scalar leaf holds an expression. A designation path
+identifies a local variable and its nested element indices. The parser lowers
+this tree into assignments joined by comma expressions, in increasing element
+order. Thus `int a[2][2]={{1,2},{3,4}}` becomes assignments to each a[row][column].
+The new NULL_EXPR node starts an empty assignment chain and emits no instructions.
+Scalar initializers and struct-copy expressions use the same lowering path.
 
-Python's explicit evaluate_constant function walks Nodes; it never calls Python
-eval. C's helper lives in parse.c; Python keeps it in constexpr.py. Division and
-remainder use integer-only truncation toward zero, avoiding Python's different
-negative // and % behavior. Int-sized destination fields narrow to signed 32 bits.
-
-This historical evaluator masks casts to 8/16/32 bits as unsigned values, even
-for signed char or _Bool, so its behavior can differ from runtime casts. It also
-computes intermediate arithmetic at host integer width rather than always using
-the expression's runtime width. Python intermediates are unbounded; overflowing
-C int64 intermediates have no portable match. Constant division by zero and
-invalid shift counts produce Python diagnostics instead of host faults or UB.
+Python dataclasses and lists replace C's initializer nodes, child-pointer arrays,
+and linked designation paths. This commit requires exactly the declared number
+of array elements with braces at every array level. Partial lists, trailing
+commas, string initialization, and incomplete-length deduction remain unsupported.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'enum{N=3*2};int main(){char a[N+1];return sizeof(a);}\n' > /tmp/lesson96.c
-python3 python/main.py /tmp/lesson96.c > /tmp/lesson96.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson96 /tmp/lesson96.s
-/tmp/lesson96
+printf 'int main(){int a[3]={1,2,42};return a[2];}\n' > /tmp/lesson97.c
+python3 python/main.py /tmp/lesson97.c > /tmp/lesson97.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson97 /tmp/lesson97.s
+/tmp/lesson97
 echo $?
 ```
 
-The compiler computes N=6 and the array length 7 before allocating stack space.
-sizeof becomes `mov $7, %rax`; no runtime multiplication is emitted for the bound.
-The shell displays 7. Tests cover all expression categories through the original
-constexpr fixture, negative/large exact division, enum/case expressions, discarded
-branches, historical cast behavior, narrowed bounds, diagnostic errors, assembly,
-and real executables.
+Each element address is computed with scaled pointer arithmetic, then
+`mov %eax, (%rdi)` stores a four-byte int. The final load returns 42, which the
+shell displays. Tests cover nested arrays, left-to-right initializer effects,
+char conversion, pointer elements, lowered tree shape, assembly, this stage's
+list restrictions, and the new original initializer program.
 
 ## Tests and attribution
 

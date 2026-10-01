@@ -122,3 +122,18 @@ class Node:
     cont_label: Optional[str] = field(default=None, compare=False)
     cases: list["Node"] = field(default_factory=list, compare=False)
     default_case: Optional["Node"] = field(default=None, compare=False)
+
+
+@dataclass
+class Initializer:
+    ty: Type
+    tok: Optional[Token] = None
+    expr: Optional[Node] = None
+    children: list["Initializer"] = field(default_factory=list)
+
+
+@dataclass
+class InitDesg:
+    parent: Optional["InitDesg"] = None
+    idx: int = 0
+    var: Optional[Obj] = None

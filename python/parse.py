@@ -8,7 +8,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from common import to_int32
+from common import Initializer, InitDesg, to_int32
 from constexpr import evaluate_constant
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
@@ -40,6 +40,13 @@ def new_sub(lhs, rhs, token):
         difference = Node("-", lhs, rhs, tok=token, ty=ty_int)
         return Node("/", difference, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
     raise CompileError(token, "invalid operands")
+
+
+def new_initializer(ty):
+    init = Initializer(ty)
+    if ty.kind == "ARRAY":
+        init.children = [new_initializer(ty.base) for _ in range(ty.array_len)]
+    return init
 
 
 class Parser:
@@ -815,12 +822,56 @@ class Parser:
             var = self.new_lvar(ty.name.text, ty)
             if self.tokens[position].text != "=":
                 continue
-            lhs = Node("VAR", var=var, tok=ty.name)
-            rhs, position = self.assign(position + 1)
+            expression, position = self.lvar_initializer(position + 1, var)
             token = self.tokens[position]
-            assignment = Node("ASSIGN", lhs, rhs, tok=token)
-            statements.append(Node("EXPR_STMT", lhs=assignment, tok=token))
+            statements.append(Node("EXPR_STMT", lhs=expression, tok=token))
         return Node("BLOCK", body=statements, tok=self.tokens[position]), position + 1
+
+    def initializer2(self, position, init):
+        if init.ty.kind == "ARRAY":
+            if self.tokens[position].text != "{":
+                raise CompileError(self.tokens[position], "expected '{'")
+            position += 1
+            for index, child in enumerate(init.children):
+                if index:
+                    if self.tokens[position].text != ",":
+                        raise CompileError(self.tokens[position], "expected ','")
+                    position += 1
+                position = self.initializer2(position, child)
+            if self.tokens[position].text != "}":
+                raise CompileError(self.tokens[position], "expected '}'")
+            return position + 1
+        init.expr, position = self.assign(position)
+        return position
+
+    def initializer(self, position, ty):
+        init = new_initializer(ty)
+        position = self.initializer2(position, init)
+        return init, position
+
+    def init_desg_expr(self, designation, token):
+        if designation.var is not None:
+            return Node("VAR", var=designation.var, tok=token)
+        array = self.init_desg_expr(designation.parent, token)
+        index = Node("NUM", value=designation.idx, tok=token)
+        return Node("DEREF", lhs=new_add(array, index, token), tok=token)
+
+    def create_lvar_init(self, init, ty, designation, token):
+        if ty.kind == "ARRAY":
+            expression = Node("NULL_EXPR", tok=token)
+            for index, child in enumerate(init.children):
+                child_designation = InitDesg(parent=designation, idx=index)
+                assignment = self.create_lvar_init(child, ty.base, child_designation, token)
+                expression = Node("COMMA", expression, assignment, tok=token)
+            return expression
+        target = self.init_desg_expr(designation, token)
+        return Node("ASSIGN", target, init.expr, tok=token)
+
+    def lvar_initializer(self, position, var):
+        token = self.tokens[position]
+        init, position = self.initializer(position, var.ty)
+        expression = self.create_lvar_init(init, var.ty, InitDesg(var=var), token)
+        return expression, position
 
     # compound-stmt = (declaration | stmt)* "}"
     def compound_stmt(self, position):

@@ -1,6 +1,6 @@
-"""Lesson 96: Compile-time constant expressions.
+"""Lesson 97: Local array initializers.
 
-Based on chibicc commit 79f5de21eb706ea5486fd682a83ffbde7e4d16a9.
+Based on chibicc commit 22dd560ecf06e9ac4a4c1be33be74bac7924f06a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

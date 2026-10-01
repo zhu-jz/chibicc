@@ -1,6 +1,6 @@
-"""Lesson 212: Update bitfields with compound assignments.
+"""Lesson 213: Align zero-width bitfields.
 
-Based on chibicc commit 54c2b3b18fb80235ad9ee53cac3966e8aad9e12a.
+Based on chibicc commit 17ea802ceaa76f55726488379959a983f891f631.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

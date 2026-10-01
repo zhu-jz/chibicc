@@ -823,7 +823,9 @@ class Parser:
             return ty, position
         bits = 0
         for member in ty.members:
-            if member.is_bitfield:
+            if member.is_bitfield and member.bit_width == 0:
+                bits = align_to(bits, member.ty.size * 8)
+            elif member.is_bitfield:
                 size = member.ty.size
                 if bits // (size * 8) != (bits + member.bit_width - 1) // (size * 8):
                     bits = align_to(bits, size * 8)

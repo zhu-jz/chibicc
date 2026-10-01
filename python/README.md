@@ -1,30 +1,26 @@
-# Lesson 212: Update bitfields with compound assignments
+# Lesson 213: Align zero-width bitfields
 
-Original chibicc commit: [`54c2b3b18fb80235ad9ee53cac3966e8aad9e12a`](https://github.com/rui314/chibicc/commit/54c2b3b18fb80235ad9ee53cac3966e8aad9e12a).
+Original chibicc commit: [`17ea802ceaa76f55726488379959a983f891f631`](https://github.com/rui314/chibicc/commit/17ea802ceaa76f55726488379959a983f891f631).
 Earlier explanations are available in Git history.
 
-Member compound assignments now save a pointer to the containing aggregate,
-then read and assign its member through that pointer. This preserves bitfield
-metadata and evaluates the base only once. Prefix/postfix increments use the
-same rewriting. Ordinary member updates follow this path too.
-
-Bitfield stores also preserve their expression result in r8 while merging the
-storage unit. Python builds explicit nodes with a shared temporary object
-instead of the C pointer-based constructors.
+An unnamed zero-width bitfield now moves the bit cursor to the next boundary
+of its declared storage type. It allocates no value bits, but affects where
+following members begin. Struct size still rounds up to the aggregate alignment.
+Python's integer cursor and align_to perform the same layout operation as C.
 
 ```sh
-printf 'int main(void){struct T{int a:10,b:10;}x={1,2};return x.b+=40;}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof(struct T{int a:3;int:0;int b:5;})+34;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly extracts b, adds 40, merges the updated bits and restores the value
-from r8 to rax. Tests cover arithmetic and shifts, prefix/postfix results,
-ordinary assignment results, side-effecting bases, neighbor preservation and
-upstream fixtures. The original returns the assigned value before truncating
-it to the bitfield width; we retain that behavior at this step.
+The first field uses one int storage unit and the barrier starts b in another;
+sizeof is 8, emitted as an immediate. Adding 34 leaves 42 in rax. Tests check
+leading and trailing barriers, a long alignment boundary, member offsets and
+original fixtures. This commit adds layout only; anonymous initializer and
+address-taking rules remain at their current historical behavior.
 
 ## Tests and attribution
 

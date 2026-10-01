@@ -77,6 +77,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_zero_width_bitfield_alignment(self):
+        for members, size in [('int a:3;int:0;int c:5;',8), ('int a:3;int:0;',4),
+                              ('char a;long:0;char b;',16), ('int:0;int c:5;',4)]:
+            self.assert_program_returns('int main(void){return sizeof(struct T{' + members + '});}', size)
+        ty = next(var.ty for var in parse_body('struct T{int a:3;int:0;int b:5;}x;return 0;').locals if var.name == 'x')
+        self.assertIsNone(ty.members[1].name)
+        self.assertEqual((ty.members[2].offset,ty.members[2].bit_offset), (4,0))
+
     def test_bitfield_compound_assignments(self):
         for expression, expected in [('x.b++', 2), ('++x.b', 3), ('x.b+=40', 42),
                                      ('x.b*=21', 42), ('x.b=42', 42)]:

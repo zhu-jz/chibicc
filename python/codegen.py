@@ -72,6 +72,8 @@ class CodeGenerator:
         if node.kind == "VAR":
             if node.var.is_local:
                 self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            elif node.ty.kind == "FUNC" and not node.var.is_definition:
+                self.assembly.append(f"  mov {node.var.name}@GOTPCREL(%rip), %rax")
             else:
                 self.assembly.append(f"  lea {node.var.name}(%rip), %rax")
             return
@@ -89,7 +91,7 @@ class CodeGenerator:
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
-        if ty.kind in ("ARRAY", "STRUCT", "UNION"):
+        if ty.kind in ("ARRAY", "STRUCT", "UNION", "FUNC"):
             return
         if ty.kind in ("FLOAT", "DOUBLE"):
             instruction = "movss" if ty.kind == "FLOAT" else "movsd"
@@ -225,6 +227,7 @@ class CodeGenerator:
                     self.pushf()
                 else:
                     self.push()
+            self.gen_expr(node.lhs)
             gp, fp = 0, 0
             for arg in node.args:
                 if arg.ty.kind in ("FLOAT", "DOUBLE"):
@@ -234,10 +237,10 @@ class CodeGenerator:
                     self.pop(ARGREG[gp])
                     gp += 1
             if self.depth % 2:
-                self.assembly.extend(("  sub $8, %rsp", f"  call {node.funcname}",
+                self.assembly.extend(("  sub $8, %rsp", "  call *%rax",
                                       "  add $8, %rsp"))
             else:
-                self.assembly.append(f"  call {node.funcname}")
+                self.assembly.append("  call *%rax")
             if node.ty.kind == "BOOL":
                 self.assembly.append("  movzx %al, %eax")
             elif node.ty.kind == "CHAR":

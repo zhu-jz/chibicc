@@ -61,6 +61,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_pointer_calls(self):
+        for source, expected in [
+            ("int f(int x){return x+1;}int main(void){return (f)(41);}", 42),
+            ("int f(int x){return x+1;}int main(void){return (&f)(41);}", 42),
+            ("int f(int x){return x+1;}int main(void){int(*p)(int)=f;return (*p)(41);}", 42),
+            ("int f(int x){return x+1;}int(*p)(int)=f;int main(void){return p(41);}", 42),
+            ("int f(int x){return x+1;}int main(void){struct T{int(*p)(int);} t={f};return t.p(41);}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assert_program_returns("int f(int);int main(void){int(*p)(int)=f;return p(41);}", 42,
+                                    "int f(int x){return x+1;}")
+        assembly = compile_program("int f(int);int main(void){return f(41);}").stdout
+        self.assertIn("  mov f@GOTPCREL(%rip), %rax\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  lea f(%rip), %rax\n", compile_program("int f(int x){return x;}int main(void){return f(42);}").stdout)
+        self.assertIn("  .quad f+0\n", compile_program("int f(int);int(*p)(int)=f;").stdout)
+        self.assertIn("not a function", compile_program("int main(void){int x=1;return x();}").stderr)
+
     def test_compiler_archive(self):
         global COMPILER
         with tempfile.TemporaryDirectory() as directory:
@@ -154,7 +172,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("double d(double,double);int main(void){return d(20.5,21.5);}").stdout
         self.assertIn("  movsd (%rsp), %xmm0\n", assembly)
         self.assertIn("  movsd (%rsp), %xmm1\n", assembly)
-        self.assertIn("  call d\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
         self.assert_program_returns("int f(int,int);int main(void){int x=0;return f(++x,++x);}", 21, "int f(int a,int b){return 10*a+b;}")
 
     def test_floating_conditions(self):
@@ -250,7 +268,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertIn(message, result.stderr)
-        self.assertIn("  call f\n", compile_program("int f(int);int main(void){return f(42);}").stdout)
+        self.assertIn("  call *%rax\n", compile_program("int f(int);int main(void){return f(42);}").stdout)
 
     def test_array_dimension_keywords(self):
         self.assert_program_returns("int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}", 42)
@@ -397,7 +415,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(len(ty.params), 1)
         self.assertEqual(tokenize("...")[0].text, "...")
         assembly = compile_program("int sum(int n,...);int main(void){return sum(1,42);}").stdout
-        self.assertIn("  call sum\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
         self.assertEqual(compile_program("int sum(int n,...,int x);").returncode, 1)
 
     def test_small_function_return_values(self):
@@ -413,7 +431,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                                       ("char", "movsbl %al, %eax"),
                                       ("short", "movswl %ax, %eax")):
             assembly = compile_program(f"{spelling} f(void);int main(void){{return f();}}").stdout
-            self.assertIn(f"  call f\n  {instruction}\n", assembly)
+            self.assertIn(f"  call *%rax\n  {instruction}\n", assembly)
 
     def test_call_stack_alignment(self):
         helper = '__attribute__((naked)) int alignment(void){__asm__("mov %rsp, %rax\\nand $15, %eax\\nret");}'
@@ -425,9 +443,9 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected, helper)
         assembly = compile_program("int alignment(void);int main(void){return alignment()+1;}").stdout
-        self.assertIn("  sub $8, %rsp\n  call alignment\n  add $8, %rsp\n", assembly)
+        self.assertIn("  sub $8, %rsp\n  call *%rax\n  add $8, %rsp\n", assembly)
         assembly = compile_program("int alignment(void);int main(void){return alignment();}").stdout
-        self.assertNotIn("  sub $8, %rsp\n  call alignment", assembly)
+        self.assertNotIn("  sub $8, %rsp\n  call *%rax", assembly)
 
     def test_do_while_loops(self):
         for source, expected in [
@@ -510,7 +528,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("int f(void);int main(void){return _Alignof f();}").stdout
-        self.assertNotIn("  call f\n", assembly)
+        self.assertNotIn("  call *%rax\n", assembly)
         self.assertIn("  mov $4, %rax\n", assembly)
 
     def test_alignof_and_alignas(self):
@@ -538,7 +556,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(function.locals, [])
         assembly = compile_program(source).stdout
         self.assertNotIn("g:\n", assembly)
-        self.assertIn("  call f\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
         result = compile_program("int main(void){{int f(int x);}return f(42);}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("implicit declaration", result.stderr)
@@ -570,7 +588,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(function.ty.params, [])
         self.assertEqual(function.params, [])
         assembly = compile_program("int f(void){return 42;}int main(void){return f();}").stdout
-        self.assertIn("  call f\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
         self.assertEqual(compile_program("int f(void int x);int main(void){return 0;}").returncode, 1)
 
     def test_flexible_array_member_initializers(self):
@@ -788,7 +806,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("int f();int main(void){int a[1]={42,f()};return a[0];}").stdout
-        self.assertNotIn("  call f\n", assembly)
+        self.assertNotIn("  call *%rax\n", assembly)
         for source in ("int main(void){int a[1]={42,missing};}",
                        "int main(void){int a[1]={42,{3,4}};}"):
             self.assertEqual(compile_program(source).returncode, 1)
@@ -1265,7 +1283,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, message in [
             ("int main(void){return missing();}", "implicit declaration of a function"),
             ("int main(void){int f;return f();}", "not a function"),
-            ("typedef int f;int main(void){return f();}", "not a function"),
+            ("typedef int f;int main(void){return f();}", "implicit declaration of a function"),
             ("int f();int main(void){int f;return f();}", "not a function"),
         ]:
             result = compile_program(source)
@@ -2039,10 +2057,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                                  ('int main(void){return ret3()+ret5();}', 8)]:
             self.assert_program_returns(declarations + source, expected, helpers)
         call = parse(tokenize("int ret3();int main(void){return ret3();}"))[0].body.body[0].lhs.lhs
-        self.assertEqual(call.funcname, "ret3")
+        self.assertEqual(call.lhs.var.name, "ret3")
         self.assertEqual(call.ty.kind, "INT")
         assembly = compile_program(declarations + 'int main(void){return ret3();}').stdout
-        self.assertIn("  call ret3\n", assembly)
+        self.assertIn("  call *%rax\n", assembly)
         self.assertEqual(compile_program(declarations + 'int main(void){return ret3(,);}').returncode, 1)
 
     def test_pointer_arithmetic(self):

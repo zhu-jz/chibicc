@@ -1,6 +1,6 @@
-"""Lesson 150: Build and test a packaged compiler.
+"""Lesson 151: Function pointers and indirect calls.
 
-Based on chibicc commit 5d15431df1abab3a5cf596fabe0a77c030a10791.
+Based on chibicc commit d06a8ac6e6120861c9c79acb15b9a18693e4ee47.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

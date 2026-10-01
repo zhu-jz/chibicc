@@ -371,7 +371,9 @@ class Parser:
             return Node("COMMA", initialization, value, tok=start), position
         node, position = self.primary(position)
         while True:
-            if self.tokens[position].text == "[":
+            if self.tokens[position].text == "(":
+                node, position = self.funcall(position + 1, node)
+            elif self.tokens[position].text == "[":
                 token = self.tokens[position]
                 index, position = self.expr(position + 1)
                 if self.tokens[position].text != "]":
@@ -392,16 +394,15 @@ class Parser:
             else:
                 return node, position
 
-    # funcall = identifier "(" (assign ("," assign)*)? ")"
-    def funcall(self, position):
-        token = self.tokens[position]
-        binding = self.find_var(token.text)
-        if binding is None:
-            raise CompileError(token, "implicit declaration of a function")
-        if binding.var is None or binding.var.ty.kind != "FUNC":
-            raise CompileError(token, "not a function")
-        function_ty = binding.var.ty
-        position += 2
+    # funcall = (assign ("," assign)*)? ")"
+    def funcall(self, position, function):
+        add_type(function)
+        if function.ty.kind == "FUNC":
+            function_ty = function.ty
+        elif function.ty.kind == "PTR" and function.ty.base.kind == "FUNC":
+            function_ty = function.ty.base
+        else:
+            raise CompileError(function.tok, "not a function")
         args = []
         while self.tokens[position].text != ")":
             if args:
@@ -422,7 +423,7 @@ class Parser:
             args.append(arg)
         if len(args) < len(function_ty.params):
             raise CompileError(self.tokens[position], "too few arguments")
-        return Node("FUNCALL", funcname=token.text, args=args, tok=token,
+        return Node("FUNCALL", lhs=function, args=args, tok=self.tokens[position],
                     ty=function_ty.return_ty, func_ty=function_ty), position + 1
 
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
@@ -464,10 +465,10 @@ class Parser:
             return Node("NUM", value=operand.ty.align, tok=token, ty=ty_ulong), position
 
         if token.kind == "IDENT":
-            if self.tokens[position + 1].text == "(":
-                return self.funcall(position)
             binding = self.find_var(token.text)
             if binding is None or (binding.var is None and binding.enum_ty is None):
+                if self.tokens[position + 1].text == "(":
+                    raise CompileError(token, "implicit declaration of a function")
                 raise CompileError(token, "undefined variable")
             if binding.var is None:
                 return Node("NUM", value=binding.enum_val, tok=token), position + 1

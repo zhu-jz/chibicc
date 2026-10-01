@@ -1,39 +1,37 @@
-# Lesson 150: Build and test a packaged compiler
+# Lesson 151: Function pointers and indirect calls
 
-Original chibicc commit: [`5d15431df1abab3a5cf596fabe0a77c030a10791`](https://github.com/rui314/chibicc/commit/5d15431df1abab3a5cf596fabe0a77c030a10791).
+Original chibicc commit: [`d06a8ac6e6120861c9c79acb15b9a18693e4ee47`](https://github.com/rui314/chibicc/commit/d06a8ac6e6120861c9c79acb15b9a18693e4ee47).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The original commit adds a stage-two C compiler built by compiling chibicc with
-itself, then runs the same tests and driver checks against both builds. Our Python
-compiler emits C-program assembly and cannot compile its own Python source.
-The intentional Python adaptation builds a standalone .pyz archive with zipapp
-and runs the same suite against the source compiler and the packaged compiler.
-This is packaging validation, not a claim of self-hosting.
+A call is now a postfix operation on any function or function-pointer expression.
+Its tree stores the callee in lhs rather than storing a function-name string.
+This supports parenthesized function names, address expressions, pointer variables,
+struct members, and functions returning function pointers. Argument conversions
+and register classification still follow the callee's function type.
 
-build.py copies the current compiler modules and MIT notice, and writes a small
-entry point that preserves compiler exit statuses. test.py accepts --compiler
-so its existing command-line, assembly, and execution tests exercise either
-entry point. python/Makefile provides test, test-stage2, and test-all. The build
-uses Python's standard library and never invokes the original C compiler.
+After saving arguments, the compiler evaluates the callee address and restores
+argument registers, then emits call *%rax. Evaluating a function yields its
+address rather than loading bytes from its code. Defined functions use RIP-relative
+lea; declarations use mov name@GOTPCREL(%rip), letting the linker resolve external
+function addresses. Python uses the same assembly and explicit tree nodes.
 
 ## Assembly and WSL example
 
 ```sh
-python3 python/build.py
-printf 'int main(void){return 42;}\n' > /tmp/lesson150.c
-python3 python/build/chibicc.pyz /tmp/lesson150.c > /tmp/lesson150.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson150 /tmp/lesson150.s
-/tmp/lesson150
+printf 'int add(int x){return x+1;}int main(void){int(*p)(int)=add;return p(41);}\n' > /tmp/lesson151.c
+python3 python/main.py /tmp/lesson151.c > /tmp/lesson151.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson151 /tmp/lesson151.s
+/tmp/lesson151
 echo $?
-make -C python test-all
 ```
 
-The archive emits the same mov $42, %rax and return sequence as the source
-entry point. GCC links it and the shell shows exit status 42. test-all runs the
-full suite twice. Build tests also check help and compilation-error exit status;
-build output is ignored by Git and the source files remain under python/.
+lea obtains add's address, an assignment stores it in p, and a later load puts
+that address in rax. The argument 41 goes in edi and call *%rax transfers control
+to add. It returns 42; the shell displays that exit status. Tests cover local and
+global pointers, struct members, external functions, address instructions,
+relocations, call alignment, execution, and the original function-pointer examples.
 
 ## Tests and attribution
 

@@ -132,7 +132,6 @@ class Node:
     inc: Optional["Node"] = None
     tok: Optional[Token] = field(default=None, compare=False)  # Source metadata.
     ty: Optional[Type] = field(default=None, compare=False)  # Inferred type.
-    funcname: str = ""
     func_ty: Optional[Type] = field(default=None, compare=False)
     args: list["Node"] = field(default_factory=list)
     member: Optional[Member] = None

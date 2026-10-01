@@ -81,6 +81,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_generic_selection(self):
+        for source, expected in [
+            ('int main(void){return _Generic(1.0,double:42,default:0);}', 42),
+            ('int main(void){return _Generic("x",char*:42,int:0);}', 42),
+            ('int f(void){return 0;}int main(void){return _Generic(f,int(*)(void):42,default:0);}', 42),
+            ('int main(void){int x=42;return _Generic(x++,int:x,default:x++);}', 42),
+            ('int main(void){return _Generic(1,default:0,int:42);}', 42),
+            ('int main(void){return _Generic(1.0,int:0,default:42);}', 42),
+            ('int main(void){return _Generic(1,int:12,int:42);}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        result = compile_program('int main(void){return _Generic(1,double:42);}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('controlling expression type not compatible', result.stderr)
+
     def test_builtin_type_compatibility(self):
         for first, second, expected in [('int', 'const int', 1), ('int', 'unsigned int', 0), ('short *', 'int *', 0), ('int (*)(int,double)', 'int (*)(int,double)', 1), ('int (*)(int,...)', 'int (*)(int)', 0), ('struct{int a;}', 'struct{int a;}', 0), ('int[3]', 'int[3]', 0), ('int[]', 'int[]', 1)]:
             self.assert_program_returns('int main(void){return __builtin_types_compatible_p(' + first + ',' + second + ');}', expected)

@@ -1,6 +1,6 @@
-"""Lesson 255: Compare types with a compiler builtin.
+"""Lesson 256: Select an expression by its type.
 
-Based on chibicc commit 1433b404d68f9fe314ae2955d0988dd74e5ecb92.
+Based on chibicc commit 1faab48ecf83d31a4fd781f10f6f00acb681d2dd.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

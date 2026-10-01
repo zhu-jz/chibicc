@@ -459,9 +459,45 @@ class Parser:
             node.ret_buffer = self.new_lvar("", node.ty)
         return node, position + 1
 
+    def generic_selection(self, position):
+        start = self.tokens[position]
+        if start.text != "(":
+            raise CompileError(start, "expected '('")
+        control, position = self.assign(position + 1)
+        add_type(control)
+        ty = control.ty
+        if ty.kind == "FUNC":
+            ty = pointer_to(ty)
+        elif ty.kind == "ARRAY":
+            ty = pointer_to(ty.base)
+        selected = None
+        while self.tokens[position].text != ")":
+            if self.tokens[position].text != ",":
+                raise CompileError(self.tokens[position], "expected ','")
+            position += 1
+            is_default = self.tokens[position].text == "default"
+            if is_default:
+                position += 1
+                association_ty = None
+            else:
+                association_ty, position = self.typename(position)
+            if self.tokens[position].text != ":":
+                raise CompileError(self.tokens[position], "expected ':'")
+            node, position = self.assign(position + 1)
+            if is_default:
+                if selected is None:
+                    selected = node
+            elif is_compatible(ty, association_ty):
+                selected = node
+        if selected is None:
+            raise CompileError(start, "controlling expression type not compatible with any generic association type")
+        return selected, position + 1
+
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
+        if token.text == "_Generic":
+            return self.generic_selection(position + 1)
         if token.text == "__builtin_types_compatible_p":
             if self.tokens[position + 1].text != "(":
                 raise CompileError(self.tokens[position + 1], "expected '('")

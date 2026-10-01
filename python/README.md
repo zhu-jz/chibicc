@@ -1,29 +1,28 @@
-# Lesson 255: Compare types with a compiler builtin
+# Lesson 256: Select an expression by its type
 
-Original chibicc commit: [`1433b404d68f9fe314ae2955d0988dd74e5ecb92`](https://github.com/rui314/chibicc/commit/1433b404d68f9fe314ae2955d0988dd74e5ecb92).
+Original chibicc commit: [`1faab48ecf83d31a4fd781f10f6f00acb681d2dd`](https://github.com/rui314/chibicc/commit/1faab48ecf83d31a4fd781f10f6f00acb681d2dd).
 Earlier explanations are available in Git history.
 
-`__builtin_types_compatible_p(T,U)` now produces an integer constant telling
-whether two types are compatible. Pointer and function types compare recursively;
-structs and unions keep declaration identity. Copies of a type remember their
-origin so names added by declarators do not make the underlying type different.
+C11 `_Generic` now parses a controlling expression and a list of typed
+associations. It uses the previous lesson's compatibility check to choose one
+expression during parsing; arrays and functions in the control become pointer
+types. Only the selected expression appears in the executable syntax tree.
 
 ```sh
-printf 'typedef struct{int a;}T;int main(void){return __builtin_types_compatible_p(T,const T)?42:0;}\n' > /tmp/lesson.c
+printf 'int main(void){int x=42;return _Generic(x++,int:x,default:x++);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The builtin becomes 1 during parsing; assembly takes the true branch and returns
-42. No runtime type descriptors or comparison calls are emitted. Tests cover
-signedness, qualifiers, pointer depth, function parameters and variadic status,
-distinct anonymous structs, typedef identity, arrays and the new builtin.c fixture.
-Python uses object identity and an origin reference instead of C pointer identity.
-The original array rule has a historical bug: separately constructed fixed-size
-arrays compare false, while equal incomplete arrays compare true. We preserve
-and test that exact rule rather than silently correcting a later-history issue.
+Assembly initializes x and loads it for the return. Neither the controlling
+increment nor the unselected default increment executes. Tests cover numeric,
+array and function controls, default ordering, missing matches, discarded side
+effects and the original generic.c fixture.
+Python keeps the selected Node reference instead of a nullable C pointer. This
+original parser does not reject duplicate compatible associations: the last
+matching one wins. That historical behavior is preserved and tested.
 
 ## Tests and attribution
 

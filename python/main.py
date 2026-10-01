@@ -1,6 +1,6 @@
-"""Lesson 144: Calls with floating arguments and results.
+"""Lesson 145: Definitions with floating parameters.
 
-Based on chibicc commit 8ec1ebf176b88522fc4ec3980d20c78e13fdd526.
+Based on chibicc commit c6b30568b407e7b60b6fc2929801669434e4f91a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

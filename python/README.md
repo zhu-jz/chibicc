@@ -1,39 +1,36 @@
-# Lesson 144: Calls with floating arguments and results
+# Lesson 145: Definitions with floating parameters
 
-Original chibicc commit: [`8ec1ebf176b88522fc4ec3980d20c78e13fdd526`](https://github.com/rui314/chibicc/commit/8ec1ebf176b88522fc4ec3980d20c78e13fdd526).
+Original chibicc commit: [`c6b30568b407e7b60b6fc2929801669434e4f91a`](https://github.com/rui314/chibicc/commit/c6b30568b407e7b60b6fc2929801669434e4f91a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Function calls now pass floating arguments through xmm0–xmm7, independently of
-the six integer/pointer argument registers. The compiler evaluates arguments
-from right to left, saves each result on the stack, then restores them in source
-order into their appropriate registers. A floating return already arrives in
-xmm0, ready for subsequent arithmetic or conversion.
+Function prologues classify each parameter independently as integer/pointer or
+floating. movss saves four-byte float parameters and movsd saves eight-byte double
+parameters from xmm registers into their local stack slots. Integer parameters
+continue to use the six general-purpose argument registers. Returning a floating
+expression leaves its result in xmm0 through the normal epilogue.
 
-Python reverses a list instead of recursively visiting a C linked list. This
-commit changes the chosen argument evaluation order; C itself does not promise
-an order. Calls beyond six integer or eight floating register arguments receive
-clear Python errors; passing excess arguments on the stack is not implemented
-at this historical point. Definitions with floating parameters are still
-incomplete. The original commit also removes the old eax=0 before calls, leaving
-floating variadic-call bookkeeping incomplete for now.
+Python uses two counters in a simple loop instead of traversing a linked list.
+Its explicit register-limit errors avoid an out-of-bounds register lookup in the
+original implementation. Variadic register-save bookkeeping remains at the
+historical implementation for this commit; this step concerns fixed parameters.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'double twice(double);int main(void){return twice(21.0);}\n' > /tmp/lesson144.c
-printf 'double twice(double x){return x*2;}\n' > /tmp/lesson144-helper.c
-python3 python/main.py /tmp/lesson144.c > /tmp/lesson144.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson144 /tmp/lesson144.s /tmp/lesson144-helper.c
-/tmp/lesson144
+printf 'double add(double x,float y){return x+y;}int main(void){return add(20.5,21.5);}\n' > /tmp/lesson145.c
+python3 python/main.py /tmp/lesson145.c > /tmp/lesson145.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson145 /tmp/lesson145.s
+/tmp/lesson145
 echo $?
 ```
 
-The caller restores 21.0 into xmm0 and calls the separately compiled helper. The
-helper returns 42.0 in xmm0; cvttsd2sil converts main's result to int, so the shell
-shows exit status 42. Tests cover float and double calls, mixed register classes,
-nested calls, evaluation order, emitted register restores, and original fixtures.
+add saves xmm0 with movsd and xmm1 with movss. Its body loads both values,
+converts y to double, and adds them. Main converts the returned 42.0 to int, and
+the shell displays exit status 42. Tests cover both widths, mixed parameters,
+eight floating registers, recursion, calls from GCC-generated code, prologue
+instructions, real execution, and the original function examples.
 
 ## Tests and attribution
 

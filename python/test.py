@@ -60,6 +60,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_parameter_definitions(self):
+        for source, expected in [
+            ("float f(float a,float b,float c){return a+b+c;}int main(void){return f(10.5,20.5,11);}", 42),
+            ("double f(int a,double b,int c,float d){return a+b+c+d;}int main(void){return f(10,10.5,20,1.5);}", 42),
+            ("double f(double a,double b,double c,double d,double e,double f,double g,double h){return a+b+c+d+e+f+g+h;}int main(void){return f(1,1,1,1,1,1,1,35);}", 42),
+            ("double f(double x){if(x<=1)return 1;return x*f(x-1);}int main(void){return f(5);}", 120),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assert_program_returns("int call(void);double f(int a,double b,float c){return a+b+c;}int main(void){return call();}", 42,
+                                    "double f(int,double,float);int call(void){return f(20,20.5,1.5);}")
+        assembly = compile_program("double f(float x,double y){return x+y;}").stdout
+        self.assertIn("  movss %xmm0, -4(%rbp)\n", assembly)
+        self.assertIn("  movsd %xmm1, -16(%rbp)\n", assembly)
+
     def test_floating_external_calls(self):
         helper = "float f(float a,float b){return a+b;}double d(double a,double b){return a+b;}double mix(int a,double b,int c,float d){return a+b+c+d;}"
         for source, expected in [

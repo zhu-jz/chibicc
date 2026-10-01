@@ -442,6 +442,10 @@ class CodeGenerator:
             return
         raise CompileError(node.tok, "invalid statement")
 
+    def store_fp(self, index, var):
+        instruction = "movss" if var.ty.size == 4 else "movsd"
+        self.assembly.append(f"  {instruction} %xmm{index}, {var.offset}(%rbp)")
+
     def store_gp(self, index, var):
         if var.ty.size == 1:
             register = ARGREG8[index]
@@ -500,11 +504,18 @@ class CodeGenerator:
                     self.assembly.append(f"  movq {register}, {offset + 24 + index * 8}(%rbp)")
                 for index in range(8):
                     self.assembly.append(f"  movsd %xmm{index}, {offset + 72 + index * 8}(%rbp)")
-            if len(function.params) > len(ARGREG):
-                raise CompileError(function.params[6].ty.name,
-                                   "at most 6 parameters are supported")
-            for index, var in enumerate(function.params):
-                self.store_gp(index, var)
+            gp, fp = 0, 0
+            for var in function.params:
+                if var.ty.kind in ("FLOAT", "DOUBLE"):
+                    if fp >= 8:
+                        raise CompileError(var.ty.name, "at most 8 floating parameters are supported")
+                    self.store_fp(fp, var)
+                    fp += 1
+                else:
+                    if gp >= len(ARGREG):
+                        raise CompileError(var.ty.name, "at most 6 parameters are supported")
+                    self.store_gp(gp, var)
+                    gp += 1
             self.gen_stmt(function.body)
             assert self.depth == 0
             self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",

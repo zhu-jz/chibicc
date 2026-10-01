@@ -87,6 +87,11 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_keyword_hash_lookup(self):
+        tokens = tokenize('int intx typeof typeofx return returnx _Thread_local _Thread_localx')
+        self.assertEqual([token.kind for token in tokens[:-1]], ['KEYWORD', 'IDENT'] * 4)
+        self.assert_program_returns('typedef int T;int main(void){int integer=20;T value=22;return integer+value;}', 42)
+
     def test_scope_hash_lookup(self):
         declarations = ''.join(f'int value_{i}={i};' for i in range(500))
         self.assert_program_returns('int main(void){' + declarations + '{int value_42=1;}return value_42;}', 42)

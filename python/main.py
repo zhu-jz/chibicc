@@ -1,6 +1,6 @@
-"""Lesson 287: Use hash maps for block-scope names.
+"""Lesson 288: Use hash sets for keyword lookup.
 
-Based on chibicc commit 655954e301621737988a4fa0a2c72ffc24285c8d.
+Based on chibicc commit f6944133d211ec6fb71c41f118905e16a752135b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

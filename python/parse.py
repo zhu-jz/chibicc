@@ -19,6 +19,15 @@ from type import is_numeric, is_flonum
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
+TYPE_KEYWORDS = frozenset({
+    'void', '_Bool', 'char', 'short', 'int', 'long',
+    'struct', 'union', 'typedef', 'enum', 'static', 'extern',
+    '_Alignas', 'signed', 'unsigned', 'const', 'volatile', 'auto',
+    'register', 'restrict', '__restrict', '__restrict__', '_Noreturn', 'float',
+    'double', 'typeof', 'inline', '_Thread_local', '__thread',
+})
+
+
 def new_add(lhs, rhs, token):
     add_type(lhs)
     add_type(rhs)
@@ -801,9 +810,7 @@ class Parser:
         return Node("ASM", tok=start, asm_str=text), position + 3
 
     def is_typename(self, position):
-        return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
-                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "_Thread_local", "__thread") or self.find_typedef(position) is not None
+        return self.tokens[position].text in TYPE_KEYWORDS or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*

@@ -1,28 +1,27 @@
-# Lesson 287: Use hash maps for block-scope names
+# Lesson 288: Use hash sets for keyword lookup
 
-Original chibicc commit: [`655954e301621737988a4fa0a2c72ffc24285c8d`](https://github.com/rui314/chibicc/commit/655954e301621737988a4fa0a2c72ffc24285c8d).
+Original chibicc commit: [`f6944133d211ec6fb71c41f118905e16a752135b`](https://github.com/rui314/chibicc/commit/f6944133d211ec6fb71c41f118905e16a752135b).
 Earlier explanations are available in Git history.
 
-Each block now stores its ordinary names in a dictionary, alongside the existing
-tag dictionary. Lookup searches blocks from innermost to outermost and performs
-one map lookup per block. Adding a name replaces that block's binding; leaving a
-block exposes the outer binding again. Global function lookup also uses the map.
+The lexer keyword list and parser type-keyword list are now immutable frozensets.
+Membership uses hashing instead of scanning a tuple for every token. Type-name
+recognition still checks visible typedefs when the spelling is not a built-in
+keyword, so scope-dependent parsing remains intact.
 
 ```sh
-printf 'int main(void){int answer=42;{int answer=1;}return answer;}\n' > /tmp/lesson.c
+printf 'typedef int T;int main(void){int integer=20;T value=22;return integer+value;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly gives the two declarations separate stack slots and loads the outer
-answer for the final return. The map affects parsing, not runtime storage.
-Tests cover five hundred local names, nested shadowing, separate ordinary/tag
-namespaces, typedef shadowing and existing inline-function liveness.
-Python removes the redundant VarScope name field and uses standard dictionaries
-where C uses HashMap. Tag maps were already dictionaries in this port. Object
-references remain shared so completing a struct updates earlier declarations.
+Keyword lookup happens while compiling. Assembly stores 20 and 22 in local slots,
+loads them and adds them for the return. Tests distinguish keyword spellings from
+longer identifiers and confirm typedef-based declarations, plus original fixtures.
+Python uses frozenset because these maps contain only membership information;
+C uses lazily initialized HashMap entries with a dummy value. The port keeps its
+existing classification of inline as a keyword; its parsing behavior is unchanged.
 
 ## Tests and attribution
 

@@ -657,11 +657,14 @@ class CodeGenerator:
                 else:
                     section = ".data" if var.init_data is not None else ".bss"
                 visibility = ".local" if var.is_static else ".globl"
-                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}"])
+                self.assembly.append(f"  {visibility} {var.name}")
                 if self.fcommon and var.is_tentative:
                     self.assembly.append(f"  .comm {var.name}, {var.ty.size}, {alignment}")
                     continue
-                self.assembly.extend([f"  {section}", f"{var.name}:"])
+                self.assembly.append(f"  {section}")
+                if var.init_data is not None:
+                    self.assembly.extend((f"  .type {var.name}, @object", f"  .size {var.name}, {var.ty.size}"))
+                self.assembly.extend((f"  .align {alignment}", f"{var.name}:"))
                 if var.init_data is not None:
                     relocations = {rel.offset: rel for rel in var.relocations}
                     position = 0
@@ -713,7 +716,7 @@ class CodeGenerator:
             function.stack_size = align_to(offset, 16)
             self.current_fn = function
             directive = ".local" if function.is_static else ".globl"
-            self.assembly.extend([f"  {directive} {function.name}", "  .text", f"{function.name}:",
+            self.assembly.extend([f"  {directive} {function.name}", "  .text", f"  .type {function.name}, @function", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
             self.assembly.append(f"  mov %rsp, {function.alloca_bottom.offset}(%rbp)")

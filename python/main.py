@@ -1,6 +1,6 @@
-"""Lesson 277: Strip executable symbols with -s.
+"""Lesson 278: Emit ELF symbol types and object sizes.
 
-Based on chibicc commit c32f0e21e71f43e64a7b98c9d96d4c513d42ba37.
+Based on chibicc commit 8d130ab93f65f7ef79839aba87459e4f9507ba39.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

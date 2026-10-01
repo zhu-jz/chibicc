@@ -1,26 +1,27 @@
-# Lesson 277: Strip executable symbols with -s
+# Lesson 278: Emit ELF symbol types and object sizes
 
-Original chibicc commit: [`c32f0e21e71f43e64a7b98c9d96d4c513d42ba37`](https://github.com/rui314/chibicc/commit/c32f0e21e71f43e64a7b98c9d96d4c513d42ba37).
+Original chibicc commit: [`8d130ab93f65f7ef79839aba87459e4f9507ba39`](https://github.com/rui314/chibicc/commit/8d130ab93f65f7ef79839aba87459e4f9507ba39).
 Earlier explanations are available in Git history.
 
-The driver accepts -s and keeps it in a separate list of extra linker arguments.
-It passes those arguments to ld before the input objects. Stripping removes the
-ordinary symbol table from the linked executable without changing its behavior.
+Initialized data now receives .type name,@object and .size name,bytes directives;
+functions receive .type name,@function. Alignment moves after selecting the data
+or BSS section, so it applies to the section containing the object. Common symbols
+keep their alignment in .comm itself. Function sizes and BSS metadata are not added
+by this original step.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+printf 'int answer=42;int main(void){return answer;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -s -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -s -o /tmp/lesson /tmp/lesson.c
-nm /tmp/lesson
 ```
 
-Assembly still defines main and returns 42 in rax. The linker resolves that name
-before removing the final symbol table. Tests build both stripped and ordinary
-executables, check their exit status and use nm to check whether main remains.
-Python passes the extra argument list explicitly where C stores a global array.
+Assembly labels answer as a four-byte object and main as a function, then loads
+answer through its RIP-relative address and returns 42. These directives describe
+symbols to the assembler and linker; they do not execute. Tests inspect the emitted
+directives and readelf's object symbol table, and retain alignment/runtime checks.
+Python assembles string lists where C prints directives, with the same ELF metadata.
 
 ## Tests and attribution
 

@@ -22,7 +22,7 @@ from unicode import is_ident1, is_ident2, char_width, display_width
 
 
 COMPILER = Path(__file__).with_name("main.py")
-PROLOGUE = "  .globl main\n  .text\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
+PROLOGUE = "  .globl main\n  .text\n  .type main, @function\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
 EPILOGUE = "  mov $0, %rax\n.L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
@@ -87,6 +87,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_symbol_type_and_size(self):
+        assembly = compile_program('int x=42;int main(void){return x;}').stdout
+        self.assertIn('  .data\n  .type x, @object\n  .size x, 4\n  .align 4\nx:', assembly)
+        self.assertIn('  .text\n  .type main, @function\nmain:', assembly)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.s'
+            source.write_text(assembly)
+            obj = Path(directory) / 'main.o'
+            result = subprocess.run(['gcc', '-c', '-o', str(obj), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            symbols = subprocess.run(['readelf', '-s', str(obj)], capture_output=True, text=True, check=True).stdout
+            self.assertRegex(symbols, r'\b4\s+OBJECT\s+GLOBAL\s+DEFAULT\s+\d+\s+x\b')
+            self.assertRegex(symbols, r'\bFUNC\s+GLOBAL\s+DEFAULT\s+\d+\s+main\b')
+
     def test_strip_link_option(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'main.c'
@@ -774,8 +788,8 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(next(var.offset for var in declared_locals(function) if var.name == 'x') % 32, 0)
         self.assert_program_returns('int main(void){char x[17];return _Alignof(x);}',1)
         assembly = compile_program('char x[17];').stdout
-        self.assertIn('  .globl x\n  .align 16\n', assembly)
-        self.assertIn('  .globl x\n  .align 1\n', compile_program('char x[15];').stdout)
+        self.assertIn('  .globl x\n  .comm x, 17, 16\n', assembly)
+        self.assertIn('  .globl x\n  .comm x, 15, 1\n', compile_program('char x[15];').stdout)
 
     def test_ignored_driver_flags(self):
         options = ['-O','-O2','-Wall','-Werror','-g','-g3','-std=c11',
@@ -2293,7 +2307,7 @@ int main(void){return 42;}
         function = next(var for var in program if var.is_function)
         self.assertEqual(declared_locals(function), [])
         assembly = compile_program("int f(void){static int x=42;return x;}").stdout
-        self.assertIn("  .data\n.L..2:\n  .byte 42\n", assembly)
+        self.assertIn("  .data\n  .type .L..2, @object\n  .size .L..2, 4\n  .align 4\n.L..2:\n  .byte 42\n", assembly)
         self.assertNotIn("  rep stosb\n", assembly)
         result = compile_program("int g(void);int main(void){static int x=g();return x;}")
         self.assertEqual(result.returncode, 1)
@@ -2324,7 +2338,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         var = parse(tokenize("_Alignas(32) int g;"))[0]
         self.assertEqual((var.align, var.ty.align), (32, 4))
-        self.assertIn("  .align 32\n", compile_program("_Alignas(32) int g;int main(void){return 0;}").stdout)
+        self.assertIn("  .comm g, 4, 32\n", compile_program("_Alignas(32) int g;int main(void){return 0;}").stdout)
         result = compile_program("int f(_Alignas(32) int x);")
         self.assertEqual(result.returncode, 1)
         self.assertIn("_Alignas is not allowed", result.stderr)
@@ -2361,7 +2375,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, 0)
         assembly = compile_program("char c;short s;int i;long l;int main(void){return 0;}").stdout
         for name, alignment in (("c", 1), ("s", 2), ("i", 4), ("l", 8)):
-            self.assertIn(f"  .globl {name}\n  .align {alignment}\n", assembly)
+            self.assertIn(f"  .globl {name}\n  .comm {name}, {alignment}, {alignment}\n", assembly)
 
     def test_void_parameter_lists(self):
         self.assert_program_returns("int f(void);int f(void){return 42;}int main(void){return f();}", 42)
@@ -2403,9 +2417,9 @@ int main(void){return 42;}
         source = "int a;int b=0;char c[8];int main(void){return a+b+c[7];}"
         self.assert_program_returns(source, 0)
         assembly = compile_program(source).stdout
-        self.assertIn("  .globl a\n  .align 4\n  .comm a, 4, 4\n", assembly)
-        self.assertIn("  .globl b\n  .align 4\n  .data\nb:\n  .byte 0\n", assembly)
-        self.assertIn("  .globl c\n  .align 1\n  .comm c, 8, 1\n", assembly)
+        self.assertIn("  .globl a\n  .comm a, 4, 4\n", assembly)
+        self.assertIn("  .globl b\n  .data\n  .type b, @object\n  .size b, 4\n  .align 4\nb:\n  .byte 0\n", assembly)
+        self.assertIn("  .globl c\n  .comm c, 8, 1\n", assembly)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / "test.s").write_text(assembly)
@@ -3711,7 +3725,7 @@ int main(void){return 42;}
             self.assert_program_returns("int x[4]; int main(void){x[0]=0;x[1]=1;x[2]=2;x[3]=3;"
                                         f"return x[{index}];}}", index)
         assembly = compile_program("int x; int main(void){return x;}").stdout
-        self.assertIn("  .globl x\n  .align 4\n  .comm x, 4, 4\n", assembly)
+        self.assertIn("  .globl x\n  .comm x, 4, 4\n", assembly)
         self.assertIn("  lea x(%rip), %rax\n", assembly)
         self.assert_program_returns("int x=3; int main(void){return x;}", 3)
         self.assertEqual(compile_program("int main(void){return x;} int x;").returncode, 1)

@@ -152,6 +152,12 @@ class CodeGenerator:
                                       "  add $8, %rsp"))
             else:
                 self.assembly.append(f"  call {node.funcname}")
+            if node.ty.kind == "BOOL":
+                self.assembly.append("  movzx %al, %eax")
+            elif node.ty.kind == "CHAR":
+                self.assembly.append("  movsbl %al, %eax")
+            elif node.ty.kind == "SHORT":
+                self.assembly.append("  movswl %ax, %eax")
             return
         if node.kind == "STMT_EXPR":
             for statement in node.body:

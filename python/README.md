@@ -1,35 +1,36 @@
-# Lesson 125: Stack alignment around calls
+# Lesson 126: Small function return values
 
-Original chibicc commit: [`6a0ed71107670b404af04bc20a2461165483f390`](https://github.com/rui314/chibicc/commit/6a0ed71107670b404af04bc20a2461165483f390).
+Original chibicc commit: [`dcd45792264795a32f19581a904dda8bf6d3ad06`](https://github.com/rui314/chibicc/commit/dcd45792264795a32f19581a904dda8bf6d3ad06).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Calls now account for temporary expression pushes. Function stack frames already
-start on a 16-byte boundary; each pushed temporary changes rsp by eight bytes.
-After moving arguments into registers, an odd temporary depth triggers `sub $8`
-before call and `add $8` afterward. An even depth requires no padding.
+After a call returning _Bool, char or short, the emitter now extracts the
+meaningful low byte or word. Bool uses zero extension from al; signed char and
+short use sign extension from al or ax into eax. Later conversions can then
+safely use the normalized result rather than unrelated high register bits.
 
-Python uses the existing integer depth counter as upstream does. The padding is
-not an expression value, so it does not alter that counter. The x86-64 System V
-ABI requires rsp aligned to 16 before call; the pushed return address means the
-callee sees rsp modulo 16 equal to eight on entry.
+Python selects instructions from the call node's declared return type, exactly
+as upstream. The C ABI does not require every high bit of rax to hold a useful
+value for these small return types. The upstream tests deliberately use helper
+functions with int return definitions and small return declarations to expose
+that issue; the port preserves those educational fixtures.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void){return 41;}int main(){return f()+1;}\n' > /tmp/lesson125.c
-python3 python/main.py /tmp/lesson125.c > /tmp/lesson125.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson125 /tmp/lesson125.s
-/tmp/lesson125
+printf 'char f(void);int main(){return f()<0;}\n' > /tmp/lesson126.c
+printf 'int f(void){return 0x2ff;}\n' > /tmp/lesson126-helper.c
+python3 python/main.py /tmp/lesson126.c > /tmp/lesson126.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson126 /tmp/lesson126.s /tmp/lesson126-helper.c
+/tmp/lesson126
 echo $?
 ```
 
-The emitter evaluates the right operand 1 first and pushes it. It pads the stack
-by eight bytes around call f, restores that padding, pops the operand, and adds.
-Exit status is 42. Tests use a tiny GCC-compiled naked assembly helper to inspect
-actual callee-entry rsp, covering direct calls, odd-depth binary/assignment calls,
-nested argument calls, emitted padding, and all original C examples.
+After call f, `movsbl %al,%eax` interprets low byte ff as signed -1. The comparison
+is true, so exit status is 1. Tests cover garbage high bits for all three return
+kinds, signed comparisons and long conversion, exact cleanup instructions,
+execution, and updated original function/helper examples.
 
 ## Tests and attribution
 

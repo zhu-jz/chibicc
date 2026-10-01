@@ -1,6 +1,6 @@
-"""Lesson 125: Stack alignment around calls.
+"""Lesson 126: Small function return values.
 
-Based on chibicc commit 6a0ed71107670b404af04bc20a2461165483f390.
+Based on chibicc commit dcd45792264795a32f19581a904dda8bf6d3ad06.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_small_function_return_values(self):
+        helper = "int f(void){return 512;}int t(void){return 513;}int c(void){return 0x2ff;}int s(void){return 0x2ffff;}"
+        for source, expected in [
+            ("_Bool f(void);int main(){return f();}", 0),
+            ("_Bool t(void);int main(){return t();}", 1),
+            ("char c(void);int main(){return c()<0;}", 1),
+            ("short s(void);int main(){return (long)s()==-1;}", 1),
+        ]:
+            self.assert_program_returns(source, expected, helper)
+        for spelling, instruction in (("_Bool", "movzx %al, %eax"),
+                                      ("char", "movsbl %al, %eax"),
+                                      ("short", "movswl %ax, %eax")):
+            assembly = compile_program(f"{spelling} f(void);int main(){{return f();}}").stdout
+            self.assertIn(f"  call f\n  {instruction}\n", assembly)
+
     def test_call_stack_alignment(self):
         helper = '__attribute__((naked)) int alignment(void){__asm__("mov %rsp, %rax\\nand $15, %eax\\nret");}'
         for source, expected in [

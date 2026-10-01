@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import time
 
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
@@ -77,6 +79,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_date_and_time_macros(self):
+        fixed = time.struct_time((2020,1,7,3,4,5,1,7,-1))
+        with patch('preprocess.time.localtime', return_value=fixed):
+            tokens = tokenize('__DATE__;__TIME__;__DATE__;__TIME__')
+        self.assertEqual([t.str for t in tokens if t.kind == 'STR'],
+                         [b'Jan  7 2020\0',b'03:04:05\0'] * 2)
+        self.assert_program_returns('int main(void){return sizeof(__DATE__)+sizeof(__TIME__)+21;}',42)
+        result = subprocess.run([sys.executable,str(COMPILER),'-D__DATE__="fixed"','-E','-'],input='__DATE__',capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,'"fixed"\n')
+
     def test_anonymous_aggregate_members(self):
         for source, expected in [
             ('int main(void){struct T{char pad;struct{int a;union{int b,c;};};}x={1,{12,{30}}};return x.a+x.c;}',42),

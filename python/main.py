@@ -1,6 +1,6 @@
-"""Lesson 220: Expose anonymous struct and union members.
+"""Lesson 221: Expand compilation date and time macros.
 
-Based on chibicc commit c3075b3030c0488df1e7aa9f600da0f66072186b.
+Based on chibicc commit e27417fcde500f6c01ce0dbee57a1af137510a09.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

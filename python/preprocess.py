@@ -5,6 +5,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import os
+import time
 from dataclasses import dataclass, field, replace
 
 from tokenizer import convert_pp_tokens, tokenize, tokenize_file, warn_tok
@@ -537,6 +538,11 @@ def init_macros():
         define_macro(macros, name, source)
     macros["__FILE__"] = Macro("__FILE__", [], handler=file_macro)
     macros["__LINE__"] = Macro("__LINE__", [], handler=line_macro)
+    now = time.localtime()
+    months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    define_macro(macros, "__DATE__", f'"{months[now.tm_mon - 1]} {now.tm_mday:2d} {now.tm_year}"')
+    define_macro(macros, "__TIME__", f'"{now.tm_hour:02d}:{now.tm_min:02d}:{now.tm_sec:02d}"')
     return macros
 
 

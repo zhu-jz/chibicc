@@ -1,28 +1,27 @@
-# Lesson 220: Expose anonymous struct and union members
+# Lesson 221: Expand compilation date and time macros
 
-Original chibicc commit: [`c3075b3030c0488df1e7aa9f600da0f66072186b`](https://github.com/rui314/chibicc/commit/c3075b3030c0488df1e7aa9f600da0f66072186b).
+Original chibicc commit: [`e27417fcde500f6c01ce0dbee57a1af137510a09`](https://github.com/rui314/chibicc/commit/e27417fcde500f6c01ce0dbee57a1af137510a09).
 Earlier explanations are available in Git history.
 
-A struct or union member declaration ending immediately in a semicolon can
-now create an unnamed aggregate member. Its children are visible in the
-outer member namespace. Lookup searches such members recursively and builds
-a chain of MEMBER nodes, preserving every intermediate byte offset.
+Predefined __DATE__ and __TIME__ are now string macros initialized from one
+local-time snapshot. The date uses fixed English month abbreviations and a
+space-padded day; time uses zero-padded HH:MM:SS. Repeated expansions within
+one compiler invocation share those replacement tokens.
 
 ```sh
-printf 'int main(void){struct T{struct{int a;};int b;}x={{12},30};return x.a+x.b;}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof(__DATE__)+sizeof(__TIME__)+21;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The chained address calculation reaches a in the inner struct. Ordinary loads
-and addition return 42. Existing aggregate initialization supplies nested values.
-Tests cover multiple levels, anonymous union byte views, global initializers,
-arrow access, nested bitfield updates, missing names and original fixtures.
-Python represents an absent name with None and safely skips unnamed scalar
-members during lookup; C uses null pointers. Ambiguity diagnostics and designated
-initializers are not introduced by this original commit.
+The strings have sizes 12 and 9 including terminators; their sum plus 21 is
+42, emitted through ordinary constant instructions. Tests fix the clock for
+exact date spacing and time padding, verify repeated expansion and command-line
+overrides, check sizes in a real executable and run upstream fixtures. Python's
+stdlib time.localtime replaces C time/localtime; its month index starts at 1
+rather than 0. No locale-dependent month formatting is used.
 
 ## Tests and attribution
 

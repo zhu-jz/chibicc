@@ -1,6 +1,6 @@
-"""Lesson 119: GNU alignment queries on expressions.
+"""Lesson 120: Static local variables.
 
-Based on chibicc commit 310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7.
+Based on chibicc commit 319772b42ebc2311a56ef54e1e9a60c5583971b1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

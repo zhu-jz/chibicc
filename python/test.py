@@ -60,6 +60,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_local_variables(self):
+        for source, expected in [
+            ("int f(void){static int x=40;return ++x;}int main(){f();return f();}", 42),
+            ("int f(void){static int x;return ++x;}int main(){f();return f();}", 2),
+            ("int f(void){static int x=20;return ++x;}int h(void){static int x=20;return ++x;}int main(){int a=f();int b=h();return a+b;}", 42),
+            ("int main(){static int a[]={1,42};return a[1];}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        program = parse(tokenize("int f(void){static int x=42;return x;}"))
+        function = next(var for var in program if var.is_function)
+        self.assertEqual(function.locals, [])
+        assembly = compile_program("int f(void){static int x=42;return x;}").stdout
+        self.assertIn("  .data\n.L..0:\n  .byte 42\n", assembly)
+        self.assertNotIn("  rep stosb\n", assembly)
+        result = compile_program("int g(void);int main(){static int x=g();return x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not a compile-time constant", result.stderr)
+
     def test_alignof_expressions(self):
         for source, expected in [
             ("int main(){char x;return _Alignof(x);}", 1),

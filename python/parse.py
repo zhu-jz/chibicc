@@ -875,6 +875,12 @@ class Parser:
             ty, position = self.declarator(position, basety)
             if ty.kind == "VOID":
                 raise CompileError(self.tokens[position], "variable declared void")
+            if attr is not None and attr.is_static:
+                var = self.new_gvar(self.new_unique_name(), ty)
+                self.push_scope(ty.name.text).var = var
+                if self.tokens[position].text == "=":
+                    position = self.gvar_initializer(position + 1, var)
+                continue
             var = self.new_lvar(ty.name.text, ty)
             if attr is not None and attr.align:
                 var.align = attr.align

@@ -1,33 +1,35 @@
-# Lesson 119: GNU alignment queries on expressions
+# Lesson 120: Static local variables
 
-Original chibicc commit: [`310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7`](https://github.com/rui314/chibicc/commit/310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7).
+Original chibicc commit: [`319772b42ebc2311a56ef54e1e9a60c5583971b1`](https://github.com/rui314/chibicc/commit/319772b42ebc2311a56ef54e1e9a60c5583971b1).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-_Alignof now accepts a unary expression, with or without parentheses, as a GNU
-extension. The parser annotates its operand's type and replaces the entire query
-with a numeric node. The type-name form retains its special parsing path.
+A static local becomes an anonymous global object with a unique assembler name.
+Its source name is bound only in the current block, while its storage persists
+across calls. Constant initializers use .data; omitted initializers use zero-filled
+.bss. It consumes no local stack slot and emits no initializer statement at runtime.
 
-The operand is parsed but never executed: `_Alignof(++x)` does not increment x,
-and `_Alignof f()` emits no call. Upstream queries operand.ty.align, so an object's
-_Alignas override does not affect this result in this historical step. Python
-uses the same type annotation and numeric-node construction.
+Python reuses unique-name generation, scope bindings, and global serialization.
+The original commit does not apply local _Alignas overrides in this static path.
+Static initialization remains compile-time only; a function call is rejected.
+The anonymous symbol convention provides distinct storage for same-named locals.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=0;int y=_Alignof(++x);return x+y;}\n' > /tmp/lesson119.c
-python3 python/main.py /tmp/lesson119.c > /tmp/lesson119.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson119 /tmp/lesson119.s
-/tmp/lesson119
+printf 'int f(void){static int x=40;return ++x;}int main(){f();return f();}\n' > /tmp/lesson120.c
+python3 python/main.py /tmp/lesson120.c > /tmp/lesson120.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson120 /tmp/lesson120.s
+/tmp/lesson120
 echo $?
 ```
 
-The query becomes `mov $4, %rax` while initializing y. No increment of x appears
-in the assembly, and exit status is 4. Tests cover both expression spellings,
-unevaluated increments and calls, overridden objects, emitted constants, real
-execution, and updated original alignof examples.
+Assembly stores the initial 40 once in anonymous .data storage. Each call loads
+and increments that same object via RIP-relative addressing. The second call
+returns 42. Tests verify persistence, zero initialization, distinct function-local
+objects, static arrays, absence of stack initialization, nonconstant rejection,
+actual execution, and the updated original function program.
 
 ## Tests and attribution
 

@@ -1,6 +1,6 @@
-"""Lesson 218: Align large array variables to sixteen bytes.
+"""Lesson 219: Return zero when main reaches its end.
 
-Based on chibicc commit 5257ee0f202a5f9c4e5bcb576646cefe70f3ae91.
+Based on chibicc commit 9c36dd727c736dc3a3ffa6ce7ce473966d802068.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

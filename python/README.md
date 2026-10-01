@@ -1,30 +1,27 @@
-# Lesson 218: Align large array variables to sixteen bytes
+# Lesson 219: Return zero when main reaches its end
 
-Original chibicc commit: [`5257ee0f202a5f9c4e5bcb576646cefe70f3ae91`](https://github.com/rui314/chibicc/commit/5257ee0f202a5f9c4e5bcb576646cefe70f3ae91).
+Original chibicc commit: [`9c36dd727c736dc3a3ffa6ce7ce473966d802068`](https://github.com/rui314/chibicc/commit/9c36dd727c736dc3a3ffa6ce7ce473966d802068).
 Earlier explanations are available in Git history.
 
-Local and global array variables occupying at least sixteen bytes now request
-alignment of at least sixteen bytes. A larger explicit alignment is preserved.
-The array type itself keeps its element alignment, so _Alignof(char[17]) is
-still 1. Local slot allocation applies the stronger variable alignment, and
-global assembly uses a stronger .align directive.
+Reaching the closing brace of main now returns zero, as required by C. The
+compiler emits mov $0, %rax just before main's return label. An explicit
+return jumps directly to that label, bypassing the new instruction and
+preserving its value. Other functions receive no implicit return value.
 
 ```sh
-printf 'int main(void){char x[17];return (unsigned long)&x%%16+42;}\n' > /tmp/lesson.c
+printf 'int main(void){42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 0
 ```
 
-The local array starts at a frame offset divisible by sixteen; rbp is aligned
-too, so the remainder is zero. Tests run four large lengths, explicit 32-byte
-alignment, unchanged type alignment, global directives and original fixtures.
-Python uses max and integer alignment arithmetic. This commit changes the
-alignment value only; the original placement of global .align before the
-section directive is retained and can affect globals when sections change.
-Larger explicit local alignments round the frame offset; the prologue still
-guarantees only sixteen-byte frame-base alignment, as in the original.
+The expression first loads 42, then the fallthrough instruction replaces it
+with zero. Adding return before 42 makes the explicit path exit with 42.
+Tests run empty, expression-ending and call-ending mains, preserve explicit
+returns, verify the label placement and run the original fixture whose final
+return is removed. Existing main assembly snapshots include the new default.
+Python uses a direct name comparison; the generated behavior matches C.
 
 ## Tests and attribution
 

@@ -725,6 +725,8 @@ class CodeGenerator:
                     gp += 1
             self.gen_stmt(function.body)
             assert self.depth == 0
+            if function.name == "main":
+                self.assembly.append("  mov $0, %rax")
             self.assembly.extend([f".L.return.{function.name}:", "  mov %rbp, %rsp",
                                   "  pop %rbp", "  ret"])
         return "\n".join(self.assembly)

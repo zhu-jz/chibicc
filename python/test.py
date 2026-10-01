@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from dataclasses import replace
+import argparse
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_compiler_archive(self):
+        global COMPILER
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "compiler.pyz"
+            result = subprocess.run([sys.executable, str(Path(__file__).with_name("build.py")),
+                                     "-o", str(archive)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(archive.is_file())
+            previous = COMPILER
+            COMPILER = archive
+            try:
+                self.assert_program_returns("int main(void){return 42;}", 42)
+                self.assertIn("  mov $42, %rax\n", compile_program("int main(void){return 42;}").stdout)
+                self.assertEqual(compile_program("int main(void){return 42+;}").returncode, 1)
+                help_result = subprocess.run([sys.executable, str(archive), "--help"],
+                                             capture_output=True, text=True)
+                self.assertEqual(help_result.returncode, 0)
+            finally:
+                COMPILER = previous
+
     def test_long_double_alias(self):
         self.assert_program_returns("long double g=20.5L;long double f(long double x){return x+g;}int main(void){return sizeof(long double)+f(13.5);}", 42)
         self.assert_program_returns("int main(void){double long x=42.0;return x;}", 42)
@@ -2804,4 +2825,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--compiler", type=Path, default=COMPILER)
+    options, arguments = parser.parse_known_args()
+    COMPILER = options.compiler.resolve()
+    unittest.main(argv=[sys.argv[0], *arguments], verbosity=2)

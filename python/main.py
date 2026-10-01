@@ -1,6 +1,6 @@
-"""Lesson 149: Long double as a double alias.
+"""Lesson 150: Build and test a packaged compiler.
 
-Based on chibicc commit 9bf96124ba1e0cb95f491bd0c91d4e9c7a9850da.
+Based on chibicc commit 5d15431df1abab3a5cf596fabe0a77c030a10791.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

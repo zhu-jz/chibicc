@@ -1,10 +1,11 @@
 PYTHON ?= python3
 SOURCES = main.py common.py tokenizer.py preprocess.py parse.py type.py constexpr.py codegen.py LICENSE
 ARCHIVE = build/chibicc.pyz
+HEADERS = $(wildcard include/*.h)
 
 all: $(ARCHIVE)
 
-$(ARCHIVE): build.py $(SOURCES)
+$(ARCHIVE): build.py $(SOURCES) $(HEADERS)
 	$(PYTHON) build.py -o $@
 
 test:

@@ -1,6 +1,6 @@
-"""Lesson 194: Recognize wide character literal prefixes.
+"""Lesson 195: Add bundled standard headers.
 
-Based on chibicc commit 7746e4ee0b254da6311202c7db3d2fddd4c6a52c.
+Based on chibicc commit 7cbfd111d38b70110c9adcdfdae86d07995ae534.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

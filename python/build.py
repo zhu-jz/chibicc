@@ -19,6 +19,11 @@ def build(output):
     source_directory = Path(__file__).resolve().parent
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
+    for header in sorted((source_directory / "include").glob("*.h")):
+        target = output.parent / "include" / header.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if header.resolve() != target.resolve():
+            shutil.copyfile(header, target)
     with tempfile.TemporaryDirectory(prefix="chibicc-package-") as directory:
         stage = Path(directory)
         for name in SOURCE_FILES:

@@ -1,30 +1,36 @@
-# Lesson 194: Recognize wide character literal prefixes
+# Lesson 195: Add bundled standard headers
 
-Original chibicc commit: [`7746e4ee0b254da6311202c7db3d2fddd4c6a52c`](https://github.com/rui314/chibicc/commit/7746e4ee0b254da6311202c7db3d2fddd4c6a52c).
+Original chibicc commit: [`7cbfd111d38b70110c9adcdfdae86d07995ae534`](https://github.com/rui314/chibicc/commit/7cbfd111d38b70110c9adcdfdae86d07995ae534).
 Earlier explanations are available in Git history.
 
-The tokenizer now recognizes `L` immediately followed by a character literal
-quote. It passes both the token's starting position and the quote's position
-to the existing character reader, preserving the full source spelling.
+The historical headers are copied unchanged into include/: float.h, stdalign.h,
+stdarg.h, stdbool.h, stddef.h and stdnoreturn.h. They provide floating-point
+limits, alignment aliases, the variadic-list layout, boolean aliases, basic
+typedefs and NULL, and the noreturn alias. Header guards avoid repeated definitions.
 
-At this historical step, L-prefixed literals have exactly the same behavior
-as ordinary character literals: int type, existing escape decoding, and the
-same signed-byte conversion. This adds recognition without introducing later
-wide-character types or Unicode decoding. Python uses an optional quote index
-instead of the C reader's second pointer.
+The source compiler already searches python/include beside main.py. The Python
+packaging script installs identical header files in include/ beside its .pyz
+output, adapting the original stage-two include path to this distribution.
+Makefile dependencies rebuild the package when a header changes. The archive
+and its sibling include directory are distributed together.
+
+These are the early historical definitions: va_start copies the compiler's
+register-save descriptor, va_end expands to nothing, and va_arg is not supplied.
+Long-double limits follow this compiler's eight-byte representation. Hexadecimal
+floating literals without a decimal point retain the earlier tokenizer limitation.
 
 ```sh
-printf "int main(void){return L'a';}\n" > /tmp/lesson.c
+printf '#include <stdbool.h>\nint main(void){bool ready=true;return ready+41;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 97, the ASCII value of a
+echo $?  # 42
 ```
 
-Assembly loads the literal's integer value into %rax and returns. sizeof an
-L-prefixed literal yields four bytes at this step. Tests cover its type, token
-spelling/location, escapes, the preserved signed-byte behavior, diagnostics
-and executable results; the upstream literal fixture runs unchanged.
+The bool alias becomes _Bool and true becomes 1. Assembly stores the boolean
+byte, loads it and adds 41 before returning in %rax. Tests exercise the aliases,
+typedefs, size/alignment definitions, floating maxima, va_start with a real
+variadic call, repeated inclusion, and packaged header contents and lookup.
 
 ## Tests and attribution
 

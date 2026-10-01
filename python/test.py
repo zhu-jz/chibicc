@@ -77,6 +77,35 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bundled_standard_headers(self):
+        self.assert_program_returns('''#include <stdbool.h>
+#include <stddef.h>
+#include <stdalign.h>
+#include <stdnoreturn.h>
+#include <float.h>
+#include <stdbool.h>
+int main(void){bool ready=true;size_t size=sizeof(void*);alignas(16) int value;
+return ready+false+size+sizeof(wchar_t)+alignof(long)+FLT_DIG+DBL_DIG;}
+''', 42)
+        self.assert_program_returns('''#include <stdarg.h>
+int first(int fixed,...){va_list ap;va_start(ap,fixed);
+int value=*(int*)((char*)ap->reg_save_area+ap->gp_offset);
+va_end(ap);return value;}
+int main(void){return first(0,42);}
+''', 42)
+        self.assert_program_returns('#include <float.h>\nint main(void){return FLT_MAX>1.0 && DBL_MAX>FLT_MAX;}\n', 1)
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'compiler.pyz'
+            built = subprocess.run([sys.executable, str(Path(__file__).with_name('build.py')), '-o', str(archive)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            for header in Path(__file__).with_name('include').glob('*.h'):
+                self.assertEqual((archive.parent / 'include' / header.name).read_bytes(), header.read_bytes())
+            result = subprocess.run([sys.executable, str(archive), '-E', '-'],
+                                    input='#include <stdbool.h>\nbool value=true;\n', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('_Bool value=1;', result.stdout)
+
     def test_wide_character_prefix(self):
         self.assert_program_returns("int main(void){return L'a';}", 97)
         self.assert_program_returns("int main(void){return sizeof(L'\\0');}", 4)

@@ -1,6 +1,6 @@
-"""Lesson 253: Name variadic macro parameters.
+"""Lesson 254: Derive a declaration type with typeof.
 
-Based on chibicc commit 007e526ec50bde4b366d0927ad20d9cd4ac53abf.
+Based on chibicc commit 7d80a5136d1b2926dd0776c51896c40723c518c5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

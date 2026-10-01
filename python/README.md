@@ -1,28 +1,28 @@
-# Lesson 253: Name variadic macro parameters
+# Lesson 254: Derive a declaration type with typeof
 
-Original chibicc commit: [`007e526ec50bde4b366d0927ad20d9cd4ac53abf`](https://github.com/rui314/chibicc/commit/007e526ec50bde4b366d0927ad20d9cd4ac53abf).
+Original chibicc commit: [`7d80a5136d1b2926dd0776c51896c40723c518c5`](https://github.com/rui314/chibicc/commit/7d80a5136d1b2926dd0776c51896c40723c518c5).
 Earlier explanations are available in Git history.
 
-GNU macro definitions can now name their variadic tail, as in `args...`.
-Each macro records that name rather than a boolean variadic flag, and invocation
-collects the remaining comma-separated tokens under it. GNU comma removal also
-recognizes the chosen variadic name.
+GNU `typeof(...)` now accepts a type name or an expression. The parser attaches
+types to the expression and reuses its type for the declaration; it does not
+emit code to evaluate that expression. Arrays keep their array type here rather
+than decaying to a pointer. The predefined __typeof__ alias now works too.
 
 ```sh
-printf '#define SUM(x,args...) x+args\nint main(void){return SUM(12,30);}\n' > /tmp/lesson.c
+printf 'int main(void){int x=42;typeof(x++) y=0;return x+y;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Substitution produces `12+30`; the ordinary addition assembly returns 42.
-Tests cover an empty tail, only a variadic parameter, fixed parameters before it,
-multi-argument calls, comma removal and the original macro.c additions.
-Python passes the variadic name alongside its argument dictionary instead of
-adding C's is_va_args flag to each linked argument node. The earlier __VA_OPT__
-helper still checks the literal name __VA_ARGS__, just as in this original
-commit, so it does not recognize a GNU tail named args. That limit is tested.
+Assembly initializes x and y and adds their values. There is no increment of x
+from typeof's operand, so the returned value stays 42. Tests cover type-name and
+expression forms, pointers, arrays, string arrays, floating types, the alias,
+syntax errors and the original new typeof.c fixture.
+Python returns the selected Type object with a token index; C returns a pointer
+and updates its rest pointer. Variable-length arrays are not introduced by this
+commit, so their special evaluation rules are not claimed.
 
 ## Tests and attribution
 

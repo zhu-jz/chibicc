@@ -81,6 +81,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_typeof(self):
+        for source, expected in [
+            ('int main(void){typeof(int) x=42;return x;}', 42),
+            ('int main(void){int x=42;typeof(x++) y=0;return x+y;}', 42),
+            ('int main(void){typeof("foo") x;return sizeof(x);}', 4),
+            ('int main(void){return sizeof(typeof(int *))+sizeof(typeof(1.0));}', 16),
+            ('typedef short T;int main(void){__typeof__(T) x=42;return x;}', 42),
+            ('int main(void){int x[3];typeof(x) y={12,30};return y[0]+y[1]+y[2];}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        result = compile_program('int main(void){typeof 1 x;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected '('", result.stderr)
+
     def test_gnu_named_variadic_macros(self):
         self.assert_program_returns('#define M(args...) args\nint main(void){return M() 42;}', 42)
         self.assert_program_returns('#define M(x,args...) x+args\nint main(void){return M(12,30);}', 42)

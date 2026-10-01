@@ -691,7 +691,7 @@ class Parser:
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
                                               "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
-                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double") or self.find_typedef(position) is not None
+                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -760,7 +760,7 @@ class Parser:
                 position += 1
                 continue
             type_def = self.find_typedef(position)
-            if token.text in ("struct", "union", "enum") or type_def is not None:
+            if token.text in ("struct", "union", "enum", "typeof") or type_def is not None:
                 if specifiers or has_signed or has_unsigned:
                     break
                 if token.text == "struct":
@@ -769,6 +769,8 @@ class Parser:
                     ty, position = self.union_decl(position + 1)
                 elif token.text == "enum":
                     ty, position = self.enum_specifier(position + 1)
+                elif token.text == "typeof":
+                    ty, position = self.typeof_specifier(position + 1)
                 else:
                     ty = type_def
                     position += 1
@@ -970,6 +972,20 @@ class Parser:
     def typename(self, position):
         ty, position = self.declspec(position)
         return self.abstract_declarator(position, ty)
+
+    def typeof_specifier(self, position):
+        if self.tokens[position].text != "(":
+            raise CompileError(self.tokens[position], "expected '('")
+        position += 1
+        if self.is_typename(position):
+            ty, position = self.typename(position)
+        else:
+            node, position = self.expr(position)
+            add_type(node)
+            ty = node.ty
+        if self.tokens[position].text != ")":
+            raise CompileError(self.tokens[position], "expected ')'")
+        return ty, position + 1
 
     def is_end(self, position):
         return self.tokens[position].text == "}" or (

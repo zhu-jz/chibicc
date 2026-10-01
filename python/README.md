@@ -1,32 +1,30 @@
-# Lesson 207: Convert preprocessing numbers after expansion
+# Lesson 208: Define macros from command-line options
 
-Original chibicc commit: [`3f2c2d5bca4f4506e0ab0b03959d96be427fa672`](https://github.com/rui314/chibicc/commit/3f2c2d5bca4f4506e0ab0b03959d96be427fa672).
+Original chibicc commit: [`fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5`](https://github.com/rui314/chibicc/commit/fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5).
 Earlier explanations are available in Git history.
 
-The tokenizer now collects relaxed PP_NUM spellings without interpreting them.
-After macro expansion, a conversion pass tries a complete integer first, then
-a complete floating literal. It also converts keywords. Conditional directives
-run this pass before evaluating their expression. Invalid surviving spellings
-produce an invalid numeric constant diagnostic at the token location.
+-DNAME defines NAME as 1; -DNAME=value uses the replacement text after the
+first equals sign. Both attached and separate forms work, and -DNAME= is
+empty. Definitions are applied in command-line order after predefined macros.
+Internal compiler subprocesses receive the same options for every input file.
+
+Python passes an explicit macro dictionary through parsing and preprocessing
+rather than introducing C global state. Direct preprocess calls still get a
+fresh default dictionary. A missing separate -D value gets a usage error
+instead of the original's unchecked access past the argument array.
 
 ```sh
-printf '#define CONCAT(x,y) x##y\nint main(void){int f0zz=34;return CONCAT(f,0zz)+0x1p3;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+printf 'int main(void){return ANSWER;}\n' > /tmp/lesson.c
+python3 python/main.py -DANSWER=42 -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Macro pasting makes the identifier f0zz. The hexadecimal float becomes 8.0;
-generated conversion/addition instructions return 42. Tests check raw token
-spelling, identifier and decimal pasting, exponent signs, skipped invalid
-numbers, conditional conversion, errors and original fixtures. Python uses
-int, float and float.fromhex to decode literals only, then emits real assembly;
-it keeps explicit 64-bit range errors rather than C strtoul overflow behavior.
-Metadata and token identity survive conversion. The previous no-dot hexadecimal
-float limitation is resolved in this original step.
-The original fallback also accepts 08 as the double value 8.0; a regression
-test records that historical behavior instead of treating it as valid octal.
+ANSWER becomes a numeric token before parsing, so the assembly contains the
+ordinary mov $42 and return path. Tests check both option forms, empty values,
+redefinition order, predefined overrides, #if, the executable driver and
+upstream C fixtures. This step adds object-like command-line macros only.
 
 ## Tests and attribution
 

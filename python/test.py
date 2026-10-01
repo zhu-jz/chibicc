@@ -77,6 +77,27 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_command_line_macro_definitions(self):
+        for arguments, source, expected in [
+            (['-Dfoo'], 'foo', '1\n'), (['-D', 'foo=bar'], 'foo', 'bar\n'),
+            (['-Dfoo='], 'foo', '\n'), (['-Dfoo=7', '-Dfoo=42'], 'foo', '42\n'),
+            (['-D__STDC__=7'], '__STDC__', '7\n'),
+            (['-DX=42'], '#if X==42\nX\n#endif\n', '42\n'),
+        ]:
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, '-'],
+                                    input=source, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+        with tempfile.TemporaryDirectory() as directory:
+            source, executable = Path(directory) / 'main.c', Path(directory) / 'main'
+            source.write_text('int main(void){return ANSWER;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-DANSWER=42', '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-', '-D'],
+                                input='', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+
     def test_preprocessing_numbers(self):
         self.assertEqual([(t.kind, t.text) for t in tokenize_raw('0zz 4.57 0x1p-3 1e+2')[:-1]],
                          [('PP_NUM', text) for text in ('0zz', '4.57', '0x1p-3', '1e+2')])

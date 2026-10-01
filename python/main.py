@@ -1,6 +1,6 @@
-"""Lesson 207: Convert preprocessing numbers after expansion.
+"""Lesson 208: Define macros from command-line options.
 
-Based on chibicc commit 3f2c2d5bca4f4506e0ab0b03959d96be427fa672.
+Based on chibicc commit fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -13,7 +13,7 @@ import glob
 from codegen import codegen
 from common import CompileError, format_diagnostic
 from parse import parse
-from preprocess import preprocess
+from preprocess import preprocess, init_macros, define_macro
 from tokenizer import tokenize_file
 
 
@@ -32,6 +32,7 @@ def add_default_include_paths(argv0, include_paths):
 
 
 def parse_args(arguments):
+    macros = init_macros()
     input_paths = []
     include_paths = []
     output_path = None
@@ -44,7 +45,7 @@ def parse_args(arguments):
     opt_E = False
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -52,6 +53,15 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument.startswith("-D"):
+            definition = argument[2:]
+            if argument == "-D":
+                position += 1
+                definition = arguments[position]
+            name, separator, value = definition.partition("=")
+            define_macro(macros, name, value if separator else "1")
+            position += 1
+            continue
         if argument == "-E":
             opt_E = True
             position += 1
@@ -98,7 +108,7 @@ def parse_args(arguments):
         position += 1
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros
 
 
 def write_output(path, assembly):
@@ -126,11 +136,11 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=()):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None):
     files = []
     try:
         tokens = tokenize_file(filename, files)
-        tokens = preprocess(tokens, files, include_paths)
+        tokens = preprocess(tokens, files, include_paths, macros)
         if opt_E:
             print_tokens(tokens, opt_o)
             return 0
@@ -207,12 +217,12 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

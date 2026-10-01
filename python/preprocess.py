@@ -476,6 +476,14 @@ def line_macro(template):
     return new_num_token(template.line_no, template)
 
 
+def define_macro(macros, name, source):
+    file = File("<built-in>", 1, source)
+    tokens = tokenize(source)
+    for token in tokens:
+        token.file = file
+    macros[name] = Macro(name, tokens)
+
+
 def init_macros():
     definitions = {
         '_LP64': '1',
@@ -522,11 +530,7 @@ def init_macros():
     }
     macros = {}
     for name, source in definitions.items():
-        file = File("<built-in>", 1, source)
-        tokens = tokenize(source)
-        for token in tokens:
-            token.file = file
-        macros[name] = Macro(name, tokens)
+        define_macro(macros, name, source)
     macros["__FILE__"] = Macro("__FILE__", [], handler=file_macro)
     macros["__LINE__"] = Macro("__LINE__", [], handler=line_macro)
     return macros
@@ -549,11 +553,13 @@ def join_adjacent_string_literals(tokens):
         position += 1
 
 
-def preprocess(tokens, files=None, include_paths=()):
+def preprocess(tokens, files=None, include_paths=(), macros=None):
     if files is None:
         files = []
     conditions = []
-    preprocess2(tokens, files, init_macros(), conditions, include_paths)
+    if macros is None:
+        macros = init_macros()
+    preprocess2(tokens, files, macros, conditions, include_paths)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     convert_pp_tokens(tokens)

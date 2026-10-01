@@ -1,35 +1,37 @@
-# Lesson 120: Static local variables
+# Lesson 121: Compound literals
 
-Original chibicc commit: [`319772b42ebc2311a56ef54e1e9a60c5583971b1`](https://github.com/rui314/chibicc/commit/319772b42ebc2311a56ef54e1e9a60c5583971b1).
+Original chibicc commit: [`127056dc1de6ddad280f6cf09cb15538dca22f43`](https://github.com/rui314/chibicc/commit/127056dc1de6ddad280f6cf09cb15538dca22f43).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A static local becomes an anonymous global object with a unique assembler name.
-Its source name is bound only in the current block, while its storage persists
-across calls. Constant initializers use .data; omitted initializers use zero-filled
-.bss. It consumes no local stack slot and emits no initializer statement at runtime.
+`(type){initializer}` now creates an unnamed object. At file scope it becomes
+anonymous global data, allowing nested pointer relocations. Inside a block it
+becomes a local initialized object; a comma node sequences initialization before
+returning that object's value or address. Compound literals are lvalues, so they
+can be assigned to or addressed.
 
-Python reuses unique-name generation, scope bindings, and global serialization.
-The original commit does not apply local _Alignas overrides in this static path.
-Static initialization remains compile-time only; a function call is rejected.
-The anonymous symbol convention provides distinct storage for same-named locals.
+The cast parser distinguishes a following brace and hands the expression back
+to unary/postfix parsing. Python checks scope-list length where upstream checks
+the outer scope link, then reuses existing initializer lowering. This historical
+postfix path returns early: wrap the literal in parentheses before applying a
+subscript or member suffix, as the original tests do.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void){static int x=40;return ++x;}int main(){f();return f();}\n' > /tmp/lesson120.c
-python3 python/main.py /tmp/lesson120.c > /tmp/lesson120.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson120 /tmp/lesson120.s
-/tmp/lesson120
+printf 'int *p=&(int){42};int main(){return *p;}\n' > /tmp/lesson121.c
+python3 python/main.py /tmp/lesson121.c > /tmp/lesson121.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson121 /tmp/lesson121.s
+/tmp/lesson121
 echo $?
 ```
 
-Assembly stores the initial 40 once in anonymous .data storage. Each call loads
-and increments that same object via RIP-relative addressing. The second call
-returns 42. Tests verify persistence, zero initialization, distinct function-local
-objects, static arrays, absence of stack initialization, nonconstant rejection,
-actual execution, and the updated original function program.
+Assembly emits an anonymous int containing 42 and a .quad relocation from p to
+that object. Main follows the pointer and returns 42. Local literals instead
+emit stack zeroing and stores. Tests check scalar, array and struct values,
+runtime local initial values, writable literal storage, global relocations,
+nested pointer trees, assembly, and the new original compound-literal program.
 
 ## Tests and attribution
 

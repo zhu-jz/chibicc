@@ -60,6 +60,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_compound_literals(self):
+        for source, expected in [
+            ("int main(){return (int){42};}", 42),
+            ("int main(){return ((int[]){1,2,42})[2];}", 42),
+            ("int main(){return ((struct T{char a;int b;}){1,42}).b;}", 42),
+            ("int main(){int x=42;return (int){x};}", 42),
+            ("int main(){int *p=&(int){1};*p=42;return *p;}", 42),
+            ("int *p=&(int){42};int main(){return *p;}", 42),
+            ("struct T{int x;struct T *next;};struct T *p=&(struct T){1,&(struct T){42,0}};int main(){return p->next->x;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertIn("  rep stosb\n", compile_program("int main(){return (int){42};}").stdout)
+        assembly = compile_program("int *p=&(int){42};int main(){return *p;}").stdout
+        self.assertIn("  .quad .L..0+0\n", assembly)
+        self.assertNotIn("  rep stosb\n", assembly)
+
     def test_static_local_variables(self):
         for source, expected in [
             ("int f(void){static int x=40;return ++x;}int main(){f();return f();}", 42),

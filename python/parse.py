@@ -294,9 +294,12 @@ class Parser:
     def cast(self, position):
         token = self.tokens[position]
         if token.text == "(" and self.is_typename(position + 1):
+            start = position
             ty, position = self.typename(position + 1)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
+            if self.tokens[position + 1].text == "{":
+                return self.unary(start)
             operand, position = self.cast(position + 1)
             node = new_cast(operand, ty)
             node.tok = token
@@ -348,6 +351,20 @@ class Parser:
 
     # postfix = primary ("[" expr "]" | "." identifier | "->" identifier | "++" | "--")*
     def postfix(self, position):
+        if self.tokens[position].text == "(" and self.is_typename(position + 1):
+            start = self.tokens[position]
+            ty, position = self.typename(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            position += 1
+            if len(self.scopes) == 1:
+                var = self.new_gvar(self.new_unique_name(), ty)
+                position = self.gvar_initializer(position, var)
+                return Node("VAR", var=var, tok=start), position
+            var = self.new_lvar("", ty)
+            initialization, position = self.lvar_initializer(position, var)
+            value = Node("VAR", var=var, tok=self.tokens[position])
+            return Node("COMMA", initialization, value, tok=start), position
         node, position = self.primary(position)
         while True:
             if self.tokens[position].text == "[":

@@ -1,6 +1,6 @@
-"""Lesson 120: Static local variables.
+"""Lesson 121: Compound literals.
 
-Based on chibicc commit 319772b42ebc2311a56ef54e1e9a60c5583971b1.
+Based on chibicc commit 127056dc1de6ddad280f6cf09cb15538dca22f43.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

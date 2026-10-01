@@ -1,6 +1,6 @@
-"""Lesson 172: Add zero-argument function-like macros.
+"""Lesson 173: Add function-like macro parameters.
 
-Based on chibicc commit dec3b3fa02ffb343c37f82d36ae02be6bb30eb03.
+Based on chibicc commit b9ad3e43cf7479712972514aa3f2c55a0f650f76.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,23 +1,24 @@
-# Lesson 172: Add zero-argument function-like macros
+# Lesson 173: Add function-like macro parameters
 
-Original chibicc commit: [`dec3b3fa02ffb343c37f82d36ae02be6bb30eb03`](https://github.com/rui314/chibicc/commit/dec3b3fa02ffb343c37f82d36ae02be6bb30eb03).
+Original chibicc commit: [`b9ad3e43cf7479712972514aa3f2c55a0f650f76`](https://github.com/rui314/chibicc/commit/b9ad3e43cf7479712972514aa3f2c55a0f650f76).
 Earlier explanations are available in Git history.
 
-A definition whose opening parenthesis immediately follows its name is now
-function-like: `#define ANSWER() 42` expands only when followed by `()`.
-Without an argument list, its name remains an ordinary identifier. A space or
-comment before the definition's parenthesis instead makes it object-like.
-This step accepts no macro parameters or arguments.
+Function-like definitions now accept named parameters. An invocation collects
+one token sequence per parameter, expands that sequence, and substitutes it
+where the parameter appears in the replacement body. Python lists store
+parameter names and a dictionary maps each name to its argument tokens.
 
-The tokenizer records whether whitespace or a comment preceded each token.
-`-E` now uses that information instead of inserting a space before every token.
-Multiple spaces collapse to one, and indentation at line starts is omitted.
-Macro replacement tokens still carry their definition's spacing. Function-like
-expansion at this original step does not yet add a hideset; recursive function
-macros remain a limitation. Object-like recursion protection is retained.
+Substitution supplies no implicit grouping. `#define PRODUCT(x,y) x*y` with
+arguments `3+4` and `4+5` yields `3+4*4+5`, which is 24. Parenthesizing the body
+as `(x)*(y)` instead yields 63. Empty argument sequences are accepted.
+
+This original commit does not yet track nested parentheses while collecting
+arguments. Commas and closing parentheses stop an argument immediately. Tests
+preserve that limitation and the original punctuation-based count diagnostics.
+Function-like recursion still lacks a hideset at this step.
 
 ```sh
-printf '#define ANSWER() 42\nint main(void){return ANSWER ();}\n' > /tmp/lesson.c
+printf '#define SUM(x,y) (x)+(y)\nint main(void){return SUM(7,35);}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -25,10 +26,10 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-After expansion the return expression is a number, so assembly loads 42 into
-`%rax` and returns. It makes no function call for the macro. Tests check bare
-identifiers, empty bodies, object-like parentheses, whitespace and comments,
-`-E` output, rejected parameters and arguments, and executable exit values.
+Expansion produces arithmetic tokens. Assembly adds the two values and returns
+42 in `%rax`; no macro call exists at runtime. Tests check precedence, argument
+expansion, empty arguments, malformed definitions, count errors and the current
+nested-parenthesis limitation, alongside the upstream macro program.
 
 ## Tests and attribution
 

@@ -5,7 +5,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import os
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from tokenizer import convert_keywords, tokenize_file, warn_tok
 from common import CompileError
@@ -24,6 +24,7 @@ class Macro:
     name: str
     body: list
     is_objlike: bool = True
+    params: list[str] = field(default_factory=list)
 
 
 def skip_line(tokens, position):
@@ -96,17 +97,69 @@ def read_macro_definition(tokens, position, macros):
         raise CompileError(name, "macro name must be an identifier")
     position += 1
     is_objlike = tokens[position].has_space or tokens[position].text != "("
+    params = []
     if not is_objlike:
-        position += 1
-        if tokens[position].text != ")":
-            raise CompileError(tokens[position], "expected ')'")
-        position += 1
+        params, position = read_macro_params(tokens, position + 1)
     body, position = copy_line(tokens, position)
-    macros[name.text] = Macro(name.text, body, is_objlike)
+    macros[name.text] = Macro(name.text, body, is_objlike, params)
     return position
 
 
-def expand_macro(tokens, position, macros):
+def read_macro_params(tokens, position):
+    params = []
+    while tokens[position].text != ")":
+        if params:
+            if tokens[position].text != ",":
+                raise CompileError(tokens[position], "expected ','")
+            position += 1
+        if tokens[position].kind != "IDENT":
+            raise CompileError(tokens[position], "expected an identifier")
+        params.append(tokens[position].text)
+        position += 1
+    return params, position + 1
+
+
+def read_macro_arg_one(tokens, position):
+    argument = []
+    while tokens[position].text not in (",", ")"):
+        if tokens[position].kind == "EOF":
+            raise CompileError(tokens[position], "premature end of input")
+        argument.append(replace(tokens[position]))
+        position += 1
+    argument.append(replace(tokens[position], kind="EOF", text=""))
+    return argument, position
+
+
+def read_macro_args(tokens, position, params):
+    position += 2
+    args = {}
+    for index, name in enumerate(params):
+        if index:
+            if tokens[position].text != ",":
+                raise CompileError(tokens[position], "expected ','")
+            position += 1
+        argument, position = read_macro_arg_one(tokens, position)
+        args.setdefault(name, argument)
+    if tokens[position].text != ")":
+        raise CompileError(tokens[position], "expected ')'")
+    return args, position + 1
+
+
+def subst(body, args, files, macros, conditions):
+    result = []
+    for token in body[:-1]:
+        argument = args.get(token.text)
+        if argument is not None:
+            expanded = [replace(tok) for tok in argument]
+            preprocess2(expanded, files, macros, conditions)
+            result.extend(replace(tok) for tok in expanded[:-1])
+        else:
+            result.append(replace(token))
+    result.append(body[-1])
+    return result
+
+
+def expand_macro(tokens, position, files, macros, conditions):
     token = tokens[position]
     if token.text in token.hideset:
         return False
@@ -116,9 +169,8 @@ def expand_macro(tokens, position, macros):
     if not macro.is_objlike:
         if tokens[position + 1].text != "(":
             return False
-        if tokens[position + 2].text != ")":
-            raise CompileError(tokens[position + 2], "expected ')'")
-        tokens[position:position + 3] = [replace(tok) for tok in macro.body[:-1]]
+        args, rest = read_macro_args(tokens, position, macro.params)
+        tokens[position:rest] = subst(macro.body, args, files, macros, conditions)[:-1]
         return True
     hideset = token.hideset | {macro.name}
     tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)
@@ -129,7 +181,7 @@ def preprocess2(tokens, files, macros, conditions):
     result = []
     position = 0
     while tokens[position].kind != "EOF":
-        if expand_macro(tokens, position, macros):
+        if expand_macro(tokens, position, files, macros, conditions):
             continue
         token = tokens[position]
         if is_hash(token):

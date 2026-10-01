@@ -72,13 +72,28 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_parameterized_macros(self):
+        self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT(3+4,4+5);}\n', 24)
+        self.assert_program_returns('#define PRODUCT(x,y) (x)*(y)\nint main(void){return PRODUCT(3+4,4+5);}\n', 63)
+        self.assert_program_returns('#define VALUE 7\n#define SUM(x,y) x+y\nint main(void){return SUM(VALUE,35);}\n', 42)
+        self.assert_program_returns('#define IGNORE(x) 42\nint main(void){return IGNORE();}\n', 42)
+        for source, message in (
+                ('#define F(x,y) x+y\nint main(void){return F(1);}\n', "expected ','"),
+                ('#define F(x) x\nint main(void){return F(1,2);}\n', "expected ')'"),
+                ('#define F(1) 42\n', 'expected an identifier'),
+                ('#define F(x) x\nF(1\n', 'premature end of input'),
+                ('#define F(x,y) x+y\nF((1+2),4)\n', "expected ','")):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_zero_argument_macros_and_spacing(self):
         self.assert_program_returns('#define ANSWER() 42\nint main(void){return ANSWER ();}\n', 42)
         self.assert_program_returns('#define ANSWER() 42\nint main(void){int ANSWER=5;return ANSWER+ANSWER();}\n', 47)
         self.assert_program_returns('#define CALL ()\nint answer(void){return 42;}int main(void){return answer CALL;}\n', 42)
         self.assert_program_returns('#define EMPTY()\nint main(void){EMPTY() return 7;}\n', 7)
         self.assert_program_returns('#define ANSWER/**/()\nint answer(void){return 11;}int main(void){return answer ANSWER;}\n', 11)
-        for source in ('#define F(x) x\n', '#define F() 42\nint main(void){return F(1);}\n'):
+        for source in ('#define F() 42\nint main(void){return F(1);}\n',):
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertIn("expected ')'", result.stderr)

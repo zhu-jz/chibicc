@@ -80,6 +80,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_gnu_line_markers(self):
+        self.assert_program_returns('# 41 "virtual.c" 2 3\nint main(void){return __LINE__+(__FILE__[0]!=118);}', 42)
+        self.assert_program_returns('# 41\nint main(void){return __LINE__;}', 42)
+        result = compile_program('# 41L "virtual.c"\nint main(void){return 0;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('invalid line marker', result.stderr)
+
     def test_line_directives(self):
         self.assert_program_returns('#line 41 "virtual.c"\nint main(void){return __LINE__;}', 42)
         tokens = tokenize('#line 40 "first.c"\na\n#line 10\nb\n')

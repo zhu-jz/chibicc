@@ -1,6 +1,6 @@
-"""Lesson 246: Track logical source lines and filenames.
+"""Lesson 247: Read GNU preprocessor line markers.
 
-Based on chibicc commit c61c0d00252a8704ff2731f6a57bad3657b84170.
+Based on chibicc commit aaf20fb96eaf21ead775fde6bad00d8e71650b5a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

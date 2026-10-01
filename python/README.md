@@ -1,30 +1,27 @@
-# Lesson 246: Track logical source lines and filenames
+# Lesson 247: Read GNU preprocessor line markers
 
-Original chibicc commit: [`c61c0d00252a8704ff2731f6a57bad3657b84170`](https://github.com/rui314/chibicc/commit/c61c0d00252a8704ff2731f6a57bad3657b84170).
+Original chibicc commit: [`aaf20fb96eaf21ead775fde6bad00d8e71650b5a`](https://github.com/rui314/chibicc/commit/aaf20fb96eaf21ead775fde6bad00d8e71650b5a).
 Earlier explanations are available in Git history.
 
-`#line` now adjusts subsequent token line numbers and optionally changes the name
-used by `__FILE__`. Its arguments undergo macro expansion first. Tokens snapshot
-the current file delta while preprocessing so later markers cannot change the
-line numbers of earlier tokens. Physical file paths still control include lookup.
+A numeric preprocessing token immediately after `#` now selects the line-marker
+parser. This accepts the GNU output form without the `line` keyword, including
+optional trailing flags. The same file state and token snapshots from the last
+lesson handle the logical line and filename changes.
 
 ```sh
-printf '#line 41 "virtual.c"\nint main(void){return __LINE__;}\n' > /tmp/lesson.c
+printf '# 41 "virtual.c" 2 3\nint main(void){return __LINE__;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The macro becomes the integer 42; assembly loads that constant and returns it.
-Debug `.loc` line numbers use the recorded delta. This original version applies
-the marker number to the directive's line, so the following line is one larger;
-we intentionally retain that historical off-by-one behavior. Diagnostics still
-show the physical filename at this step, even when `__FILE__` uses a logical one.
-Tests cover markers with and without filenames, macro arguments, token snapshots,
-diagnostics, invalid marker types and the original new line.c fixture.
-Python gives raw source tokens a File object too, enabling the same tracking in
-parser tests; C always tokenizes through a File. Filename bytes decode as UTF-8.
+The marker disappears during preprocessing and `__LINE__` becomes 42, which the
+assembly loads into the return register. Tests exercise both filename forms,
+invalid non-int marker numbers and the expanded original line.c fixture.
+Trailing flags are consumed with the directive but have no effect in this
+original implementation. The previous historical off-by-one rule remains.
+Python dispatches on the token kind string instead of C's token-kind enum.
 
 ## Tests and attribution
 

@@ -72,6 +72,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macro_expansion_spacing(self):
+        prefix = '#define STR(x) #x\n#define FORWARD(x) STR(x)\n'
+        for definition, expected in (
+                ('#define WRAP(x) FORWARD(foo.x)\nWRAP(bar)\n', b'foo.bar\0'),
+                ('#define WRAP(x) FORWARD(foo. x)\nWRAP(bar)\n', b'foo. bar\0'),
+                ('#define NAME foo\n#define WRAP(x) FORWARD(x.NAME)\nWRAP(bar)\n', b'bar.foo\0'),
+                ('#define NAME foo\n#define WRAP(x) FORWARD(x. NAME)\nWRAP(bar)\n', b'bar. foo\0')):
+            self.assertEqual(tokenize(prefix + definition)[0].str, expected)
+        for source, expected in (
+                ('#define VALUE 42\nVALUE\nVALUE\n', '42\n42\n'),
+                ('#define VALUE() 42\nVALUE()\nVALUE()\n', '42\n42\n'),
+                ('#define EMPTY\n a EMPTY+b\n', 'a +b\n')):
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                    input=source, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+        self.assert_program_returns('#define VALUE 42\nint main(void){return VALUE;}\n', 42)
+
     def test_undefined_names_in_conditions(self):
         for expression in ('UNKNOWN==0', '!UNKNOWN', 'UNKNOWN+2==2', 'KNOWN&&!UNKNOWN'):
             self.assert_program_returns('#define KNOWN 1\n#if ' + expression +
@@ -217,7 +235,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                                 input='#define SELF SELF\nSELF\n', capture_output=True,
                                 text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, ' SELF\n')
+        self.assertEqual(result.stdout, 'SELF\n')
 
     def test_macros_in_conditions(self):
         self.assert_program_returns('''#define VALUE NEXT

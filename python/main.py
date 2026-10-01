@@ -1,6 +1,6 @@
-"""Lesson 181: Replace remaining conditional identifiers with zero.
+"""Lesson 182: Preserve macro expansion spacing.
 
-Based on chibicc commit a8d76ad435891deee9deebbc3a825062fd6cd45a.
+Based on chibicc commit 8075582c21496530e3b1847f5bad11c42941066e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

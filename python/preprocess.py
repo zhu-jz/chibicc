@@ -272,6 +272,8 @@ def subst(body, args, files, macros, conditions):
         if argument is not None:
             expanded = [replace(tok) for tok in argument]
             preprocess2(expanded, files, macros, conditions)
+            expanded[0].at_bol = token.at_bol
+            expanded[0].has_space = token.has_space
             result.extend(replace(tok) for tok in expanded[:-1])
         else:
             result.append(replace(token))
@@ -294,9 +296,13 @@ def expand_macro(tokens, position, files, macros, conditions):
         hideset = (token.hideset & tokens[rest - 1].hideset) | {macro.name}
         body = subst(macro.body, args, files, macros, conditions)
         tokens[position:rest] = add_hideset(body[:-1], hideset)
+        tokens[position].at_bol = token.at_bol
+        tokens[position].has_space = token.has_space
         return True
     hideset = token.hideset | {macro.name}
     tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)
+    tokens[position].at_bol = token.at_bol
+    tokens[position].has_space = token.has_space
     return True
 
 

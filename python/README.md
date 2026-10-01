@@ -1,21 +1,20 @@
-# Lesson 181: Replace remaining conditional identifiers with zero
+# Lesson 182: Preserve macro expansion spacing
 
-Original chibicc commit: [`a8d76ad435891deee9deebbc3a825062fd6cd45a`](https://github.com/rui314/chibicc/commit/a8d76ad435891deee9deebbc3a825062fd6cd45a).
+Original chibicc commit: [`8075582c21496530e3b1847f5bad11c42941066e`](https://github.com/rui314/chibicc/commit/8075582c21496530e3b1847f5bad11c42941066e).
 Earlier explanations are available in Git history.
 
-After processing `defined` and expanding macros in a conditional expression,
-any remaining identifier becomes an integer token with value zero. This lets
-`#if UNKNOWN` select its alternate branch and `#if UNKNOWN == 0` select its
-first branch. A self-referential macro's surviving name becomes zero too.
+The first replacement token now inherits the invoking macro token's beginning-
+of-line and preceding-space flags. Empty replacements transfer those flags to
+the following token. A substituted argument's first token similarly inherits
+the parameter's flags from the replacement body.
 
-The rewrite applies only to preprocessing constant expressions. Undeclared
-identifiers in program code continue to produce diagnostics. Tokens retain C
-integer typing through the existing numeric-token helper; Python does not
-interpret the expression itself. The earlier unknown-condition error test is
-updated to expect the new behavior.
+These flags do not change expression evaluation, but they affect `-E` output
+and stringizing through another macro. A wrapper containing `foo.x` now yields
+`"foo.bar"`, while `foo. x` yields `"foo. bar"`. The change uses straightforward
+field assignments, matching the original C metadata updates.
 
 ```sh
-printf '#if UNKNOWN == 0\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#define VALUE 42\nint main(void){return VALUE;}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -23,10 +22,10 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The condition becomes `0 == 0` before parsing the program. Assembly loads 42
-into `%rax` and returns, with no runtime identifier checks. Tests cover logical
-and arithmetic use, unknown names in alternative branches, recursive macros,
-and unchanged errors for undeclared names in actual code.
+Assembly still loads 42 into `%rax` and returns. New tests inspect nested
+stringizing with and without spaces, retained newlines for both macro kinds,
+spacing after empty expansion and executable behavior. The earlier recursive
+macro output snapshot changes to reflect the corrected leading-space behavior.
 
 ## Tests and attribution
 

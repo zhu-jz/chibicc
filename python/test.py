@@ -87,6 +87,10 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_hashmap_self_test(self):
+        result = subprocess.run([sys.executable, str(COMPILER), '-hashmap-test'], capture_output=True, text=True)
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, 'OK\n', ''))
+
     def test_static_label_addresses(self):
         source = 'int main(void){static void *p[]={&&a,&&b};goto *p[1];a:return 1;b:return 42;}'
         self.assert_program_returns(source, 42)

@@ -12,7 +12,7 @@ import zipapp
 
 
 SOURCE_FILES = ("main.py", "common.py", "tokenizer.py", "preprocess.py", "parse.py",
-                "type.py", "constexpr.py", "codegen.py", "unicode.py", "LICENSE")
+                "type.py", "constexpr.py", "codegen.py", "unicode.py", "hashmap.py", "LICENSE")
 
 
 def build(output):

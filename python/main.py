@@ -1,6 +1,6 @@
-"""Lesson 284: Allow static initializers containing label addresses.
+"""Lesson 285: Exercise the string hash map.
 
-Based on chibicc commit f0c98e0d590ffae286a8a4847c91212c734be8e3.
+Based on chibicc commit 0aad326f3550b3d4c499d4078fcc65cc2dbf7626.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -61,6 +61,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-hashmap-test":
+            from hashmap import hashmap_test
+            hashmap_test()
+            raise SystemExit(0)
         if argument == "-s":
             ld_extra_args.append(argument)
             position += 1

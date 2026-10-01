@@ -1,5 +1,5 @@
 PYTHON ?= python3
-SOURCES = main.py common.py tokenizer.py preprocess.py parse.py type.py constexpr.py codegen.py unicode.py LICENSE
+SOURCES = main.py common.py tokenizer.py preprocess.py parse.py type.py constexpr.py codegen.py unicode.py hashmap.py LICENSE
 ARCHIVE = build/chibicc.pyz
 HEADERS = $(wildcard include/*.h)
 

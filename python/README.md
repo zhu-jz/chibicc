@@ -1,26 +1,31 @@
-# Lesson 284: Allow static initializers containing label addresses
+# Lesson 285: Exercise the string hash map
 
-Original chibicc commit: [`f0c98e0d590ffae286a8a4847c91212c734be8e3`](https://github.com/rui314/chibicc/commit/f0c98e0d590ffae286a8a4847c91212c734be8e3).
+Original chibicc commit: [`0aad326f3550b3d4c499d4078fcc65cc2dbf7626`](https://github.com/rui314/chibicc/commit/0aad326f3550b3d4c499d4078fcc65cc2dbf7626).
 Earlier explanations are available in Git history.
 
-Label addresses can now appear in static initializers. A forward label's assembly
-name is unknown while parsing the initializer, so its relocation retains a reference
-to the label-expression node. After the function's labels are resolved, code generation
-reads the finished name when emitting .quad. This enables static jump tables.
+The original adds an open-addressing string hash table and a -hashmap-test command.
+It hashes keys into buckets, probes collisions, marks deleted slots with tombstones
+and rehashes crowded tables. Compiler lookup sites are not changed in this commit.
+For the Python port, the built-in dict already provides the required string map;
+hashmap.py exercises insertion, deletion, reinsertion, missing keys and replacement.
 
 ```sh
-printf 'int main(void){static void *p[]={&&a,&&b};goto *p[1];a:return 1;b:return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -hashmap-test  # prints OK
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly emits two .quad label entries in data, loads the second pointer and jumps
-through rax to the return of 42. The assembler/linker resolve each entry's address.
-Tests check forward static tables, single pointers, emitted relocations and missing
-labels, plus the original control fixture. Python holds the node itself rather than
-C's pointer to its unique_label field; stable global names remain ordinary strings.
+The self-test checks thousands of keys and exits without requiring a source file.
+The compiler's assembly still returns 42 in rax; this commit adds internal data
+structure testing without changing generated programs. The command is tested
+through the compiler entry point, and hashmap.py is included in packaged builds.
+Python deliberately uses its standard hash table rather than reproducing C's
+bucket allocation, FNV hash, tombstones or memory management. Its self-test also
+checks the actual removed keys and final inserted values; the original repeatedly
+checks a generic missing key and mistakenly reinserts in its final checking loop.
 
 ## Tests and attribution
 

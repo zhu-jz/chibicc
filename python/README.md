@@ -1,27 +1,27 @@
-# Lesson 248: Expand file modification timestamps
+# Lesson 249: Remember the main translation unit filename
 
-Original chibicc commit: [`922604ae1e29fd1283fcc557e294a7272116c094`](https://github.com/rui314/chibicc/commit/922604ae1e29fd1283fcc557e294a7272116c094).
+Original chibicc commit: [`3a10c8aa44250e51dfe33e50b3121d6061faee4b`](https://github.com/rui314/chibicc/commit/3a10c8aa44250e51dfe33e50b3121d6061faee4b).
 Earlier explanations are available in Git history.
 
-The GNU `__TIMESTAMP__` macro now becomes a 24-character string describing the
-physical file's last modification time in local time. Failed file lookup, such
-as standard input, yields the original placeholder `??? ??? ?? ??:??:?? ????`.
-A logical filename set by `#line` does not change the file used for this lookup.
+The GNU `__BASE_FILE__` macro now expands to the original input filename even
+inside included headers. Unlike `__FILE__`, it does not change after `#line`.
+The driver supplies the current translation unit's path when its internal Python
+compiler process initializes predefined macros.
 
 ```sh
-printf 'int main(void){return sizeof(__TIMESTAMP__)+17;}\n' > /tmp/lesson.c
+printf 'int main(void){return __BASE_FILE__[0]==47?42:0;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The timestamp occupies 25 bytes including its terminator. `sizeof` becomes 25,
-so assembly adds 17 and returns 42. Tests set known file times, check the stdin
-placeholder, and verify macro definitions in headers use the defining file's
-mtime, matching this original handler's lack of origin traversal.
-Python uses os.stat and time.ctime; C uses stat and ctime_r. Both format local
-time. Original C fixtures include a runtime length check for the new macro.
+The absolute input path begins with slash (ASCII 47). Assembly loads its first
+byte, compares it and returns 42 for the true branch. Tests distinguish the root
+path, header path and logical filename, check stdin and command-line override,
+and run the original macro.c assertion using its relative input path.
+Python captures the base path in a per-compilation macro handler instead of C's
+global base_file. This also keeps independent preprocessing calls isolated.
 
 ## Tests and attribution
 

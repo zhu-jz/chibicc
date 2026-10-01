@@ -1,6 +1,6 @@
-"""Lesson 248: Expand file modification timestamps.
+"""Lesson 249: Remember the main translation unit filename.
 
-Based on chibicc commit 922604ae1e29fd1283fcc557e294a7272116c094.
+Based on chibicc commit 3a10c8aa44250e51dfe33e50b3121d6061faee4b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -33,7 +33,6 @@ def add_default_include_paths(argv0, include_paths):
 
 
 def parse_args(arguments):
-    macros = init_macros()
     input_paths = []
     include_paths = []
     output_path = None
@@ -50,7 +49,10 @@ def parse_args(arguments):
             position += 1
             if position == len(arguments):
                 usage(1)
+            if arguments[position - 1] == "-cc1-input":
+                base_file = arguments[position]
         position += 1
+    macros = init_macros(base_file or "-")
     position = 0
     while position < len(arguments):
         argument = arguments[position]

@@ -81,6 +81,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_base_file_macro(self):
+        self.assertEqual(tokenize('__BASE_FILE__')[0].str, b'-\0')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'base.c'
+            header = Path(directory) / 'base.h'
+            header.write_text('__BASE_FILE__; __FILE__;\n')
+            source.write_text('#line 10 "logical.c"\n#include "base.h"\n__BASE_FILE__; __FILE__;\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.replace('\n', '').replace(' ', ''), f'"{source}";"{header}";"{source}";"logical.c";')
+        self.assert_program_returns('int main(void){return __BASE_FILE__[0]==45?42:0;}', 42)
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-D__BASE_FILE__=42', '-'], input='__BASE_FILE__\n', capture_output=True, text=True)
+        self.assertEqual(result.stdout, '42\n')
+
     def test_timestamp_macro(self):
         self.assertEqual(tokenize('__TIMESTAMP__')[0].str, b'??? ??? ?? ??:??:?? ????\0')
         self.assert_program_returns('int main(void){return sizeof(__TIMESTAMP__)+17;}', 42)

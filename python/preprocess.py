@@ -521,7 +521,7 @@ def define_macro(macros, name, source):
     macros[name] = Macro(name, tokens)
 
 
-def init_macros():
+def init_macros(base_file="-"):
     definitions = {
         '_LP64': '1',
         '__C99_MACRO_WITH_VA_ARGS': '1',
@@ -582,6 +582,8 @@ def init_macros():
 
     macros["__COUNTER__"] = Macro("__COUNTER__", [], handler=counter_macro)
     macros["__TIMESTAMP__"] = Macro("__TIMESTAMP__", [], handler=timestamp_macro)
+    macros["__BASE_FILE__"] = Macro("__BASE_FILE__", [],
+                                   handler=lambda template: new_str_token(base_file, template))
     now = time.localtime()
     months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -632,7 +634,8 @@ def preprocess(tokens, files=None, include_paths=(), macros=None):
         files = []
     conditions = []
     if macros is None:
-        macros = init_macros()
+        base_file = files[0].name if files else tokens[0].file.name
+        macros = init_macros(base_file)
     preprocess2(tokens, files, macros, conditions, include_paths)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")

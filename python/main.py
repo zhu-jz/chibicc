@@ -1,6 +1,6 @@
-"""Lesson 254: Derive a declaration type with typeof.
+"""Lesson 255: Compare types with a compiler builtin.
 
-Based on chibicc commit 7d80a5136d1b2926dd0776c51896c40723c518c5.
+Based on chibicc commit 1433b404d68f9fe314ae2955d0988dd74e5ecb92.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

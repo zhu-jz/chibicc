@@ -81,6 +81,11 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_builtin_type_compatibility(self):
+        for first, second, expected in [('int', 'const int', 1), ('int', 'unsigned int', 0), ('short *', 'int *', 0), ('int (*)(int,double)', 'int (*)(int,double)', 1), ('int (*)(int,...)', 'int (*)(int)', 0), ('struct{int a;}', 'struct{int a;}', 0), ('int[3]', 'int[3]', 0), ('int[]', 'int[]', 1)]:
+            self.assert_program_returns('int main(void){return __builtin_types_compatible_p(' + first + ',' + second + ');}', expected)
+        self.assert_program_returns('typedef struct{int a;}T;int main(void){return __builtin_types_compatible_p(T,const T)?42:0;}', 42)
+
     def test_typeof(self):
         for source, expected in [
             ('int main(void){typeof(int) x=42;return x;}', 42),

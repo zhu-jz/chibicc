@@ -36,7 +36,34 @@ def is_numeric(ty):
 
 
 def copy_type(ty):
-    return replace(ty)
+    return replace(ty, origin=ty)
+
+
+def is_compatible(first, second):
+    if first is second:
+        return True
+    if first.origin is not None:
+        return is_compatible(first.origin, second)
+    if second.origin is not None:
+        return is_compatible(first, second.origin)
+    if first.kind != second.kind:
+        return False
+    if first.kind in ("CHAR", "SHORT", "INT", "LONG"):
+        return first.is_unsigned == second.is_unsigned
+    if first.kind in ("FLOAT", "DOUBLE"):
+        return True
+    if first.kind == "PTR":
+        return is_compatible(first.base, second.base)
+    if first.kind == "FUNC":
+        return (is_compatible(first.return_ty, second.return_ty)
+                and first.is_variadic == second.is_variadic
+                and len(first.params) == len(second.params)
+                and all(is_compatible(a, b) for a, b in zip(first.params, second.params)))
+    if first.kind == "ARRAY":
+        return (is_compatible(first.base, second.base)
+                and first.array_len < 0 and second.array_len < 0
+                and first.array_len == second.array_len)
+    return False
 
 
 def pointer_to(base):

@@ -14,7 +14,7 @@ from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer, evaluate_float
 import math
 import struct
-from type import ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
+from type import is_compatible, ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
 from type import is_numeric, is_flonum
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
@@ -462,6 +462,16 @@ class Parser:
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
+        if token.text == "__builtin_types_compatible_p":
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            first, position = self.typename(position + 2)
+            if self.tokens[position].text != ",":
+                raise CompileError(self.tokens[position], "expected ','")
+            second, position = self.typename(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            return Node("NUM", value=int(is_compatible(first, second)), tok=token), position + 1
         if token.text == "(" and self.tokens[position + 1].text == "{":
             block, position = self.compound_stmt(position + 2)
             if self.tokens[position].text != ")":

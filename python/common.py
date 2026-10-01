@@ -90,6 +90,7 @@ class Type:
     is_flexible: bool = False
     is_variadic: bool = False
     is_unsigned: bool = False
+    origin: Optional["Type"] = field(default=None, compare=False, repr=False)
 
 
 @dataclass

@@ -1,28 +1,29 @@
-# Lesson 254: Derive a declaration type with typeof
+# Lesson 255: Compare types with a compiler builtin
 
-Original chibicc commit: [`7d80a5136d1b2926dd0776c51896c40723c518c5`](https://github.com/rui314/chibicc/commit/7d80a5136d1b2926dd0776c51896c40723c518c5).
+Original chibicc commit: [`1433b404d68f9fe314ae2955d0988dd74e5ecb92`](https://github.com/rui314/chibicc/commit/1433b404d68f9fe314ae2955d0988dd74e5ecb92).
 Earlier explanations are available in Git history.
 
-GNU `typeof(...)` now accepts a type name or an expression. The parser attaches
-types to the expression and reuses its type for the declaration; it does not
-emit code to evaluate that expression. Arrays keep their array type here rather
-than decaying to a pointer. The predefined __typeof__ alias now works too.
+`__builtin_types_compatible_p(T,U)` now produces an integer constant telling
+whether two types are compatible. Pointer and function types compare recursively;
+structs and unions keep declaration identity. Copies of a type remember their
+origin so names added by declarators do not make the underlying type different.
 
 ```sh
-printf 'int main(void){int x=42;typeof(x++) y=0;return x+y;}\n' > /tmp/lesson.c
+printf 'typedef struct{int a;}T;int main(void){return __builtin_types_compatible_p(T,const T)?42:0;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly initializes x and y and adds their values. There is no increment of x
-from typeof's operand, so the returned value stays 42. Tests cover type-name and
-expression forms, pointers, arrays, string arrays, floating types, the alias,
-syntax errors and the original new typeof.c fixture.
-Python returns the selected Type object with a token index; C returns a pointer
-and updates its rest pointer. Variable-length arrays are not introduced by this
-commit, so their special evaluation rules are not claimed.
+The builtin becomes 1 during parsing; assembly takes the true branch and returns
+42. No runtime type descriptors or comparison calls are emitted. Tests cover
+signedness, qualifiers, pointer depth, function parameters and variadic status,
+distinct anonymous structs, typedef identity, arrays and the new builtin.c fixture.
+Python uses object identity and an origin reference instead of C pointer identity.
+The original array rule has a historical bug: separately constructed fixed-size
+arrays compare false, while equal incomplete arrays compare true. We preserve
+and test that exact rule rather than silently correcting a later-history issue.
 
 ## Tests and attribution
 

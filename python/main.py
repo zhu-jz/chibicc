@@ -1,6 +1,6 @@
-"""Lesson 196: Add va_arg and register classification.
+"""Lesson 197: Build through the complete preprocessing pipeline.
 
-Based on chibicc commit 5322ea8495d70be81a6b80f7a88850b85bfba240.
+Based on chibicc commit 12a9e7506c092fcbab8852db85c3aebefc8a8c81.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

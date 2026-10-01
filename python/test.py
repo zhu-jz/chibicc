@@ -77,6 +77,29 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_complete_packaged_compiler_pipeline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / 'compiler.pyz'
+            first, second = root / 'main.c', root / 'sum.c'
+            executable = root / 'program'
+            first.write_text('#include <stdbool.h>\nint sum(int,...);int main(void){bool ready=true;return sum(0,ready,41);}\n')
+            second.write_text('''#include <stdarg.h>
+int sum(int fixed,...){va_list ap;va_start(ap,fixed);
+int x=va_arg(ap,int);int y=va_arg(ap,int);return x+y;}
+''')
+            built = subprocess.run([sys.executable, str(Path(__file__).with_name('build.py')), '-o', str(archive)],
+                                   capture_output=True, text=True)
+            self.assertEqual(built.returncode, 0, built.stderr)
+            compiled = subprocess.run([sys.executable, str(archive), '-o', str(executable),
+                                       str(first), str(second)], cwd=root, capture_output=True, text=True)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            assembled = subprocess.run([sys.executable, str(archive), '-S', '-o', '-', str(first)],
+                                       cwd=root, capture_output=True, text=True)
+            self.assertEqual(assembled.returncode, 0, assembled.stderr)
+            self.assertIn('  call *%rax\n', assembled.stdout)
+
     def test_va_arg_and_register_class(self):
         for typename, expected in (('int', 0), ('unsigned long', 0), ('char *', 0),
                                    ('int (*)(int)', 0), ('float', 1), ('double', 1),
@@ -2513,7 +2536,7 @@ int main(void){return 42;}
         with tempfile.TemporaryDirectory() as directory:
             for source in sorted(fixtures.glob("*.c")):
                 with self.subTest(source=source.name):
-                    compiled = subprocess.run(compiler_command("-Itest", "test/" + source.name),
+                    compiled = subprocess.run(compiler_command("-Iinclude", "-Itest", "test/" + source.name),
                                               cwd=fixtures.parent, capture_output=True, text=True)
                     self.assertEqual(compiled.returncode, 0, compiled.stderr)
                     assembly = Path(directory) / (source.stem + ".s")

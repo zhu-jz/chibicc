@@ -1,38 +1,35 @@
-# Lesson 196: Add va_arg and register classification
+# Lesson 197: Build through the complete preprocessing pipeline
 
-Original chibicc commit: [`5322ea8495d70be81a6b80f7a88850b85bfba240`](https://github.com/rui314/chibicc/commit/5322ea8495d70be81a6b80f7a88850b85bfba240).
+Original chibicc commit: [`12a9e7506c092fcbab8852db85c3aebefc8a8c81`](https://github.com/rui314/chibicc/commit/12a9e7506c092fcbab8852db85c3aebefc8a8c81).
 Earlier explanations are available in Git history.
 
-stdarg.h now defines va_arg using a statement expression and the parser's
-`__builtin_reg_class(type)` operation. The builtin becomes a constant: 0 for
-integer or pointer types, 1 for floating types, and 2 for other types. It parses
-a type name and emits no runtime function call.
+The original C build now compiles its compiler sources directly with chibicc,
+including its own preprocessor, and deletes the source-rewriting self.py script.
+Its ordinary tests also explicitly search the bundled include directory.
+There is no compiler algorithm change in this commit.
 
-The header's general-purpose and floating readers return the next saved
-register slot and advance the corresponding offset by eight bytes. The macro
-casts that address to a pointer to the requested type and dereferences it.
-These definitions are copied unchanged. They preserve the historical compact
-floating save layout, perform no exhaustion checks, and leave the memory
-reader unimplemented with a division-by-zero placeholder. Stack or aggregate
-variadic arguments are therefore not supported at this step.
+The Python port never needed a C source-rewriting bootstrap script. Python
+executes its implementation, while the implementation compiles C into native
+assembly. Its build milestone is a packaged compiler with sibling headers and
+the same complete C preprocessing/parsing/generation pipeline. This is an
+intentional build adaptation, not a claim that this C compiler compiles its own
+Python source or that packaging is native self-hosting. The original C files
+remain intact. Both upstream test runs explicitly use their bundled headers.
 
 ```sh
-cat > /tmp/lesson.c <<'C'
-#include <stdarg.h>
-int sum(int fixed,...){va_list ap;va_start(ap,fixed);
-int x=va_arg(ap,int);int y=va_arg(ap,int);return x+y;}
-int main(void){return sum(0,7,35);}
-C
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+python3 python/build.py
+printf '#include <stdbool.h>\nint main(void){bool ready=true;return ready+41;}\n' > /tmp/lesson.c
+python3 python/build/chibicc.pyz -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The callee saves argument registers, reads the slots for 7 and 35, adds them
-and returns the result in %rax. Tests check type classification, two integer
-arguments, interleaved floating/integer/pointer arguments, malformed syntax,
-existing header behavior and the original new variadic test program.
+The archive expands the header, stores a boolean byte, adds 41 to its loaded
+value and returns 42 in %rax. A new integration test builds the archive outside
+the repository, compiles and links two C inputs using stdbool.h and stdarg.h,
+and runs the result. It also checks emitted call assembly. The complete source
+and packaged suites are run for this build milestone.
 
 ## Tests and attribution
 

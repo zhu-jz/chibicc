@@ -87,6 +87,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependency_target_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)/'main.c'
+            source.write_text('int main(void){return 42;}')
+            for targets, expected in [(['build/main.o'], 'build/main.o:'), (['foo', 'bar'], 'foo bar:'), ([''], ':')]:
+                options = [item for target in targets for item in ('-MT', target)]
+                result = subprocess.run([sys.executable, str(COMPILER), '-M', *options, str(source)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(result.stdout.startswith(expected), result.stdout)
+        result = subprocess.run([sys.executable, str(COMPILER), '-MT'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('chibicc (Python):', result.stderr)
+
     def test_dependency_phony_rules(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

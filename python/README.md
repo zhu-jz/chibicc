@@ -1,17 +1,17 @@
-# Lesson 291: Emit dummy header targets with -MP
+# Lesson 292: Choose dependency targets with -MT
 
-Original chibicc commit: [`57c1d4ec0290d49fa1e954ff3e7a51e24d71a3a1`](https://github.com/rui314/chibicc/commit/57c1d4ec0290d49fa1e954ff3e7a51e24d71a3a1).
+Original chibicc commit: [`db850f37a2a284bf18cea427e4676a22d83d04b8`](https://github.com/rui314/chibicc/commit/db850f37a2a284bf18cea427e4676a22d83d04b8).
 Earlier explanations are available in Git history.
 
-With -M, -MP appends an empty Make rule for each opened file after the first one.
-These dummy targets let Make continue when a previously included header has been
-removed, rather than failing because no rule can build that old prerequisite.
--MP alone does not request dependency output, and -MF still chooses its destination.
+-MT TARGET replaces the default basename.o target in a -M dependency rule. Repeating
+-MT joins the target strings with spaces, producing a rule for several targets.
+The supplied strings are written literally; this commit does not escape Make
+syntax. -MF selects the output file and -MP still adds dummy header rules.
 
 ```sh
 printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
 printf '#include "lesson-answer.h"\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
-python3 python/main.py -M -MP -MF /tmp/lesson.d /tmp/lesson.c
+python3 python/main.py -M -MP -MF /tmp/lesson.d -MT build/lesson.o -MT lesson-copy.o /tmp/lesson.c
 cat /tmp/lesson.d
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -19,12 +19,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The dependency file now includes an empty /tmp/lesson-answer.h: rule. Ordinary
-assembly still returns the expanded value 42. Tests generate a rule, remove the
-header and ask Make to dry-run the object target; existing dependency tests remain.
-Python appends strings where C prints lines. As in the original, the first opened
-file is skipped by position, which can be a forced include rather than the source.
-These are empty rules, not .PHONY declarations, and filenames are not escaped yet.
+The dependency rule begins build/lesson.o lesson-copy.o: and lists the source and
+header. The header also gets an empty rule. These options affect build metadata;
+normal assembly loads 42 into rax and returns, and echo $? displays the exit status.
+Tests check single and repeated targets, an empty literal target and missing -MT
+arguments, alongside -M, -MF and -MP behavior. Python uses None for an absent target
+and immutable string concatenation instead of C's allocated formatted strings.
+Earlier lesson explanations remain in Git history; README describes this lesson.
 
 ## Tests and attribution
 

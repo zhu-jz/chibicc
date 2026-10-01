@@ -72,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_recursive_function_macros(self):
+        self.assert_program_returns('int value(int x){return x;}\n#define value(x) value(x)+1\nint main(void){return value(41);}\n', 42)
+        self.assert_program_returns('int dbl(int x){return x*x;}\n#define dbl(x) OTHER(x)*x\n#define OTHER(x) dbl(x)+3\nint main(void){return dbl(2);}\n', 10)
+        self.assert_program_returns('int f(int x){return x*2;}\n#define f(x) f(x)+1\nint main(void){return f(f(1));}\n', 7)
+        tokens = tokenize('#define G F\n#define F(x) G\nG(1)\n')
+        self.assertEqual([t.text for t in tokens[:-1]], ['F'])
+        self.assertEqual(tokens[0].hideset, frozenset({'F', 'G'}))
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                input='#define SELF() SELF()\nSELF()\n',
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('SELF()', result.stdout)
+
     def test_parenthesized_macro_arguments(self):
         self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2+3),4);}\n', 20)
         self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2,3),4);}\n', 12)

@@ -1,6 +1,6 @@
-"""Lesson 175: Allow parenthesized macro arguments.
+"""Lesson 176: Stop recursive function-like expansion.
 
-Based on chibicc commit c7d7ce0f0cbd5869259a3365211ab92126a27ff6.
+Based on chibicc commit 1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

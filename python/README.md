@@ -1,29 +1,32 @@
-# Lesson 175: Allow parenthesized macro arguments
+# Lesson 176: Stop recursive function-like expansion
 
-Original chibicc commit: [`c7d7ce0f0cbd5869259a3365211ab92126a27ff6`](https://github.com/rui314/chibicc/commit/c7d7ce0f0cbd5869259a3365211ab92126a27ff6).
+Original chibicc commit: [`1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f`](https://github.com/rui314/chibicc/commit/1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f).
 Earlier explanations are available in Git history.
 
-The macro argument reader now keeps a parenthesis depth. It stops at a comma
-or closing parenthesis only at depth zero. Parenthesized arithmetic, comma
-expressions and nested function or macro calls remain complete argument lists.
+Function-like expansion now attaches a hideset to every substituted token.
+It intersects the invoking name's hideset with the closing parenthesis's set,
+then adds the macro name. Arguments keep their own existing hidesets as well.
+An intersection handles invocations whose name and punctuation came from
+different expansion histories; using a union would suppress too much.
 
-This is a small change to token collection, not to parsing or evaluation.
-Only parentheses affect this depth, matching the original C implementation.
-End of input inside an incomplete argument still produces a diagnostic.
+Python's immutable set intersection and union replace linked-list operations.
+Direct and indirect function-like recursion now stop. A surviving name can
+still refer to a real C function with the same name, just as a recursive
+object-like macro can leave a variable reference.
 
 ```sh
-printf '#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2+3),4);}\n' > /tmp/lesson.c
+printf 'int value(int x){return x;}\n#define value(x) value(x)+1\nint main(void){return value(41);}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 20
+echo $?  # 42
 ```
 
-Expansion yields `(2+3)*4`. Assembly adds 2 and 3, multiplies by 4, and returns
-20 in `%rax`. Tests cover nested parentheses, comma expressions, function calls
-with their own arguments, nested macro invocations and incomplete input. The
-previous lesson's nested-argument limitation test is updated for this change.
+Expansion leaves a real call to `value(41)` followed by `+1`. Assembly passes
+41 in `%rdi`, calls the function through `%rax`, adds one to its result, and
+returns 42. Tests exercise direct and indirect recursion, nested invocation,
+the intersection case, and preprocessing termination within a timeout.
 
 ## Tests and attribution
 

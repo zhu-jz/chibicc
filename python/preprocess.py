@@ -175,7 +175,9 @@ def expand_macro(tokens, position, files, macros, conditions):
         if tokens[position + 1].text != "(":
             return False
         args, rest = read_macro_args(tokens, position, macro.params)
-        tokens[position:rest] = subst(macro.body, args, files, macros, conditions)[:-1]
+        hideset = (token.hideset & tokens[rest - 1].hideset) | {macro.name}
+        body = subst(macro.body, args, files, macros, conditions)
+        tokens[position:rest] = add_hideset(body[:-1], hideset)
         return True
     hideset = token.hideset | {macro.name}
     tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)

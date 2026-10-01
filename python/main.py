@@ -1,6 +1,6 @@
-"""Lesson 216: Accept historical compatibility flags.
+"""Lesson 217: Check build warnings and non-returning helpers.
 
-Based on chibicc commit b1fdddff1523d2ca7bab4050434499d3a5ac39a1.
+Based on chibicc commit 2c91da54dff93a365feec5a34f8eaeccca3e3a70.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 import tempfile
 import glob
+from typing import NoReturn
 
 from codegen import codegen
 from common import CompileError, format_diagnostic
@@ -17,7 +18,7 @@ from preprocess import preprocess, init_macros, define_macro, undef_macro
 from tokenizer import tokenize_file
 
 
-def usage(status):
+def usage(status) -> NoReturn:
     print("chibicc (Python): python3 python/main.py [ -o <path> ] <file>", file=sys.stderr)
     raise SystemExit(status)
 

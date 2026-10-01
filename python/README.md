@@ -1,27 +1,29 @@
-# Lesson 216: Accept historical compatibility flags
+# Lesson 217: Check build warnings and non-returning helpers
 
-Original chibicc commit: [`b1fdddff1523d2ca7bab4050434499d3a5ac39a1`](https://github.com/rui314/chibicc/commit/b1fdddff1523d2ca7bab4050434499d3a5ac39a1).
+Original chibicc commit: [`2c91da54dff93a365feec5a34f8eaeccca3e3a70`](https://github.com/rui314/chibicc/commit/2c91da54dff93a365feec5a34f8eaeccca3e3a70).
 Earlier explanations are available in Git history.
 
-The driver now ignores -O*, -W*, -g*, -std=* and the original commit's explicit
-set of freestanding, builtin, frame-pointer, stack-protector, aliasing, target
-and warning flags. This lets ordinary build commands run, but these accepted
-flags do not enable optimization or change the language or target behavior.
-Unrecognized flags outside that set still receive an error.
+The original enables GCC warnings for the compiler's own build and marks its
+fatal error helpers noreturn. Python has no C compiler-warning pass, so the
+corresponding build target checks every Python module with py_compile and
+warnings treated as errors. make all and make test-all include this check.
+The always-exiting usage helper is annotated with typing.NoReturn.
 
 ```sh
+make -C python check all
 printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -O2 -Wall -g -std=c11 -S -o /tmp/lesson.s /tmp/lesson.c
+python3 python/build/chibicc.pyz -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The assembly remains identical to a compile without these flags: mov $42
-and the regular main epilogue. Tests compare full emitted output, check an
-unknown option and run the original C fixtures. Python uses startswith and
-a tuple of exact spellings in place of the original strcmp/strncmp chain.
-Options are forwarded to cc1 as before and ignored there as well.
+This build-quality lesson does not change generated instructions; main still
+places 42 in rax and returns. Validation checks syntax/warnings, archive build,
+the packaged multi-file pipeline and original C fixtures. Python's check is
+an explicit adaptation, not a substitute claim that GCC's -Wall analysis runs
+on Python or that py_compile is a static type checker. Compiler errors already
+raise exceptions, preserving the original non-returning control flow.
 
 ## Tests and attribution
 

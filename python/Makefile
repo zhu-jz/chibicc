@@ -3,7 +3,10 @@ SOURCES = main.py common.py tokenizer.py preprocess.py parse.py type.py constexp
 ARCHIVE = build/chibicc.pyz
 HEADERS = $(wildcard include/*.h)
 
-all: $(ARCHIVE)
+all: check $(ARCHIVE)
+
+check:
+	$(PYTHON) -W error -m py_compile $(filter %.py,$(SOURCES)) build.py test.py
 
 $(ARCHIVE): build.py $(SOURCES) $(HEADERS)
 	$(PYTHON) build.py -o $@
@@ -14,6 +17,6 @@ test:
 test-stage2: $(ARCHIVE)
 	$(PYTHON) test.py --compiler $(ARCHIVE)
 
-test-all: test test-stage2
+test-all: check test test-stage2
 
-.PHONY: all test test-stage2 test-all
+.PHONY: all check test test-stage2 test-all

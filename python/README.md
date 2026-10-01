@@ -1,31 +1,29 @@
-# Lesson 267: Address variables relative to the current thread
+# Lesson 268: Prepend headers with the include driver option
 
-Original chibicc commit: [`b3772845bd07fb695ca6b6e67ad7640776ae0f6c`](https://github.com/rui314/chibicc/commit/b3772845bd07fb695ca6b6e67ad7640776ae0f6c).
+Original chibicc commit: [`8f5ff07dc08d258209adf60ed8e796efa7b7a476`](https://github.com/rui314/chibicc/commit/8f5ff07dc08d258209adf60ed8e796efa7b7a476).
 Earlier explanations are available in Git history.
 
-File-scope _Thread_local and GNU __thread declarations now mark TLS objects.
-Their addresses use the Linux thread pointer in fs:0 plus a linker-resolved
-tpoff offset. Initialized objects go in .tdata and zero-filled objects in .tbss;
-TLS definitions bypass tentative/common-symbol treatment. __STDC_NO_THREADS__
-is removed from predefined macros, matching the original commit.
+`-include HEADER` now tokenizes a header before the main input. Repeated options
+prepend their headers in command-line order, and all tokens share one preprocessing
+pass. A directly existing path wins; otherwise include paths are searched.
+Each physical file keeps its own source metadata, while __BASE_FILE__ stays the
+main input filename.
 
 ```sh
-printf '_Thread_local int x=42;int main(void){return x;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -pthread -o /tmp/lesson /tmp/lesson.s
+printf '#define VALUE 42\n' > /tmp/lesson.h
+printf 'int main(void){return VALUE;}\n' > /tmp/lesson.c
+python3 python/main.py -include /tmp/lesson.h -S -o /tmp/lesson.s /tmp/lesson.c
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly reads fs:0 into rax, adds x@tpoff and loads x from that address. Each
-thread has its own storage initialized from the TLS image. Tests inspect both
-sections and address instructions, run both keywords, and create/join a real
-pthread that changes its copy while main's copy remains 42. The original tls.c
-also checks a shared ordinary global. Runtime test linking now uses -pthread.
-Python carries an is_tls flag on objects and declaration attributes instead of C
-struct fields. This step implements the original local-exec TLS model for Linux
-executables. Block-scope static TLS handling and dynamic-library TLS models are
-not extended beyond this original patch.
+The forced header defines VALUE before main is read, so assembly loads 42 and
+returns. Tests exercise ordered macros across two forced headers, include-path
+lookup, missing headers, root-file identity, stdio.h and a real linked executable,
+plus original fixtures. Python concatenates token lists without their intermediate
+EOF tokens instead of relinking C chains. It uses immutable empty defaults for
+optional header lists, avoiding shared mutable defaults between compilations.
 
 ## Tests and attribution
 

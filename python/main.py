@@ -1,6 +1,6 @@
-"""Lesson 267: Address variables relative to the current thread.
+"""Lesson 268: Prepend headers with the include driver option.
 
-Based on chibicc commit b3772845bd07fb695ca6b6e67ad7640776ae0f6c.
+Based on chibicc commit 8f5ff07dc08d258209adf60ed8e796efa7b7a476.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -14,7 +14,7 @@ from typing import NoReturn
 from codegen import codegen
 from common import CompileError, format_diagnostic
 from parse import parse
-from preprocess import preprocess, init_macros, define_macro, undef_macro
+from preprocess import preprocess, init_macros, define_macro, undef_macro, search_include_paths
 from tokenizer import tokenize_file
 
 
@@ -36,6 +36,7 @@ def parse_args(arguments):
     input_paths = []
     include_paths = []
     idirafter = []
+    forced_includes = []
     output_path = None
     base_file = None
     cc1_output = None
@@ -47,7 +48,7 @@ def parse_args(arguments):
     opt_fcommon = True
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -58,6 +59,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-include":
+            forced_includes.append(arguments[position + 1])
+            position += 2
+            continue
         if argument in ("-fcommon", "-fno-common"):
             opt_fcommon = argument == "-fcommon"
             position += 1
@@ -136,7 +141,7 @@ def parse_args(arguments):
     include_paths.extend(idirafter)
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes
 
 
 def write_output(path, assembly):
@@ -164,10 +169,18 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=()):
     files = []
     try:
-        tokens = tokenize_file(filename, files)
+        tokens = []
+        for header in forced_includes:
+            path = header if Path(header).exists() else search_include_paths(header, include_paths)
+            if path is None:
+                raise CompileError(None, f"-include: {header}: No such file or directory")
+            tokens.extend(tokenize_file(path, files)[:-1])
+        tokens.extend(tokenize_file(filename, files))
+        if macros is None:
+            macros = init_macros(filename)
         tokens = preprocess(tokens, files, include_paths, macros)
         if opt_E:
             print_tokens(tokens, opt_o)
@@ -246,12 +259,12 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

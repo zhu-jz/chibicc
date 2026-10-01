@@ -81,6 +81,32 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_forced_include_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first.h'
+            second = Path(directory) / 'second.h'
+            source = Path(directory) / 'program.c'
+            first.write_text('#define BASE 12\n')
+            second.write_text('#define VALUE (BASE+30)\n')
+            source.write_text('int main(void){return VALUE;}')
+            result = compile_program('-I' + directory, '-include', 'first.h', '-include', str(second), str(source))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('  mov $12, %rax', result.stdout)
+            self.assertIn('  mov $30, %rax', result.stdout)
+            executable = Path(directory) / 'program'
+            result = subprocess.run([sys.executable, str(COMPILER), '-include', str(first), '-include', str(second), '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            first.write_text('__BASE_FILE__;\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-include', str(first), '-E', str(source)], capture_output=True, text=True)
+            self.assertIn('"' + str(source) + '"', result.stdout)
+        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'missing-header-268.h', '-E', '-'], input='x\n', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('-include: missing-header-268.h:', result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'stdio.h', '-E', '-'], input='NULL\n', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('0', result.stdout)
+
     def test_thread_local_storage(self):
         for keyword in ('_Thread_local', '__thread'):
             source = keyword + ' int x=42;' + keyword + ' int y;int main(void){return x+y;}'

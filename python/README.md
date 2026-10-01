@@ -1,37 +1,33 @@
-# Lesson 148: Floating constant expressions
+# Lesson 149: Long double as a double alias
 
-Original chibicc commit: [`ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea`](https://github.com/rui314/chibicc/commit/ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea).
+Original chibicc commit: [`9bf96124ba1e0cb95f491bd0c91d4e9c7a9850da`](https://github.com/rui314/chibicc/commit/9bf96124ba1e0cb95f491bd0c91d4e9c7a9850da).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Global float and double initializers now evaluate arithmetic, negation, casts,
-conditionals, and comma expressions. A dedicated syntax-tree walker computes in
-double precision; global float storage rounds to four bytes, and double storage
-uses eight bytes. Integer constant evaluation truncates floating results when it
-needs an integer. Runtime calculations continue to use generated SSE instructions.
+The declaration-specifier table now accepts one long together with double and
+selects the existing DOUBLE type. Both long double and double long therefore
+have size and alignment eight and use the ordinary double instructions and ABI.
+Repeated long in long long double remains invalid.
 
-Python's struct module writes explicitly little-endian IEEE bytes instead of C
-pointer casts into a character buffer. Floating division by zero is handled
-explicitly to produce infinity or NaN, matching the ordinary target environment.
-A non-finite result converted to an integer gets a clear error instead of relying
-on undefined C conversion behavior. The historical evaluator does not round every
-intermediate float cast and retains its signed integer-to-floating cast rules.
+This is the original compiler's deliberate historical simplification, not GCC's
+x86-64 long-double format. Python adds one readable table entry; no new numeric
+representation or code-generation path is required.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'float g=21.5*2-1;int main(void){return g;}\n' > /tmp/lesson148.c
-python3 python/main.py /tmp/lesson148.c > /tmp/lesson148.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson148 /tmp/lesson148.s
-/tmp/lesson148
+printf 'long double x=42.0L;int main(void){return x;}\n' > /tmp/lesson149.c
+python3 python/main.py /tmp/lesson149.c > /tmp/lesson149.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson149 /tmp/lesson149.s
+/tmp/lesson149
 echo $?
 ```
 
-The .data bytes 0,0,40,66 encode float 42.0. Main loads them with movss and
-converts xmm0 to integer 42. The shell displays that exit status. Tests cover
-exact bytes, aggregates, casts, conditionals, infinity/NaN, unsupported calls,
-assembly, real execution, and the original constant-expression fixture.
+The global holds an eight-byte double. movsd loads it into xmm0, and cvttsd2sil
+converts it to main's integer return value. The shell displays exit status 42.
+Tests check size/alignment, both specifier orders, globals, function parameters,
+invalid repetition, real execution, and the original sizeof fixture.
 
 ## Tests and attribution
 

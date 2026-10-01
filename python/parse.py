@@ -648,6 +648,7 @@ class Parser:
     def declspec(self, position, attr=None):
         combinations = {
             ("float",): ty_float, ("double",): ty_double,
+            ("double", "long"): ty_double,
             ("void",): ty_void,
             ("_Bool",): ty_bool, ("char",): ty_char,
             ("short",): ty_short, ("int", "short"): ty_short,

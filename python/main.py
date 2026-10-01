@@ -1,6 +1,6 @@
-"""Lesson 148: Floating constant expressions.
+"""Lesson 149: Long double as a double alias.
 
-Based on chibicc commit ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea.
+Based on chibicc commit 9bf96124ba1e0cb95f491bd0c91d4e9c7a9850da.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -60,6 +60,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_long_double_alias(self):
+        self.assert_program_returns("long double g=20.5L;long double f(long double x){return x+g;}int main(void){return sizeof(long double)+f(13.5);}", 42)
+        self.assert_program_returns("int main(void){double long x=42.0;return x;}", 42)
+        variable = parse(tokenize("long double x;"))[0]
+        self.assertEqual((variable.ty.kind, variable.ty.size, variable.ty.align), ("DOUBLE", 8, 8))
+        self.assertEqual(compile_program("long long double x;").returncode, 1)
+
     def test_floating_constant_initializers(self):
         for source, expected in [
             ("float g=21.5*2-1;int main(void){return g;}", 42),
@@ -192,7 +199,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("int main(void){float x=42.9f;return (int)x;}").stdout
         for instruction in ("  movss %xmm0, (%rdi)\n", "  movss (%rax), %xmm0\n", "  cvttss2sil %xmm0, %eax\n"):
             self.assertIn(instruction, assembly)
-        self.assertEqual(compile_program("int main(void){long double x;}").returncode, 1)
+        self.assertEqual(compile_program("int main(void){long double x;}").returncode, 0)
 
     def test_floating_literal_bits(self):
         for spelling, kind, value in (("1.5f", "FLOAT", 1.5), (".1E4f", "FLOAT", 1000.0),

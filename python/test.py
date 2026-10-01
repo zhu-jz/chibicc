@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_alignof_expressions(self):
+        for source, expected in [
+            ("int main(){char x;return _Alignof(x);}", 1),
+            ("int main(){int x;return _Alignof x;}", 4),
+            ("int main(){int x=0;int y=_Alignof(++x);return x+y;}", 4),
+            ("int main(){_Alignas(32) int x;return _Alignof(x);}", 4),
+            ("int f(void);int main(){return _Alignof f();}", 4),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int f(void);int main(){return _Alignof f();}").stdout
+        self.assertNotIn("  call f\n", assembly)
+        self.assertIn("  mov $4, %rax\n", assembly)
+
     def test_alignof_and_alignas(self):
         for source, expected in [
             ("int main(){return _Alignof(int);}", 4),

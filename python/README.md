@@ -1,38 +1,33 @@
-# Lesson 118: Alignment queries and overrides
+# Lesson 119: GNU alignment queries on expressions
 
-Original chibicc commit: [`9df51789e7fd36fc1580bcd80676f9bcc4e24be1`](https://github.com/rui314/chibicc/commit/9df51789e7fd36fc1580bcd80676f9bcc4e24be1).
+Original chibicc commit: [`310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7`](https://github.com/rui314/chibicc/commit/310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-_Alignof(type) becomes a constant number describing type alignment. _Alignas(type)
-or _Alignas(constant) overrides alignment for declared variables and members.
-Objects and members now store alignment separately from their Type, so aligning
-one int to 32 does not change _Alignof(int), which remains 4. Stack offsets,
-global directives, and struct/union layout use these separate alignments.
+_Alignof now accepts a unary expression, with or without parentheses, as a GNU
+extension. The parser annotates its operand's type and replaces the entire query
+with a numeric node. The type-name form retains its special parsing path.
 
-Python stores the new values on dataclasses and parses the two argument forms
-with existing type-name and constant-expression routines. As upstream, this step
-does not fully validate requested alignments or realign the stack base for large
-local alignment; tests check local spacing rather than a stronger guarantee.
-For-loop and parameter contexts still reject _Alignas. The member parser now
-accepts storage attributes like upstream, without applying complete validation.
+The operand is parsed but never executed: `_Alignof(++x)` does not increment x,
+and `_Alignof f()` emits no call. Upstream queries operand.ty.align, so an object's
+_Alignas override does not affect this result in this historical step. Python
+uses the same type annotation and numeric-node construction.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){_Alignas(32) char x,y;return &y-&x;}\n' > /tmp/lesson118.c
-python3 python/main.py /tmp/lesson118.c > /tmp/lesson118.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson118 /tmp/lesson118.s
-/tmp/lesson118
+printf 'int main(){int x=0;int y=_Alignof(++x);return x+y;}\n' > /tmp/lesson119.c
+python3 python/main.py /tmp/lesson119.c > /tmp/lesson119.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson119 /tmp/lesson119.s
+/tmp/lesson119
 echo $?
 ```
 
-Stack offsets are rounded separately to multiples of 32, putting these chars
-32 bytes apart. Address subtraction returns exit status 32. Tests cover type
-queries, type/numeric overrides, separate object and type alignment, struct
-member gaps, union alignment, emitted global directives, rejected contexts,
-real execution, and the new original alignof program.
+The query becomes `mov $4, %rax` while initializing y. No increment of x appears
+in the assembly, and exit status is 4. Tests cover both expression spellings,
+unevaluated increments and calls, overridden objects, emitted constants, real
+execution, and updated original alignof examples.
 
 ## Tests and attribution
 

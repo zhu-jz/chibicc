@@ -424,13 +424,17 @@ class Parser:
             add_type(operand)
             return Node("NUM", value=operand.ty.size, tok=token), position
 
-        if token.text == "_Alignof":
-            if self.tokens[position + 1].text != "(":
-                raise CompileError(self.tokens[position + 1], "expected '('")
+        if (token.text == "_Alignof" and self.tokens[position + 1].text == "("
+                and self.is_typename(position + 2)):
             ty, position = self.typename(position + 2)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
             return Node("NUM", value=ty.align, tok=token), position + 1
+
+        if token.text == "_Alignof":
+            operand, position = self.unary(position + 1)
+            add_type(operand)
+            return Node("NUM", value=operand.ty.align, tok=token), position
 
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":

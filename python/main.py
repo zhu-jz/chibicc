@@ -1,6 +1,6 @@
-"""Lesson 118: Alignment queries and overrides.
+"""Lesson 119: GNU alignment queries on expressions.
 
-Based on chibicc commit 9df51789e7fd36fc1580bcd80676f9bcc4e24be1.
+Based on chibicc commit 310a87e15e98bb5abfd86ea7bb2a1cca1f5243c7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

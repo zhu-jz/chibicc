@@ -1,6 +1,6 @@
-"""Lesson 210: Pack named bitfields into storage units.
+"""Lesson 211: Initialize global struct bitfields.
 
-Based on chibicc commit cc852fe99d0acfc6d547b36c75ff85e90975ad36.
+Based on chibicc commit 441a89b80babf98d3feb13e4594ee01eb6cc4dd5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

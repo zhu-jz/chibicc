@@ -1218,8 +1218,19 @@ class Parser:
             return
         if ty.kind == "STRUCT":
             for member in ty.members:
-                self.write_gvar_data(init.children[member.idx], member.ty,
-                                     buffer, offset + member.offset, relocations)
+                child = init.children[member.idx]
+                if member.is_bitfield:
+                    if child.expr is None:
+                        break
+                    location, size = offset + member.offset, member.ty.size
+                    old = int.from_bytes(buffer[location:location + size], 'little')
+                    value = evaluate_constant(child.expr)
+                    mask = (1 << member.bit_width) - 1
+                    combined = old | ((value & mask) << member.bit_offset)
+                    buffer[location:location + size] = (combined & ((1 << (size * 8)) - 1)).to_bytes(size, 'little')
+                else:
+                    self.write_gvar_data(child, member.ty, buffer,
+                                         offset + member.offset, relocations)
             return
         if ty.kind == "UNION":
             self.write_gvar_data(init.children[0], ty.members[0].ty, buffer, offset, relocations)

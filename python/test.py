@@ -77,6 +77,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_bitfield_initializers(self):
+        source = 'struct T{char a;unsigned int b:5,c:10;}g={1,31,42},z={};int main(void){return g.c+z.a+z.b+z.c;}'
+        self.assert_program_returns(source, 42)
+        program = parse(tokenize(source))
+        g = next(var for var in program if var.name == 'g')
+        self.assertEqual(g.init_data, ((1 | (31 << 8) | (42 << 13))).to_bytes(4,'little'))
+        self.assert_program_returns('struct T{int a:3,b:4;}g={7,15};int main(void){return g.a+g.b;}', 254)
+        self.assert_program_returns('struct T{unsigned int a:6,b:4;}g[2]={{42},{1,2}};int main(void){return g[0].a+g[0].b;}', 42)
+
     def test_bitfield_storage(self):
         for source, expected in [
             ('int main(void){struct T{unsigned int a:3,b:5;}x={7,19};x.a=2;return x.a+x.b;}', 21),

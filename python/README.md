@@ -1,33 +1,27 @@
-# Lesson 210: Pack named bitfields into storage units
+# Lesson 211: Initialize global struct bitfields
 
-Original chibicc commit: [`cc852fe99d0acfc6d547b36c75ff85e90975ad36`](https://github.com/rui314/chibicc/commit/cc852fe99d0acfc6d547b36c75ff85e90975ad36).
+Original chibicc commit: [`441a89b80babf98d3feb13e4594ee01eb6cc4dd5`](https://github.com/rui314/chibicc/commit/441a89b80babf98d3feb13e4594ee01eb6cc4dd5).
 Earlier explanations are available in Git history.
 
-Members now record a bit width and offset. Struct layout counts bits, grouping
-fields into storage units of their declared integer type and moving a crossing
-field to the next unit. Ordinary members still start at their normal alignment.
-A field read shifts its bits into place, then uses arithmetic right shift for
-signed fields or logical right shift for unsigned fields.
-
-Assignments load the current unit, clear the target mask, merge the new low
-bits and store it back. This preserves neighboring fields. Local initializer
-assignments automatically use that path. Python integer masks replace C's
-long shifts; emitted operations still use x86-64 registers.
+Global initializer serialization now merges each struct bitfield's masked
+constant into its storage unit. Other members retain their ordinary byte
+serialization. Uninitialized fields remain zero. Python reads and writes the
+little-endian buffer with int.from_bytes and to_bytes instead of C casts to
+integer pointers, avoiding dependence on the host's alignment or byte order.
 
 ```sh
-printf 'int main(void){struct T{unsigned int a:6,b:3;}x={42,7};return x.a;}\n' > /tmp/lesson.c
+printf 'struct T{unsigned int a:6,b:4;}g={42,7};int main(void){return g.a;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Masking and merging initialize the shared word; shl/shr extract a and return
-42 in rax. Tests cover signed truncation, unsigned reads, neighbor preservation,
-crossing storage units, mixed ordinary members, layout metadata and the original
-bitfield fixture. This first bitfield commit has no dedicated global initializer
-support, unnamed-field rules or compound-assignment handling. Assignment results
-still contain the merged storage unit, as in the original.
+The data section contains the packed initial word. Main loads it and shifts
+to isolate a, leaving 42 in rax. Tests inspect exact initializer bytes and run
+signed fields, zero-filled trailing fields, arrays and original fixtures.
+The original stops processing struct members at the first absent bitfield
+initializer; that historical rule is retained. Union serialization is unchanged.
 
 ## Tests and attribution
 

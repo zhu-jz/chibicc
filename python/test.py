@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_comparisons(self):
+        for source, expected in [
+            ("int main(void){return 2.0==2;}", 1),
+            ("int main(void){return 5.1f<5;}", 0),
+            ("int main(void){return 4.9<=5.0f;}", 1),
+            ("double f(void){return 42.0;}int main(void){return f()==42.0;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        for operator, expected in (("==", 0), ("!=", 1), ("<", 0), ("<=", 0)):
+            self.assert_program_returns(f"int main(void){{union U{{unsigned long u;double d;}} n={{0x7ff8000000000000}};return n.d{operator}n.d;}}", expected)
+        assembly = compile_program("int main(void){return 1.0==1.0;}").stdout
+        self.assertIn("  ucomisd %xmm0, %xmm1\n", assembly)
+        self.assertIn("  setnp %dl\n  and %dl, %al\n", assembly)
+        self.assertIn("  movsd %xmm0, (%rsp)\n", assembly)
+
     def test_floating_locals_and_casts(self):
         for source, expected in [
             ("int main(void){float x=42.9f;return (int)x;}", 42),

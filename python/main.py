@@ -1,6 +1,6 @@
-"""Lesson 140: Floating locals and casts.
+"""Lesson 141: Floating-point comparisons.
 
-Based on chibicc commit 29de46aed47e5308db9a0aef6e13610dea8fb389.
+Based on chibicc commit cf9ceecb2f8cad2fb694b15c14ca1cf98e9524e7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

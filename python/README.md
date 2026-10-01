@@ -1,43 +1,40 @@
-# Lesson 140: Floating locals and casts
+# Lesson 141: Floating-point comparisons
 
-Original chibicc commit: [`29de46aed47e5308db9a0aef6e13610dea8fb389`](https://github.com/rui314/chibicc/commit/29de46aed47e5308db9a0aef6e13610dea8fb389).
+Original chibicc commit: [`cf9ceecb2f8cad2fb694b15c14ca1cf98e9524e7`](https://github.com/rui314/chibicc/commit/cf9ceecb2f8cad2fb694b15c14ca1cf98e9524e7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-float and double become declaration keywords. Local floating values load/store
-through xmm0 using movss or movsd. The cast matrix grows to ten types, using
-cvtsi2ss/cvtsi2sd for integer-to-floating conversion and cvttss2si/cvttsd2si for
-truncating floating-to-integer conversion. Float/double conversion uses cvtss2sd
-or cvtsd2ss. Assignment and return casts reuse that matrix automatically.
+Floating operands now have common-type precedence: double wins over float,
+and either wins over integer. Comparisons save the right value in an eight-byte
+stack slot, evaluate the left in xmm0, restore the right to xmm1, and use ucomiss
+or ucomisd. Their result is still an ordinary int in rax.
 
-Python splits multi-instruction cast entries into assembly lines instead of C's
-semicolon-separated strings. The unsigned-long-to-double path handles values
-with the top bit set by halving and then doubling the converted value. The
-historical unsigned-long-to-float path still uses signed conversion. Out-of-range
-floating-to-integer behavior follows the emitted SSE instructions; full C
-semantics for such conversions are not newly promised.
+NaN comparisons require the parity flag: equality combines sete with setnp,
+while inequality combines setne with setp. Ordered < and <= use seta/setae because
+the emitted comparison's operands are reversed. The floating push/pop helpers
+update the same depth counter used for call alignment. Python loops and emitted
+instruction lists preserve the original behavior without host-side evaluation.
 
-This commit adds local storage and casts. Floating arithmetic, general condition
-checks, global floating initializers and floating argument-register handling
-remain incomplete. Long double declarations are not supported; literal L still
-selects double as introduced in lesson 139.
+This step adds comparisons; other floating binary operations still report
+invalid expression. General floating condition checks and argument ABI handling
+remain incomplete. Tests construct NaN by a union bit pattern without arithmetic.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){double x=42.9;float y=x;return (int)y;}\n' > /tmp/lesson140.c
-python3 python/main.py /tmp/lesson140.c > /tmp/lesson140.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson140 /tmp/lesson140.s
-/tmp/lesson140
+printf 'int main(void){return 4.9<=5.0f;}\n' > /tmp/lesson141.c
+python3 python/main.py /tmp/lesson141.c > /tmp/lesson141.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson141 /tmp/lesson141.s
+/tmp/lesson141
 echo $?
 ```
 
-Assembly stores x with movsd, converts it with cvtsd2ss and stores y with movss.
-cvttss2sil truncates y toward zero for the return, giving exit status 42. Tests
-cover local scalars and arrays, both floating widths, signed/unsigned integer
-casts, narrowing, exact SSE load/store/conversion instructions, execution, and
-original cast/float/sizeof programs.
+The float operand converts to double, the emitter compares in xmm registers,
+and setae records that the right value is at least the left. Exit status is 1.
+Tests cover mixed numeric types, a floating no-argument return, every NaN
+comparison, floating stack preservation, exact parity-sensitive assembly,
+actual execution, and expanded original floating examples.
 
 ## Tests and attribution
 

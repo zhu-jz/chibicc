@@ -126,6 +126,14 @@ class CodeGenerator:
         else:
             self.assembly.append("  mov %rax, (%rdi)")
 
+    def pushf(self):
+        self.assembly.extend(("  sub $8, %rsp", "  movsd %xmm0, (%rsp)"))
+        self.depth += 1
+
+    def popf(self, register):
+        self.assembly.extend((f"  movsd (%rsp), {register}", "  add $8, %rsp"))
+        self.depth -= 1
+
     def cmp_zero(self, ty):
         register = "%eax" if is_integer(ty) and ty.size <= 4 else "%rax"
         self.assembly.append(f"  cmp $0, {register}")
@@ -262,6 +270,23 @@ class CodeGenerator:
             return
 
         # Save the right result, compute the left, then restore the right.
+        if node.lhs.ty.kind in ("FLOAT", "DOUBLE"):
+            self.gen_expr(node.rhs)
+            self.pushf()
+            self.gen_expr(node.lhs)
+            self.popf("%xmm1")
+            if node.kind not in ("==", "!=", "<", "<="):
+                raise CompileError(node.tok, "invalid expression")
+            suffix = "ss" if node.lhs.ty.kind == "FLOAT" else "sd"
+            self.assembly.append(f"  ucomi{suffix} %xmm0, %xmm1")
+            if node.kind == "==":
+                self.assembly.extend(("  sete %al", "  setnp %dl", "  and %dl, %al"))
+            elif node.kind == "!=":
+                self.assembly.extend(("  setne %al", "  setp %dl", "  or %dl, %al"))
+            else:
+                self.assembly.append("  seta %al" if node.kind == "<" else "  setae %al")
+            self.assembly.extend(("  and $1, %al", "  movzb %al, %rax"))
+            return
         self.gen_expr(node.rhs)
         self.push()
         self.gen_expr(node.lhs)

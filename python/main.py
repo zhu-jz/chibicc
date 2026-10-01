@@ -1,6 +1,6 @@
-"""Lesson 126: Small function return values.
+"""Lesson 127: Calling variadic functions.
 
-Based on chibicc commit dcd45792264795a32f19581a904dda8bf6d3ad06.
+Based on chibicc commit 58fc86137c23adc3d98be40117087c645a9d7e4e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

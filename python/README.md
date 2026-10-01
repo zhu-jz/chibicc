@@ -1,36 +1,36 @@
-# Lesson 126: Small function return values
+# Lesson 127: Calling variadic functions
 
-Original chibicc commit: [`dcd45792264795a32f19581a904dda8bf6d3ad06`](https://github.com/rui314/chibicc/commit/dcd45792264795a32f19581a904dda8bf6d3ad06).
+Original chibicc commit: [`58fc86137c23adc3d98be40117087c645a9d7e4e`](https://github.com/rui314/chibicc/commit/58fc86137c23adc3d98be40117087c645a9d7e4e).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-After a call returning _Bool, char or short, the emitter now extracts the
-meaningful low byte or word. Bool uses zero extension from al; signed char and
-short use sign extension from al or ax into eax. Later conversions can then
-safely use the normalized result rather than unrelated high register bits.
+The tokenizer recognizes `...` and function parameter parsing records a variadic
+flag when an ellipsis ends the list. Calls can now use explicit variadic
+prototypes, including printf and sprintf. Fixed arguments retain declared-type
+conversions; later integer/pointer arguments use the existing call path.
 
-Python selects instructions from the call node's declared return type, exactly
-as upstream. The C ABI does not require every high bit of rax to hold a useful
-value for these small return types. The upstream tests deliberately use helper
-functions with int return definitions and small return declarations to expose
-that issue; the port preserves those educational fixtures.
+Python adds a boolean to Type and consumes the ellipsis directly. This step adds
+calling support, not va_start/va_arg implementation inside Python-compiled function
+bodies. Up to six total integer/pointer arguments are still supported. The emitter
+already writes zero to rax before calls, reporting zero floating-point argument
+registers for the System V variadic calling convention.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'char f(void);int main(){return f()<0;}\n' > /tmp/lesson126.c
-printf 'int f(void){return 0x2ff;}\n' > /tmp/lesson126-helper.c
-python3 python/main.py /tmp/lesson126.c > /tmp/lesson126.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson126 /tmp/lesson126.s /tmp/lesson126-helper.c
-/tmp/lesson126
+printf 'int sprintf(char *b,char *f,...);int main(){char b[20];sprintf(b,"%%d",42);return b[0];}\n' > /tmp/lesson127.c
+python3 python/main.py /tmp/lesson127.c > /tmp/lesson127.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson127 /tmp/lesson127.s
+/tmp/lesson127
 echo $?
 ```
 
-After call f, `movsbl %al,%eax` interprets low byte ff as signed -1. The comparison
-is true, so exit status is 1. Tests cover garbage high bits for all three return
-kinds, signed comparisons and long conversion, exact cleanup instructions,
-execution, and updated original function/helper examples.
+Registers carry b, the format pointer, and 42. The emitter sets rax to zero and
+calls libc sprintf. Buffer byte '4' has value 52, the exit status. Tests check
+variadic type metadata, ellipsis tokenization, malformed declarations, integer
+extras with negative char values, libc formatting, emitted ABI setup, execution,
+and the original function/helper examples.
 
 ## Tests and attribution
 

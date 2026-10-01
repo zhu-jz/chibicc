@@ -60,6 +60,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_variadic_function_calls(self):
+        helper = "#include <stdarg.h>\nint sum(int n,...){va_list ap;va_start(ap,n);int s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}"
+        self.assert_program_returns("int sum(int n,...);int main(){char a=-1;return sum(3,20,23,a);}", 42, helper)
+        self.assert_program_returns('int sprintf(char *buf,char *fmt,...);int main(){char b[30];sprintf(b,"%d %s",42,"abc");return b[0]+b[1];}', 102)
+        ty = parse(tokenize("int sum(int n,...);"))[0].ty
+        self.assertTrue(ty.is_variadic)
+        self.assertEqual(len(ty.params), 1)
+        self.assertEqual(tokenize("...")[0].text, "...")
+        assembly = compile_program("int sum(int n,...);int main(){return sum(1,42);}").stdout
+        self.assertIn("  mov $0, %rax\n  call sum\n", assembly)
+        self.assertEqual(compile_program("int sum(int n,...,int x);").returncode, 1)
+
     def test_small_function_return_values(self):
         helper = "int f(void){return 512;}int t(void){return 513;}int c(void){return 0x2ff;}int s(void){return 0x2ffff;}"
         for source, expected in [

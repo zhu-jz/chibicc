@@ -771,11 +771,18 @@ class Parser:
         if self.tokens[position].text == "void" and self.tokens[position + 1].text == ")":
             return func_type(ty), position + 2
         params = []
+        is_variadic = False
         while self.tokens[position].text != ")":
             if params:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
+            if self.tokens[position].text == "...":
+                is_variadic = True
+                position += 1
+                if self.tokens[position].text != ")":
+                    raise CompileError(self.tokens[position], "expected ')'")
+                break
             basety, position = self.declspec(position)
             param, position = self.declarator(position, basety)
             if param.kind == "ARRAY":
@@ -785,6 +792,7 @@ class Parser:
             params.append(copy_type(param))
         ty = func_type(ty)
         ty.params = params
+        ty.is_variadic = is_variadic
         return ty, position + 1
 
     def array_dimensions(self, position, ty):

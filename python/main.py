@@ -1,6 +1,6 @@
-"""Lesson 283: Use label addresses and computed goto.
+"""Lesson 284: Allow static initializers containing label addresses.
 
-Based on chibicc commit 4f165ec60baa74f244d0a7c9b64c4bb3cbb76173.
+Based on chibicc commit f0c98e0d590ffae286a8a4847c91212c734be8e3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

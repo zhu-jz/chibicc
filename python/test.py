@@ -87,6 +87,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_label_addresses(self):
+        source = 'int main(void){static void *p[]={&&a,&&b};goto *p[1];a:return 1;b:return 42;}'
+        self.assert_program_returns(source, 42)
+        self.assert_program_returns('int main(void){static void *p=&&answer;goto *p;answer:return 42;}', 42)
+        assembly = compile_program(source).stdout
+        self.assertRegex(assembly, r'  \.quad \.L\.\.\d+\+0')
+        self.assertNotIn('.quad None', assembly)
+        result = compile_program('int main(void){static void *p=&&missing;return 0;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('use of undeclared label', result.stderr)
+
     def test_labels_as_values(self):
         for source in [
             'int main(void){void *p=&&answer;goto *p;return 1;answer:return 42;}',

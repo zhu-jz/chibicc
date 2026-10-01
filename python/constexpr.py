@@ -24,7 +24,7 @@ def signed64(value):
 
 
 def evaluate_initializer(node):
-    """Return an integer addend and an optional global symbol name."""
+    """Return an integer addend and an optional symbol name or label-node reference."""
     add_type(node)
     if is_flonum(node.ty):
         return evaluate_constant(node), None
@@ -42,6 +42,8 @@ def evaluate_initializer(node):
         return cast_constant(value, node.ty), label
     if node.kind == "ADDR":
         return evaluate_address(node.lhs)
+    if node.kind == "LABEL_VAL":
+        return 0, node
     if node.kind == "MEMBER":
         if node.ty.kind != "ARRAY":
             raise CompileError(node.tok, "invalid initializer")

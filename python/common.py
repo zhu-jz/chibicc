@@ -113,7 +113,7 @@ class Member:
 @dataclass
 class Relocation:
     offset: int
-    label: str
+    label: "str | Node"
     addend: int
 
 

@@ -783,7 +783,8 @@ class CodeGenerator:
                     while position < var.ty.size:
                         if position in relocations:
                             rel = relocations[position]
-                            self.assembly.append(f"  .quad {rel.label}{rel.addend:+d}")
+                            label = rel.label if isinstance(rel.label, str) else rel.label.unique_label
+                            self.assembly.append(f"  .quad {label}{rel.addend:+d}")
                             position += 8
                         else:
                             self.assembly.append(f"  .byte {var.init_data[position]}")

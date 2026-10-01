@@ -1,26 +1,26 @@
-# Lesson 283: Use label addresses and computed goto
+# Lesson 284: Allow static initializers containing label addresses
 
-Original chibicc commit: [`4f165ec60baa74f244d0a7c9b64c4bb3cbb76173`](https://github.com/rui314/chibicc/commit/4f165ec60baa74f244d0a7c9b64c4bb3cbb76173).
+Original chibicc commit: [`f0c98e0d590ffae286a8a4847c91212c734be8e3`](https://github.com/rui314/chibicc/commit/f0c98e0d590ffae286a8a4847c91212c734be8e3).
 Earlier explanations are available in Git history.
 
-GNU &&label expressions produce a void pointer to a label in the current function.
-The parser records unresolved label references alongside ordinary gotos, then
-matches them after parsing the body. goto *expression evaluates a pointer and
-jumps to it, allowing a local table of destinations.
+Label addresses can now appear in static initializers. A forward label's assembly
+name is unknown while parsing the initializer, so its relocation retains a reference
+to the label-expression node. After the function's labels are resolved, code generation
+reads the finished name when emitting .quad. This enables static jump tables.
 
 ```sh
-printf 'int main(void){void *p=&&answer;goto *p;return 1;answer:return 42;}\n' > /tmp/lesson.c
+printf 'int main(void){static void *p[]={&&a,&&b};goto *p[1];a:return 1;b:return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly obtains the label address with lea label(%rip), stores it in p and later
-uses jmp *%rax. That jump reaches the return of 42. Tests cover forward references,
-local destination arrays, conditional destinations and unresolved labels, plus
-the original control fixture. Python keeps references in a list rather than C's
-linked goto chain. Static/global label-address initializers are not added yet.
+Assembly emits two .quad label entries in data, loads the second pointer and jumps
+through rax to the return of 42. The assembler/linker resolve each entry's address.
+Tests check forward static tables, single pointers, emitted relocations and missing
+labels, plus the original control fixture. Python holds the node itself rather than
+C's pointer to its unique_label field; stable global names remain ordinary strings.
 
 ## Tests and attribution
 

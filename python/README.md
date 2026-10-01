@@ -1,24 +1,26 @@
-# Lesson 275: Advertise variable-length array support
+# Lesson 276: Pass library arguments to the linker
 
-Original chibicc commit: [`b0109a30c9fa24fedcb4d79bb17788e7ed228636`](https://github.com/rui314/chibicc/commit/b0109a30c9fa24fedcb4d79bb17788e7ed228636).
+Original chibicc commit: [`bc2527944a83c1bc951a429530f39e93dc5235b2`](https://github.com/rui314/chibicc/commit/bc2527944a83c1bc951a429530f39e93dc5235b2).
 Earlier explanations are available in Git history.
 
-The compiler now supports variable-length arrays, so it stops predefining
-__STDC_NO_VLA__. Headers and conditional compilation can detect that support.
-Other predefined feature macros retain their existing values.
+Arguments beginning with -l are now collected alongside input files and passed
+to ld in their original order. They are not treated as source filenames. For
+example, -lm asks the linker to resolve math functions from libm.
 
 ```sh
-printf '#ifdef __STDC_NO_VLA__\n#error unexpected VLA exclusion\n#endif\nint main(void){int n=2;int x[n];x[1]=42;return x[1];}\n' > /tmp/lesson.c
+printf 'double sqrt(double);int main(void){return sqrt(1764.0);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s -lm
 /tmp/lesson
 echo $?  # 42
+python3 python/main.py -o /tmp/lesson /tmp/lesson.c -lm
 ```
 
-The preprocessor discards the error branch. Assembly allocates the runtime array,
-stores 42 in its second element and returns that element. The feature-macro test
-checks this conditional path; predefined macro and VLA tests remain enabled.
-Python removes one dictionary entry where C removes one define_macro call.
+Assembly passes 1764 in xmm0, calls sqrt, and converts its floating return value
+42 to the integer return register. GCC in the example and our compiler's driver
+both link libm. A test links and runs that call through our own driver and checks
+its traced linker arguments. Python uses the existing subprocess argument list;
+the original accepts attached -lname syntax, without adding a separate -l name form.
 
 ## Tests and attribution
 

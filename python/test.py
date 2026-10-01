@@ -87,6 +87,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_library_link_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.c'
+            source.write_text('double sqrt(double);int main(void){return sqrt(1764.0);}')
+            executable = Path(directory) / 'main'
+            result = subprocess.run([sys.executable, str(COMPILER), '-###', '-o', str(executable), str(source), '-lm'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('-lm', result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_vla_feature_macro(self):
         self.assert_program_returns('#ifdef __STDC_NO_VLA__\n#error unexpected macro\n#endif\nint main(void){int n=2;int x[n];x[1]=42;return x[1];}', 42)
 

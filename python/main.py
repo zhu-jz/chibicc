@@ -1,6 +1,6 @@
-"""Lesson 275: Advertise variable-length array support.
+"""Lesson 276: Pass library arguments to the linker.
 
-Based on chibicc commit b0109a30c9fa24fedcb4d79bb17788e7ed228636.
+Based on chibicc commit bc2527944a83c1bc951a429530f39e93dc5235b2.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -60,6 +60,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument.startswith("-l"):
+            input_paths.append(argument)
+            position += 1
+            continue
         if argument.startswith("-x"):
             language = argument[2:]
             if argument == "-x":
@@ -299,6 +303,9 @@ def main():
         linker_inputs = []
         with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
             for index, filename in enumerate(inputs):
+                if filename.startswith("-l"):
+                    linker_inputs.append(filename)
+                    continue
                 output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
                 file_type = get_file_type(filename, opt_x)
                 if file_type == "OBJ":

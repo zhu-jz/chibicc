@@ -1,6 +1,6 @@
-"""Lesson 268: Prepend headers with the include driver option.
+"""Lesson 269: Choose the input language explicitly.
 
-Based on chibicc commit 8f5ff07dc08d258209adf60ed8e796efa7b7a476.
+Based on chibicc commit ee0a951b30646023ccc9a144afb4b380bf8d09b1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -46,9 +46,10 @@ def parse_args(arguments):
     opt_c = False
     opt_E = False
     opt_fcommon = True
+    opt_x = None
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -59,6 +60,14 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument.startswith("-x"):
+            language = argument[2:]
+            if argument == "-x":
+                position += 1
+                language = arguments[position]
+            opt_x = parse_opt_x(language)
+            position += 1
+            continue
         if argument == "-include":
             forced_includes.append(arguments[position + 1])
             position += 2
@@ -141,7 +150,25 @@ def parse_args(arguments):
     include_paths.extend(idirafter)
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x
+
+
+def parse_opt_x(language):
+    if language not in ("c", "assembler", "none"):
+        raise CompileError(None, f"<command line>: unknown argument for -x: {language}")
+    return {"c": "C", "assembler": "ASM", "none": None}[language]
+
+
+def get_file_type(filename, opt_x):
+    if filename.endswith(".o"):
+        return "OBJ"
+    if opt_x is not None:
+        return opt_x
+    if filename.endswith(".c"):
+        return "C"
+    if filename.endswith(".s"):
+        return "ASM"
+    raise CompileError(None, f"<command line>: unknown file extension: {filename}")
 
 
 def write_output(path, assembly):
@@ -259,7 +286,7 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
@@ -271,17 +298,16 @@ def main():
         with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
             for index, filename in enumerate(inputs):
                 output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
-                if filename.endswith(".o"):
+                file_type = get_file_type(filename, opt_x)
+                if file_type == "OBJ":
                     linker_inputs.append(filename)
                     continue
-                if filename.endswith(".s"):
+                if file_type == "ASM":
                     if not opt_S:
                         status = run_subprocess(["as", "-c", filename, "-o", output_path], opt_trace)
                         if status:
                             return status
                     continue
-                if not filename.endswith(".c") and filename != "-":
-                    raise CompileError(None, f"unknown file extension: {filename}")
                 if opt_E:
                     status = run_cc1(sys.argv[1:], filename, None, opt_trace)
                 elif opt_S:

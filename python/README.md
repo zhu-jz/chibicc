@@ -1,29 +1,29 @@
-# Lesson 268: Prepend headers with the include driver option
+# Lesson 269: Choose the input language explicitly
 
-Original chibicc commit: [`8f5ff07dc08d258209adf60ed8e796efa7b7a476`](https://github.com/rui314/chibicc/commit/8f5ff07dc08d258209adf60ed8e796efa7b7a476).
+Original chibicc commit: [`ee0a951b30646023ccc9a144afb4b380bf8d09b1`](https://github.com/rui314/chibicc/commit/ee0a951b30646023ccc9a144afb4b380bf8d09b1).
 Earlier explanations are available in Git history.
 
-`-include HEADER` now tokenizes a header before the main input. Repeated options
-prepend their headers in command-line order, and all tokens share one preprocessing
-pass. A directly existing path wins; otherwise include paths are searched.
-Each physical file keeps its own source metadata, while __BASE_FILE__ stays the
-main input filename.
+The driver accepts attached or separate -x c, -x assembler and -x none forms.
+C and assembler override the filename extension; none restores extension-based
+selection. Object files ending in .o always retain their object-file role.
+Stdin now requires -xc or -x assembler because it has no recognized extension.
 
 ```sh
-printf '#define VALUE 42\n' > /tmp/lesson.h
-printf 'int main(void){return VALUE;}\n' > /tmp/lesson.c
-python3 python/main.py -include /tmp/lesson.h -S -o /tmp/lesson.s /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.data
+python3 python/main.py -xc -S -o /tmp/lesson.s /tmp/lesson.data
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The forced header defines VALUE before main is read, so assembly loads 42 and
-returns. Tests exercise ordered macros across two forced headers, include-path
-lookup, missing headers, root-file identity, stdio.h and a real linked executable,
-plus original fixtures. Python concatenates token lists without their intermediate
-EOF tokens instead of relinking C chains. It uses immutable empty defaults for
-optional header lists, avoiding shared mutable defaults between compilations.
+Despite the .data suffix, the input is parsed as C and assembly loads and returns
+42. Tests compile C under an arbitrary suffix, assemble stdin into a real ELF
+object, link that object even with -xc present, reset with -x none and reject
+unknown languages. Existing stdin tests now pass -xc, matching original driver
+fixture changes. Python uses descriptive strings instead of C's FileType enum.
+The original driver stores one final language value for every input, rather than
+tracking -x state separately for each input path. The earlier assembly-input
+linking omission is unchanged by this step.
 
 ## Tests and attribution
 

@@ -33,7 +33,8 @@ def tokenize(source):
 
 def compiler_command(*arguments):
     """Request assembly explicitly for existing compiler and driver fixtures."""
-    return [sys.executable, str(COMPILER), "-S", "-o", "-", *arguments]
+    language = ["-xc"] if "-" in arguments else []
+    return [sys.executable, str(COMPILER), "-S", "-o", "-", *language, *arguments]
 
 
 def compile_program(*arguments):
@@ -81,6 +82,32 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_explicit_input_language(self):
+        result = subprocess.run([sys.executable, str(COMPILER), '-S', '-o-', '-'], input='int x;', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unknown file extension: -', result.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source.data'
+            source.write_text('int main(void){return 42;}')
+            executable = Path(directory) / 'program'
+            result = subprocess.run([sys.executable, str(COMPILER), '-x', 'c', '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            obj = Path(directory) / 'program.o'
+            result = subprocess.run([sys.executable, str(COMPILER), '-c', '-xassembler', '-o', str(obj), '-'], input='.globl main\nmain:\nmov $42,%eax\nret\n', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(obj.read_bytes().startswith(b'\x7fELF'))
+            result = subprocess.run([sys.executable, str(COMPILER), '-xc', '-o', str(executable), str(obj)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            source = Path(directory) / 'source.c'
+            source.write_text('int main(void){return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-xassembler', '-xnone', '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), '-xunknown', '-'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unknown argument for -x: unknown', result.stderr)
+
     def test_forced_include_option(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / 'first.h'
@@ -100,10 +127,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             first.write_text('__BASE_FILE__;\n')
             result = subprocess.run([sys.executable, str(COMPILER), '-include', str(first), '-E', str(source)], capture_output=True, text=True)
             self.assertIn('"' + str(source) + '"', result.stdout)
-        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'missing-header-268.h', '-E', '-'], input='x\n', capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'missing-header-268.h', '-E', "-xc", '-'], input='x\n', capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn('-include: missing-header-268.h:', result.stderr)
-        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'stdio.h', '-E', '-'], input='NULL\n', capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(COMPILER), '-include', 'stdio.h', '-E', "-xc", '-'], input='NULL\n', capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('0', result.stdout)
 
@@ -169,14 +196,14 @@ class ExpressionCompilerTests(unittest.TestCase):
             (first / 'after.h').write_text('foo\n')
             (second / 'after.h').write_text('bar\n')
             for options, expected in [(['-I' + str(first), '-I' + str(second)], 'foo\n'), (['-idirafter', str(first), '-I' + str(second)], 'bar\n')]:
-                result = subprocess.run([sys.executable, str(COMPILER), *options, '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+                result = subprocess.run([sys.executable, str(COMPILER), *options, '-E', "-xc", '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
                 self.assertEqual((result.returncode, result.stdout), (0, expected), result.stderr)
-            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', "-xc", '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
             self.assertEqual(result.returncode, 1)
             literal = Path(directory) / '-idirafter'
             literal.mkdir()
             (literal / 'after.h').write_text('literal\n')
-            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', "-xc", '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
             self.assertEqual((result.returncode, result.stdout), (0, 'literal\n'), result.stderr)
         result = subprocess.run([sys.executable, str(COMPILER), '-idirafter'], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
@@ -332,7 +359,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.replace('\n', '').replace(' ', ''), f'"{source}";"{header}";"{source}";"logical.c";')
         self.assert_program_returns('int main(void){return __BASE_FILE__[0]==45?42:0;}', 42)
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-D__BASE_FILE__=42', '-'], input='__BASE_FILE__\n', capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-D__BASE_FILE__=42', "-xc", '-'], input='__BASE_FILE__\n', capture_output=True, text=True)
         self.assertEqual(result.stdout, '42\n')
 
     def test_timestamp_macro(self):
@@ -451,7 +478,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assertIn(message,result.stderr)
 
     def test_utf8_bom(self):
-        result = subprocess.run([sys.executable,str(COMPILER),'-E','-o-','-'],input='\ufeffxyz\n',capture_output=True,text=True)
+        result = subprocess.run([sys.executable,str(COMPILER),'-E','-o-',"-xc", '-'],input='\ufeffxyz\n',capture_output=True,text=True)
         self.assertEqual((result.returncode,result.stdout),(0,'xyz\n'))
         self.assert_program_returns('\ufeffint main(void){return 42;}\r\n',42)
         with tempfile.TemporaryDirectory() as directory:
@@ -500,7 +527,7 @@ class ExpressionCompilerTests(unittest.TestCase):
     def test_utf_encoding_predefined_macros(self):
         self.assertEqual([t.value for t in tokenize('__STDC_UTF_16__;__STDC_UTF_32__') if t.kind=='NUM'],[1,1])
         self.assert_program_returns('#if defined(__STDC_UTF_16__)&&__STDC_UTF_16__&&defined(__STDC_UTF_32__)&&__STDC_UTF_32__\nint main(void){return 42;}\n#else\n#error missing encoding macros\n#endif',42)
-        result = subprocess.run([sys.executable,str(COMPILER),'-U__STDC_UTF_16__','-E','-'],input='__STDC_UTF_16__',capture_output=True,text=True)
+        result = subprocess.run([sys.executable,str(COMPILER),'-U__STDC_UTF_16__','-E',"-xc", '-'],input='__STDC_UTF_16__',capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(result.stdout,'__STDC_UTF_16__\n')
 
@@ -626,7 +653,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual([t.str for t in tokens if t.kind == 'STR'],
                          [b'Jan  7 2020\0',b'03:04:05\0'] * 2)
         self.assert_program_returns('int main(void){return sizeof(__DATE__)+sizeof(__TIME__)+21;}',42)
-        result = subprocess.run([sys.executable,str(COMPILER),'-D__DATE__="fixed"','-E','-'],input='__DATE__',capture_output=True,text=True)
+        result = subprocess.run([sys.executable,str(COMPILER),'-D__DATE__="fixed"','-E',"-xc", '-'],input='__DATE__',capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual(result.stdout,'"fixed"\n')
 
@@ -751,10 +778,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             (['-U__STDC__'], '#ifdef __STDC__\nbad\n#else\n42\n#endif', '42\n'),
             (['-Ufoo'], '#define foo 42\nfoo', '42\n'),
         ]:
-            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, '-'], input=source, capture_output=True, text=True)
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, "-xc", '-'], input=source, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
-        result = subprocess.run([sys.executable, str(COMPILER), '-', '-U'], input='', capture_output=True, text=True)
+        result = subprocess.run([sys.executable, str(COMPILER), "-xc", '-', '-U'], input='', capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
 
     def test_command_line_macro_definitions(self):
@@ -764,7 +791,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             (['-D__STDC__=7'], '__STDC__', '7\n'),
             (['-DX=42'], '#if X==42\nX\n#endif\n', '42\n'),
         ]:
-            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, '-'],
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, "-xc", '-'],
                                     input=source, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
@@ -774,7 +801,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(COMPILER), '-DANSWER=42', '-o', str(executable), str(source)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-', '-D'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-', '-D'],
                                 input='', capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
 
@@ -986,7 +1013,7 @@ int main(void){return first(0,42);}
             self.assertEqual(built.returncode, 0, built.stderr)
             for header in Path(__file__).with_name('include').glob('*.h'):
                 self.assertEqual((archive.parent / 'include' / header.name).read_bytes(), header.read_bytes())
-            result = subprocess.run([sys.executable, str(archive), '-E', '-'],
+            result = subprocess.run([sys.executable, str(archive), '-E', "-xc", '-'],
                                     input='#include <stdbool.h>\nbool value=true;\n', capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('_Bool value=1;', result.stdout)
@@ -1013,7 +1040,7 @@ int main(void){return first(0,42);}
         self.assertEqual(tokens[0].ty.array_len, 3)
         self.assertEqual(len(tokens), 2)
         self.assertEqual(tokens[0].text, '"\\x9"')
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                 input='"abc" "def"\n', capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, '"abc"\n')
@@ -1087,7 +1114,7 @@ int main(void){return first(0,42);}
             self.assertIn('^ error\n', result.stderr)
             self.assertEqual(result.stdout, '')
         self.assert_program_returns('#if 0\n#error unreachable\n#endif\nint main(void){return 42;}\n', 42)
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                 input='#error stop\n', capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn('^ error\n', result.stderr)
@@ -1114,12 +1141,12 @@ int main(void){return first(0,42);}
             built = subprocess.run([sys.executable, str(Path(__file__).with_name('build.py')), '-o', str(archive)],
                                    capture_output=True, text=True)
             self.assertEqual(built.returncode, 0, built.stderr)
-            result = subprocess.run([sys.executable, str(archive), '-E', '-'],
+            result = subprocess.run([sys.executable, str(archive), '-E', "-xc", '-'],
                                     input='#include <answer.h>\n', capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assert_program_returns(result.stdout, 42)
         if Path('/usr/include/linux/limits.h').exists():
-            result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                     input='#include <linux/limits.h>\nint main(void){return PATH_MAX/128;}\n',
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -1215,7 +1242,7 @@ int main(void){return first(0,42);}
                 ('#define VALUE 42\nVALUE\nVALUE\n', '42\n42\n'),
                 ('#define VALUE() 42\nVALUE()\nVALUE()\n', '42\n42\n'),
                 ('#define EMPTY\n a EMPTY+b\n', 'a +b\n')):
-            result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                     input=source, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
@@ -1286,7 +1313,7 @@ int main(void){return first(0,42);}
         tokens = tokenize('#define G F\n#define F(x) G\nG(1)\n')
         self.assertEqual([t.text for t in tokens[:-1]], ['F'])
         self.assertEqual(tokens[0].hideset, frozenset({'F', 'G'}))
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                 input='#define SELF() SELF()\nSELF()\n',
                                 capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -1333,7 +1360,7 @@ int main(void){return first(0,42);}
             self.assertIn("expected ')'", result.stderr)
         tokens = tokenize_raw('a/**/(b)\n c +d')
         self.assertEqual([t.has_space for t in tokens[:-1]], [False, True, False, False, True, True, False])
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                 input='int  main(void){/*gap*/return\t42;}\n', capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, 'int main(void){ return 42;}\n')
@@ -1362,7 +1389,7 @@ int main(void){return first(0,42);}
         self.assertEqual([t.text for t in tokens[:-1]], ['FIRST', 'FIRST'])
         for token in tokens[:-1]:
             self.assertEqual(token.hideset, frozenset({'FIRST', 'SECOND'}))
-        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', "-xc", '-'],
                                 input='#define SELF SELF\nSELF\n', capture_output=True,
                                 text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -1489,7 +1516,7 @@ int main(void){return 42;}
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "int value=42;\nint main(void){return value;}\n")
             self.assert_program_returns(result.stdout, 42)
-            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), "-"],
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), "-xc", "-"],
                                     input=f'#include "{header}"\n', capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "")
@@ -1499,7 +1526,7 @@ int main(void){return 42;}
             self.assertEqual(result.returncode, 1)
             self.assertIn("multiple files", result.stderr)
         for text, expected in (("not_valid_c", "not_valid_c\n"), ("", "\n"), ("0x2a", "0x2a\n")):
-            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-"],
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-xc", "-"],
                                     input=text, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, expected)
@@ -1614,7 +1641,7 @@ int main(void){return 42;}
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(subprocess.run([str(Path(directory) / "a.out")], timeout=5).returncode, 42)
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(executable), "-"],
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(executable), "-xc", "-"],
                                     input="int puts(char*);int main(void){puts(\"linked\");return 42;}", capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             executed = subprocess.run([str(executable)], capture_output=True, text=True, timeout=5)

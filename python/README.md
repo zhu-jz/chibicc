@@ -1,34 +1,33 @@
-# Lesson 190: Add variadic macros
+# Lesson 191: Add the __func__ identifier
 
-Original chibicc commit: [`dc01f94900a9cabf40bb6ec2c5be8b4665c30eda`](https://github.com/rui314/chibicc/commit/dc01f94900a9cabf40bb6ec2c5be8b4665c30eda).
+Original chibicc commit: [`ba6b4b63751ed65f2fcd74965d2b337a1a65752b`](https://github.com/rui314/chibicc/commit/ba6b4b63751ed65f2fcd74965d2b337a1a65752b).
 Earlier explanations are available in Git history.
 
-A function-like macro parameter list can now end in `...`. After its fixed
-arguments, the reader collects the remaining tokens through the invocation's
-closing parenthesis, preserving commas at the outer level. It names that token
-sequence `__VA_ARGS__` for ordinary substitution, stringizing or pasting.
+Every function definition now binds `__func__` in its function scope to a
+static character array containing its name and a terminating zero. It is a
+parser-provided variable, not a preprocessor macro. Its array size is therefore
+the name length plus one, and returning its address is safe after the call.
 
-Parenthesis depth still protects nested calls. The variadic sequence may be
-empty, including when a fixed parameter is supplied without an additional
-comma. No special comma removal is introduced. Python reuses its argument
-dictionary and adds a boolean field to each macro, matching the original state.
+The parser creates an ordinary anonymous global string object and a scoped
+binding for it. This also creates an unused string for functions that never
+reference __func__, matching the original C commit. Tests now select function
+objects explicitly because each function also adds a string object. Instruction
+snapshots omit global data; separate tests inspect the generated string and
+assemble/link/run the complete emitted output. Anonymous label numbers change
+because those strings consume identifiers.
 
 ```sh
-cat > /tmp/lesson.c <<'C'
-#define CALL(...) sum(__VA_ARGS__)
-int sum(int x,int y){return x+y;}
-int main(void){return CALL(7,35);}
-C
+printf 'int main(void){return sizeof(__func__);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 5 for main plus its terminating zero
 ```
 
-Expansion leaves a real call to sum. Assembly passes values in `%rdi` and
-`%rsi`, calls through the function address in `%rax`, and returns its result.
-Tests cover empty sequences, variadic-only and mixed parameter lists, forwarding
-commas, nested calls, stringizing and an ellipsis in the wrong position.
+Assembly emits the bytes of main and a zero in static data. The sizeof
+expression produces a constant 5, which is loaded into `%rax` and returned.
+Tests cover array size, character access, returning the string, local shadowing,
+rejection outside functions, original fixtures and earlier AST/assembly checks.
 
 ## Tests and attribution
 

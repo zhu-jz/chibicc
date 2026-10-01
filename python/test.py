@@ -46,13 +46,17 @@ def compile_program(*arguments):
 
 def parse_body(source):
     """Parse a main function containing a statement-body fixture."""
-    return parse(tokenize('int main(void){' + source + "}"))[0]
+    return next(obj for obj in parse(tokenize('int main(void){' + source + "}")) if obj.name == "main")
 
 
 def instruction_assembly(assembly):
-    """Keep instruction snapshots independent of source-debug metadata."""
-    return "".join(line for line in assembly.splitlines(keepends=True)
-                   if not line.lstrip().startswith((".file ", ".loc ")))
+    """Keep function snapshots independent of debug metadata and global data."""
+    lines = [line for line in assembly.splitlines(keepends=True)
+             if not line.lstrip().startswith((".file ", ".loc "))]
+    for index, line in enumerate(lines):
+        if line.strip() == ".text":
+            return "".join(lines[index - 1:])
+    return "".join(lines)
 
 
 def grammar_tree(node):
@@ -73,6 +77,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_func_identifier(self):
+        self.assert_program_returns('int main(void){return sizeof(__func__);}', 5)
+        self.assert_program_returns('int answer(void){return __func__[0];}int main(void){return answer();}', 97)
+        self.assert_program_returns('char *answer(void){return __func__;}int main(void){return answer()[5];}', 114)
+        self.assert_program_returns('int main(void){int __func__=42;return __func__;}', 42)
+        result = compile_program('char *name=__func__;')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('undefined variable', result.stderr)
+        program = parse(tokenize('int main(void){return sizeof(__func__);}'))
+        strings = [obj for obj in program if obj.init_data == b'main\0']
+        self.assertEqual(len(strings), 1)
+        self.assertEqual(strings[0].ty.kind, 'ARRAY')
+
     def test_variadic_macros(self):
         self.assert_program_returns('#define V(...) 42\nint main(void){return V();}\n', 42)
         self.assert_program_returns('#define V(...) __VA_ARGS__\nint main(void){return V() 42;}\n', 42)
@@ -1087,7 +1104,7 @@ int main(void){return 42;}
             self.assertEqual(result.returncode, 1)
             self.assertIn(message, result.stderr)
         self.assert_program_returns("int f();int main(void){return f(42);}", 42, "int f(int x){return x;}")
-        function = parse(tokenize("int f(){return 42;}"))[0]
+        function = next(obj for obj in parse(tokenize("int f(){return 42;}")) if obj.is_function and obj.is_definition)
         self.assertTrue(function.ty.is_variadic)
         self.assertIsNotNone(function.va_area)
         self.assertFalse(parse(tokenize("int f(void);"))[0].ty.is_variadic)
@@ -1212,7 +1229,7 @@ int main(void){return 42;}
         function = next(var for var in program if var.is_function)
         self.assertEqual(function.locals, [])
         assembly = compile_program("int f(void){static int x=42;return x;}").stdout
-        self.assertIn("  .data\n.L..0:\n  .byte 42\n", assembly)
+        self.assertIn("  .data\n.L..1:\n  .byte 42\n", assembly)
         self.assertNotIn("  rep stosb\n", assembly)
         result = compile_program("int g(void);int main(void){static int x=g();return x;}")
         self.assertEqual(result.returncode, 1)
@@ -1494,7 +1511,8 @@ int main(void){return 42;}
         assembly = compile_program('int main(void){char a[4]="abc";return a[0];}').stdout
         self.assertIn("  mov $97, %rax\n", assembly)
         self.assertIn("  mov %al, (%rdi)\n", assembly)
-        self.assertNotIn("  .data\n", assembly)
+        objects = parse(tokenize('int main(void){char x[]="abc";return x[0];}'))
+        self.assertEqual([obj.init_data for obj in objects if not obj.is_function], [b'main\0'])
 
     def test_excess_initializer_elements(self):
         for source, expected in [
@@ -1719,7 +1737,7 @@ int main(void){return 42;}
             ("int f(int *x[]){return *x[0];}int main(void){int x=42;int *a[1];a[0]=&x;return f(a);}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        function = parse(tokenize("int f(int x[][3]){return 0;}"))[0]
+        function = next(obj for obj in parse(tokenize("int f(int x[][3]){return 0;}")) if obj.is_function and obj.is_definition)
         param = function.params[0]
         self.assertEqual((param.ty.kind, param.ty.size, param.ty.base.kind, param.ty.base.array_len),
                          ("PTR", 8, "ARRAY", 3))
@@ -1902,7 +1920,7 @@ int main(void){return 42;}
             ("int main(void){enum {a} x;return sizeof(x);}", 4),
         ]:
             self.assert_program_returns(source, expected)
-        function = parse(tokenize("enum {answer=42};int main(void){return answer;}"))[0]
+        function = next(obj for obj in parse(tokenize("enum {answer=42};int main(void){return answer;}")) if obj.is_function and obj.is_definition)
         self.assertEqual(function.locals, [])
         self.assertIn("  mov $42, %rax\n", compile_program("enum {answer=42};int main(void){return answer;}").stdout)
         for source, message in [
@@ -1952,7 +1970,7 @@ int main(void){return 42;}
             ("int f(short x){return x<0;}int main(void){return f(65535);}", 1),
         ]:
             self.assert_program_returns(source, expected)
-        call = parse(tokenize("int f(long x);int main(void){return f(-1);}"))[0].body.body[0].lhs.lhs
+        call = next(obj for obj in parse(tokenize("int f(long x);int main(void){return f(-1);}")) if obj.is_function and obj.is_definition).body.body[0].lhs.lhs
         self.assertEqual(call.func_ty.kind, "FUNC")
         self.assertEqual((call.args[0].kind, call.args[0].ty.kind), ("CAST", "LONG"))
         assembly = compile_program("int f(long x);int main(void){return f(-1);}").stdout
@@ -1970,14 +1988,14 @@ int main(void){return 42;}
             ("int x;int *f(void){return &x;}int main(void){x=42;return *f();}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        node = parse(tokenize("char f(void){return 261;}"))[0].body.body[0].lhs
+        node = next(obj for obj in parse(tokenize("char f(void){return 261;}")) if obj.is_function and obj.is_definition).body.body[0].lhs
         self.assertEqual((node.kind, node.ty.kind, node.lhs.kind), ("CAST", "CHAR", "NUM"))
         assembly = compile_program("char f(void){return 261;}").stdout
         self.assertIn("  movsbl %al, %eax\n  jmp .L.return.f", assembly)
 
     def test_declared_calls(self):
         self.assert_program_returns("int f();int main(void){return f();}int f(void){return 42;}", 42)
-        call = parse(tokenize("char f();int main(void){return f();}"))[0].body.body[0].lhs.lhs
+        call = next(obj for obj in parse(tokenize("char f();int main(void){return f();}")) if obj.is_function and obj.is_definition).body.body[0].lhs.lhs
         self.assertEqual(call.ty.kind, "CHAR")
         self.assert_program_returns("int f(int x){if(x==0)return 42;return f(x-1);}int main(void){return f(3);}", 42)
         for source, message in [
@@ -2148,13 +2166,13 @@ int main(void){return 42;}
         self.assert_program_returns("int ret42();int main(void){return ret42();}", 42,
                                     "int ret42(void){return 42;}")
         program = parse(tokenize("int f(int x);int f(int x){return x;}"))
-        self.assertEqual([obj.is_definition for obj in program], [True, False])
-        self.assertTrue(all(obj.is_function for obj in program))
-        self.assertIsNone(program[1].body)
-        self.assertEqual(program[1].locals, [])
+        self.assertEqual([obj.is_definition for obj in program if obj.is_function], [True, False])
+        prototype = next(obj for obj in program if obj.is_function and not obj.is_definition)
+        self.assertIsNone(prototype.body)
+        self.assertEqual(prototype.locals, [])
         assembly = compile_program("int f(int x);int f(int x){return x;}").stdout
         self.assertEqual(assembly.splitlines().count("f:"), 1)
-        self.assertNotIn("  .data", assembly)
+        self.assertIn("  .byte 102\n  .byte 0\n", assembly)
         self.assertEqual(compile_program("int printf();").stdout, '  .file 1 "-"\n')
         self.assertEqual(compile_program("int f(int); ").returncode, 0)
 
@@ -2374,7 +2392,7 @@ int main(void){return 42;}
         result = compile_program(source_text)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout.startswith('  .file 1 "-"\n'))
-        locations = [line for line in result.stdout.splitlines() if ".loc" in line]
+        locations = [line for line in result.stdout.splitlines() if ".loc " in line]
         self.assertEqual(locations, ["  .loc 1 2"] * 4)
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'source "quoted".c'
@@ -2443,7 +2461,8 @@ int main(void){return 42;}
             self.assertEqual(result.returncode, 1)
             self.assertIn("undefined variable", result.stderr)
         program = parse(tokenize("int main(void){int x;{int x;int y;}}"))
-        self.assertEqual([var.name for var in program[0].locals], ["y", "x", "x"])
+        main = next(obj for obj in program if obj.name == "main")
+        self.assertEqual([var.name for var in main.locals], ["y", "x", "x"])
 
     def test_comments(self):
         for source in ["int main(void){/* return 1; */ return 2;}",
@@ -2589,7 +2608,7 @@ int main(void){return 42;}
         self.assertEqual(token.ty.size, 4)
         assembly = compile_program('int main(void){return "abc"[0];}').stdout
         self.assertIn("  .byte 97\n  .byte 98\n  .byte 99\n  .byte 0\n", assembly)
-        self.assertIn("  lea .L..0(%rip), %rax", assembly)
+        self.assertIn("  lea .L..1(%rip), %rax", assembly)
         for source in ['int main(void){return "abc;}', 'int main(void){return "a\nb"[0];}']:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
@@ -2637,10 +2656,11 @@ int main(void){return 42;}
 
     def test_unified_objects(self):
         objects = parse(tokenize("int a(void){int x;return 3;} int main(void){return a();}"))
-        self.assertEqual([obj.name for obj in objects], ["main", "a"])
-        self.assertTrue(all(obj.is_function and not obj.is_local for obj in objects))
-        self.assertTrue(objects[1].locals[0].is_local)
-        self.assertEqual(objects[1].ty.kind, "FUNC")
+        functions = [obj for obj in objects if obj.is_function]
+        self.assertEqual([obj.name for obj in functions], ["main", "a"])
+        self.assertTrue(all(not obj.is_local for obj in functions))
+        self.assertTrue(functions[1].locals[0].is_local)
+        self.assertEqual(functions[1].ty.kind, "FUNC")
         assembly = CodeGenerator().generate(objects)
         self.assertEqual(assembly.count("  .text\n"), 2)
         self.assert_program_returns("int a(void){return 3;} int main(void){return a();}", 3)
@@ -2684,7 +2704,7 @@ int main(void){return 42;}
                                             "**(x+1)", "*(*(x+1)+1)", "*(*(x+1)+2)"]):
             self.assert_program_returns("int main(void){int x[2][3]; int *y=x;"
                                         f"*(y+{index})={index}; return {expression};}}", index)
-        function = parse(tokenize("int main(void){int x[2][3]; return x+1;}"))[0]
+        function = next(obj for obj in parse(tokenize("int main(void){int x[2][3]; return x+1;}")) if obj.is_function and obj.is_definition)
         ty = function.locals[0].ty
         self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,24,3,12))
         expression = grammar_tree(function.body.body[-1].lhs)
@@ -2697,7 +2717,7 @@ int main(void){return 42;}
             self.assert_program_returns("int main(void){int x[3]; *x=3; *(x+1)=4; *(x+2)=5;"
                                         f"return *(x+{offset});}}", expected)
         self.assert_program_returns("int main(void){int *x[2]; int a=7; *x=&a; return **x;}", 7)
-        function = parse(tokenize("int main(void){int x[3]; return x;}"))[0]
+        function = next(obj for obj in parse(tokenize("int main(void){int x[3]; return x;}")) if obj.is_function and obj.is_definition)
         assembly = CodeGenerator().generate([function])
         self.assertEqual(function.locals[0].ty.size, 12)
         self.assertEqual(function.locals[0].offset, -12)
@@ -2716,7 +2736,7 @@ int main(void){return 42;}
             ("int set(int *p){*p=9; return *p;} int main(void){int x=1; return set(&x);}", 9),
         ]:
             self.assert_program_returns(source, expected)
-        function = parse(tokenize("int f(int x,int y){int z; return x-y;}"))[0]
+        function = next(obj for obj in parse(tokenize("int f(int x,int y){int z; return x-y;}")) if obj.is_function and obj.is_definition)
         self.assertEqual([var.name for var in function.params], ["x", "y"])
         self.assertEqual([var.name for var in function.locals], ["z", "x", "y"])
         assembly = CodeGenerator().generate([function])
@@ -2754,7 +2774,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for source, expected in [('int main(void){return ret3();}', 3), ('int main(void){return ret5();}', 5),
                                  ('int main(void){return ret3()+ret5();}', 8)]:
             self.assert_program_returns(declarations + source, expected, helpers)
-        call = parse(tokenize("int ret3();int main(void){return ret3();}"))[0].body.body[0].lhs.lhs
+        call = next(obj for obj in parse(tokenize("int ret3();int main(void){return ret3();}")) if obj.is_function and obj.is_definition).body.body[0].lhs.lhs
         self.assertEqual(call.lhs.var.name, "ret3")
         self.assertEqual(call.ty.kind, "INT")
         assembly = compile_program(declarations + 'int main(void){return ret3();}').stdout
@@ -2828,7 +2848,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
     def test_representative_tokens(self):
         source = 'int main(void){return -(1+2)*3>4;}'
         tokens = tokenize(source)
-        program = parse(tokens)[0]
+        program = next(obj for obj in parse(tokens) if obj.is_function and obj.is_definition)
         statement = program.body.body[0]
         self.assertIs(program.body.tok, tokens[6])
         self.assertIs(statement.tok, tokens[6])
@@ -2922,7 +2942,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
-                         ".L..1:\n  jmp .L.begin.1\n.L..0:\n" + EPILOGUE)
+                         ".L..2:\n  jmp .L.begin.1\n.L..1:\n" + EPILOGUE)
         for source, position, message in [
             ('int main(void){for 1;}', 19, "expected '('"),
             ('int main(void){for(1 2;3) ;}', 21, "expected ';'"),
@@ -2945,7 +2965,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             self.assertEqual(assembly.count(label), 1)
 
     def test_null_statements(self):
-        program = parse(tokenize('int main(void){ ;;; return 5; }'))[0]
+        program = next(obj for obj in parse(tokenize('int main(void){ ;;; return 5; }')) if obj.is_function and obj.is_definition)
         self.assertEqual(grammar_tree(program.body), Node("BLOCK", body=[
             Node("BLOCK"), Node("BLOCK"), Node("BLOCK"),
             Node("RETURN", lhs=Node("NUM", value=5)),
@@ -2962,7 +2982,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
 
     def test_nested_block_tree(self):
-        program = parse(tokenize('int main(void){ {1;} return 2; }'))[0]
+        program = next(obj for obj in parse(tokenize('int main(void){ {1;} return 2; }')) if obj.is_function and obj.is_definition)
         self.assertEqual(grammar_tree(program.body), Node("BLOCK", body=[
             Node("BLOCK", body=[Node("EXPR_STMT", lhs=Node("NUM", value=1))]),
             Node("RETURN", lhs=Node("NUM", value=2)),

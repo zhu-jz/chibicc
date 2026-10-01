@@ -1288,6 +1288,9 @@ class Parser:
             function.va_area = self.new_lvar("__va_area__", array_of(ty_char, 136))
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
+        name = function.name.encode("utf-8") + b"\0"
+        literal = self.new_string_literal(name, array_of(ty_char, len(name)))
+        self.push_scope("__func__").var = literal
         function.body, position = self.compound_stmt(position + 1)
         function.locals = self.locals
         self.leave_scope()

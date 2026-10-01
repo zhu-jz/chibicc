@@ -1,6 +1,6 @@
-"""Lesson 190: Add variadic macros.
+"""Lesson 191: Add the __func__ identifier.
 
-Based on chibicc commit dc01f94900a9cabf40bb6ec2c5be8b4665c30eda.
+Based on chibicc commit ba6b4b63751ed65f2fcd74965d2b337a1a65752b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

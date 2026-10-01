@@ -72,6 +72,12 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_empty_macro_arguments(self):
+        self.assert_program_returns('#define JOIN(x,y) x y\nint main(void){return JOIN(,4+5);}\n', 9)
+        self.assert_program_returns('#define JOIN(x,y) x y\nint main(void){return JOIN(42,);}\n', 42)
+        self.assert_program_returns('#define IGNORE(x,y) 42\nint main(void){return IGNORE(,);}\n', 42)
+        self.assert_program_returns('#define EMPTY\n#define JOIN(x,y) x y\nint main(void){return JOIN(EMPTY,7);}\n', 7)
+
     def test_parameterized_macros(self):
         self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT(3+4,4+5);}\n', 24)
         self.assert_program_returns('#define PRODUCT(x,y) (x)*(y)\nint main(void){return PRODUCT(3+4,4+5);}\n', 63)

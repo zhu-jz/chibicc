@@ -1,6 +1,6 @@
-"""Lesson 173: Add function-like macro parameters.
+"""Lesson 174: Test empty macro arguments.
 
-Based on chibicc commit b9ad3e43cf7479712972514aa3f2c55a0f650f76.
+Based on chibicc commit dd4306cdd8158f76f094fc699530311228536adb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

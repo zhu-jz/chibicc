@@ -1,35 +1,26 @@
-# Lesson 173: Add function-like macro parameters
+# Lesson 174: Test empty macro arguments
 
-Original chibicc commit: [`b9ad3e43cf7479712972514aa3f2c55a0f650f76`](https://github.com/rui314/chibicc/commit/b9ad3e43cf7479712972514aa3f2c55a0f650f76).
+Original chibicc commit: [`dd4306cdd8158f76f094fc699530311228536adb`](https://github.com/rui314/chibicc/commit/dd4306cdd8158f76f094fc699530311228536adb).
 Earlier explanations are available in Git history.
 
-Function-like definitions now accept named parameters. An invocation collects
-one token sequence per parameter, expands that sequence, and substitutes it
-where the parameter appears in the replacement body. Python lists store
-parameter names and a dictionary maps each name to its argument tokens.
-
-Substitution supplies no implicit grouping. `#define PRODUCT(x,y) x*y` with
-arguments `3+4` and `4+5` yields `3+4*4+5`, which is 24. Parenthesizing the body
-as `(x)*(y)` instead yields 63. Empty argument sequences are accepted.
-
-This original commit does not yet track nested parentheses while collecting
-arguments. Commas and closing parentheses stop an argument immediately. Tests
-preserve that limitation and the original punctuation-based count diagnostics.
-Function-like recursion still lacks a hideset at this step.
+This original commit changes only the macro test program. The existing reader
+already represents an empty argument as an EOF-only token sequence, so
+substituting it contributes no tokens to the replacement body. No compiler
+implementation change is needed in Python either.
 
 ```sh
-printf '#define SUM(x,y) (x)+(y)\nint main(void){return SUM(7,35);}\n' > /tmp/lesson.c
+printf '#define JOIN(x,y) x y\nint main(void){return JOIN(,4+5);}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 9
 ```
 
-Expansion produces arithmetic tokens. Assembly adds the two values and returns
-42 in `%rax`; no macro call exists at runtime. Tests check precedence, argument
-expansion, empty arguments, malformed definitions, count errors and the current
-nested-parenthesis limitation, alongside the upstream macro program.
+The empty first argument disappears, leaving `4+5`. Assembly adds those values
+and returns 9 in `%rax`. New tests cover an empty first or last argument, two
+empty arguments in an unused parameter list, and a macro that expands to empty
+inside an argument. The original new fixture is copied verbatim and compiled.
 
 ## Tests and attribution
 

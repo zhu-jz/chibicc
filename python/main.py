@@ -1,6 +1,6 @@
-"""Lesson 91: Break statements.
+"""Lesson 92: Continue statements.
 
-Based on chibicc commit b3047f2317b74f19fb44dfe5e577d586d93dfa3c.
+Based on chibicc commit 3c83dfd8af045ae6923d4ccb3a3a5a50f4012346.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -58,6 +58,24 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_continue_statements(self):
+        for source, expected in [
+            ("int main(){int s=0;for(int i=0;i<10;i++){if(i>5)continue;s++;}return s;}", 6),
+            ("int main(){int i=0,s=0;while(i++<10){if(i>5)continue;s++;}return s;}", 5),
+            ("int main(){int s=0;for(int i=0;i<3;i++){for(int j=0;j<2;j++)continue;s++;}return s;}", 3),
+            ("int main(){int s=0;for(int i=0;i<3;i++){for(int j=0;j<2;j++)break;continue;s++;}return s;}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        loop = parse_body("for(int i=0;i<2;i++)continue;").body.body[0]
+        self.assertEqual(loop.then.unique_label, loop.cont_label)
+        assembly = compile_program("int main(){for(int i=0;i<2;i++)continue;}").stdout
+        label_position = assembly.index(f"{loop.cont_label}:\n")
+        back_edge = assembly.index("  jmp .L.begin.", label_position)
+        self.assertIn("  add %edi, %eax\n", assembly[label_position:back_edge])
+        result = compile_program("int main(){continue;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("stray continue", result.stderr)
+
     def test_break_statements(self):
         for source, expected in [
             ("int main(){int i=0;for(;;i++){if(i==42)break;}return i;}", 42),
@@ -1343,7 +1361,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
-                         "  jmp .L.begin.1\n.L..0:\n" + EPILOGUE)
+                         ".L..1:\n  jmp .L.begin.1\n.L..0:\n" + EPILOGUE)
         for source, position, message in [
             ('int main(){for 1;}', 15, "expected '('"),
             ('int main(){for(1 2;3) ;}', 17, "expected ';'"),

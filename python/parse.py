@@ -51,6 +51,7 @@ class Parser:
         self.gotos = []
         self.labels = []
         self.brk_label = None
+        self.cont_label = None
 
     def enter_scope(self):
         self.scopes.append(Scope())
@@ -426,7 +427,9 @@ class Parser:
                 raise CompileError(self.tokens[position], "expected '('")
             self.enter_scope()
             previous_break = self.brk_label
+            previous_continue = self.cont_label
             self.brk_label = break_label = self.new_unique_name()
+            self.cont_label = continue_label = self.new_unique_name()
             position += 1
             if self.is_typename(position):
                 basety, position = self.declspec(position)
@@ -447,8 +450,9 @@ class Parser:
             then, position = self.stmt(position + 1)
             self.leave_scope()
             self.brk_label = previous_break
+            self.cont_label = previous_continue
             return Node("FOR", init=init, cond=cond, inc=inc, then=then, tok=token,
-                        brk_label=break_label), position
+                        brk_label=break_label, cont_label=continue_label), position
         if self.tokens[position].text == "while":
             position += 1
             if self.tokens[position].text != "(":
@@ -457,10 +461,14 @@ class Parser:
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
             previous_break = self.brk_label
+            previous_continue = self.cont_label
             self.brk_label = break_label = self.new_unique_name()
+            self.cont_label = continue_label = self.new_unique_name()
             then, position = self.stmt(position + 1)
             self.brk_label = previous_break
-            return Node("FOR", cond=cond, then=then, tok=token, brk_label=break_label), position
+            self.cont_label = previous_continue
+            return Node("FOR", cond=cond, then=then, tok=token, brk_label=break_label,
+                        cont_label=continue_label), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
         if token.text == "goto":
@@ -485,6 +493,12 @@ class Parser:
             if self.tokens[position + 1].text != ";":
                 raise CompileError(self.tokens[position + 1], "expected ';'")
             return Node("GOTO", unique_label=self.brk_label, tok=token), position + 2
+        if token.text == "continue":
+            if self.cont_label is None:
+                raise CompileError(token, "stray continue")
+            if self.tokens[position + 1].text != ";":
+                raise CompileError(self.tokens[position + 1], "expected ';'")
+            return Node("GOTO", unique_label=self.cont_label, tok=token), position + 2
         return self.expr_stmt(position)
 
     def is_typename(self, position):

@@ -239,6 +239,7 @@ class CodeGenerator:
                 self.assembly.append("  cmp $0, %rax")
                 self.assembly.append(f"  je {node.brk_label}")
             self.gen_stmt(node.then)
+            self.assembly.append(f"{node.cont_label}:")
             if node.inc is not None:
                 self.gen_expr(node.inc)
             self.assembly.append(f"  jmp .L.begin.{label}")

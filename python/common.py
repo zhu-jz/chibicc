@@ -114,3 +114,4 @@ class Node:
     label: str = ""
     unique_label: Optional[str] = field(default=None, compare=False)
     brk_label: Optional[str] = field(default=None, compare=False)
+    cont_label: Optional[str] = field(default=None, compare=False)

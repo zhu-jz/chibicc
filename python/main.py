@@ -1,6 +1,6 @@
-"""Lesson 274: Compute sizeof for a fresh VLA type.
+"""Lesson 275: Advertise variable-length array support.
 
-Based on chibicc commit 2fa8f489f3a852bd5bb17e023fdc5ea3a606100d.
+Based on chibicc commit b0109a30c9fa24fedcb4d79bb17788e7ed228636.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

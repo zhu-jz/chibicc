@@ -1,27 +1,24 @@
-# Lesson 274: Compute sizeof for a fresh VLA type
+# Lesson 275: Advertise variable-length array support
 
-Original chibicc commit: [`2fa8f489f3a852bd5bb17e023fdc5ea3a606100d`](https://github.com/rui314/chibicc/commit/2fa8f489f3a852bd5bb17e023fdc5ea3a606100d).
+Original chibicc commit: [`b0109a30c9fa24fedcb4d79bb17788e7ed228636`](https://github.com/rui314/chibicc/commit/b0109a30c9fa24fedcb4d79bb17788e7ed228636).
 Earlier explanations are available in Git history.
 
-sizeof can now create a runtime-sized array type directly, such as sizeof(int[n]).
-If that type has no saved size yet, the parser builds a comma expression: compute
-and save its dimension sizes, then read the final byte size. Existing VLA types
-continue using their previously computed size. No array storage is allocated just
-to calculate sizeof a type.
+The compiler now supports variable-length arrays, so it stops predefining
+__STDC_NO_VLA__. Headers and conditional compilation can detect that support.
+Other predefined feature macros retain their existing values.
 
 ```sh
-printf 'int main(void){int n=5;return sizeof(int[2][n])+2;}\n' > /tmp/lesson.c
+printf '#ifdef __STDC_NO_VLA__\n#error unexpected VLA exclusion\n#endif\nint main(void){int n=2;int x[n];x[1]=42;return x[1];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly multiplies n by four bytes and then by two rows, saves and loads 40,
-and adds 2 before returning. Tests also check that a side-effecting bound runs
-once and that sizeof(typeof(existing_array)) retains its declaration-time size.
-Python represents C's linked expression nodes with dataclasses; the runtime
-calculation and saved-size behavior follow the original commit.
+The preprocessor discards the error branch. Assembly allocates the runtime array,
+stores 42 in its second element and returns that element. The feature-macro test
+checks this conditional path; predefined macro and VLA tests remain enabled.
+Python removes one dictionary entry where C removes one define_macro call.
 
 ## Tests and attribution
 

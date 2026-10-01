@@ -87,6 +87,9 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_vla_feature_macro(self):
+        self.assert_program_returns('#ifdef __STDC_NO_VLA__\n#error unexpected macro\n#endif\nint main(void){int n=2;int x[n];x[1]=42;return x[1];}', 42)
+
     def test_sizeof_vla_type(self):
         for source, expected in [
             ('int main(void){int n=5;return sizeof(char[2][n]);}', 10),

@@ -1,6 +1,6 @@
-"""Lesson 105: Global scalar and string initializers.
+"""Lesson 106: Global struct initializers.
 
-Based on chibicc commit bbfe3f4369e1dd2266b827c81d7d9078ab1d301f.
+Based on chibicc commit eeb62b6dd547da5742f3ed74f8c8ae534d883dd9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

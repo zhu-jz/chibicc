@@ -985,6 +985,11 @@ class Parser:
             for index, child in enumerate(init.children):
                 self.write_gvar_data(child, ty.base, buffer, offset + ty.base.size * index)
             return
+        if ty.kind == "STRUCT":
+            for member in ty.members:
+                self.write_gvar_data(init.children[member.idx], member.ty,
+                                     buffer, offset + member.offset)
+            return
         if init.expr is not None:
             if ty.size not in (1, 2, 4, 8):
                 raise CompileError(init.expr.tok, "unsupported initializer size")

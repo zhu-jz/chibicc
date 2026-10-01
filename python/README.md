@@ -1,36 +1,34 @@
-# Lesson 105: Global scalar and string initializers
+# Lesson 106: Global struct initializers
 
-Original chibicc commit: [`bbfe3f4369e1dd2266b827c81d7d9078ab1d301f`](https://github.com/rui314/chibicc/commit/bbfe3f4369e1dd2266b827c81d7d9078ab1d301f).
+Original chibicc commit: [`eeb62b6dd547da5742f3ed74f8c8ae534d883dd9`](https://github.com/rui314/chibicc/commit/eeb62b6dd547da5742f3ed74f8c8ae534d883dd9).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Global declarations now accept initializers. The existing initializer tree is
-serialized at compile time into zero-filled bytes, recursively for arrays and
-strings. Scalar expressions use the existing constant evaluator. The variable's
-completed type is retained, including inferred array lengths.
+Global initializer serialization now descends through struct members. Each
+member's initializer is written at its aligned offset; the initial zero-filled
+buffer preserves omitted members and padding. Array recursion and struct
+recursion combine naturally for nested aggregates.
 
-Python bytearray and masked int.to_bytes explicitly encode little-endian data;
-upstream writes through integer pointers into allocated memory on its host.
-The generated target remains x86-64 Linux. Runtime function calls cannot supply
-global initial values. Struct/union member serialization and address relocations
-are not implemented by this original commit; brace-initialized global aggregates
-other than arrays still remain zero at this historical step.
+Python keeps the same member indices and offsets as upstream and writes into a
+bytearray. Global union serialization and address relocations remain incomplete.
+Global struct copy expressions are not evaluated by this historical serializer;
+use brace lists for global struct initialization at this step.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int answer=6*7;int main(){return answer;}\n' > /tmp/lesson105.c
-python3 python/main.py /tmp/lesson105.c > /tmp/lesson105.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson105 /tmp/lesson105.s
-/tmp/lesson105
+printf 'struct T{char a;int b;} g={1,42};int main(){return g.b;}\n' > /tmp/lesson106.c
+python3 python/main.py /tmp/lesson106.c > /tmp/lesson106.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson106 /tmp/lesson106.s
+/tmp/lesson106
 echo $?
 ```
 
-The .data section contains answer followed by `.byte 42` and three zero bytes.
-Main loads its four-byte value; there is no runtime multiplication. Exit status
-is 42. Tests check every scalar width, negative-value truncation, arrays, strings,
-exact byte order, nonconstant rejection, and updated upstream examples.
+The .data section stores byte 1, three padding zeros, then the four-byte value
+42. Main adds offset four and loads g.b, yielding exit status 42. Tests check
+exact bytes, nested structs, arrays of structs, partial initialization, emitted
+data, real execution, and the original expanded initializer program.
 
 ## Tests and attribution
 

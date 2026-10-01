@@ -60,6 +60,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_struct_initializers(self):
+        for source, expected in [
+            ("struct T{char a;int b;} g={1,42};int main(){return g.b;}", 42),
+            ("struct T{int a[2];} g[2]={{{1,42}}};int main(){return g[0].a[1]+g[1].a[0];}", 42),
+            ("struct T{int a,b;} g={42};int main(){return g.a+g.b;}", 42),
+            ("struct T{struct U{int n;} u;} g={{42}};int main(){return g.u.n;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        var = parse(tokenize("struct T{char a;int b;} g={1,42};"))[0]
+        self.assertEqual(var.init_data, b"\x01\x00\x00\x00\x2a\x00\x00\x00")
+        self.assertIn("g:\n  .byte 1\n  .byte 0\n", compile_program("struct T{char a;int b;} g={1,42};int main(){return g.b;}").stdout)
+
     def test_global_scalar_initializers(self):
         for source, expected in [
             ("char a=1;short b=2;int c=3;long d=36;int main(){return a+b+c+d;}", 42),

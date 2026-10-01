@@ -80,6 +80,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_mixed_width_string_concatenation(self):
+        for spelling,size,expected in [('"α" u"β"',2,'αβ'.encode('utf-16-le')),('u"α" "β"',2,'αβ'.encode('utf-16-le')),('"🍣" U"β"',4,'🍣β'.encode('utf-32-le')),('L"α" L"β"',4,'αβ'.encode('utf-32-le'))]:
+            token = tokenize(spelling)[0]
+            self.assertEqual(token.str,expected+b'\0'*size)
+            self.assertEqual(token.ty.size,len(expected)+size)
+            self.assert_program_returns('int main(void){return (' + spelling + ')[0]=='+str(127843 if '🍣' in spelling else 945)+';}',1)
+        self.assert_program_returns('int main(void){unsigned short x[]="α" u"β";return x[1]-904;}',42)
+        self.assert_program_returns(r'int main(void){return ("\343\201\202" L"")[0]==0343;}',1)
+        for spelling in ('u"a" U"b"','L"a" U"b"'):
+            result = compile_program('int main(void){return sizeof(' + spelling + ');}')
+            self.assertEqual(result.returncode,1)
+            self.assertIn('unsupported non-standard concatenation',result.stderr)
+
     def test_dollar_identifiers(self):
         self.assertEqual([(t.kind,t.text) for t in tokenize_raw('$$$ a$b $0')[:-1]],[('IDENT',s) for s in ('$$$','a$b','$0')])
         self.assert_program_returns('int main(void){int $$$=42;return $$$;}',42)

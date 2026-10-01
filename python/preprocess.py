@@ -8,7 +8,7 @@ import os
 import time
 from dataclasses import dataclass, field, replace
 
-from tokenizer import convert_pp_tokens, tokenize, tokenize_file, warn_tok
+from tokenizer import convert_pp_tokens, tokenize, tokenize_file, warn_tok, tokenize_string_literal
 from common import CompileError, File
 from parse import const_expr
 from type import array_of
@@ -557,6 +557,13 @@ def init_macros():
     return macros
 
 
+def get_string_kind(token):
+    # Retain the original exact-spelling u8 check at this historical step.
+    if token.text == "u8":
+        return "UTF8"
+    return {'"': "NONE", 'u': "UTF16", 'U': "UTF32", 'L': "WIDE"}[token.text[0]]
+
+
 def join_adjacent_string_literals(tokens):
     position = 0
     while tokens[position].kind != "EOF":
@@ -567,8 +574,21 @@ def join_adjacent_string_literals(tokens):
         end = position + 1
         while tokens[end].kind == "STR":
             end += 1
-        data = b"".join(token.str[:-1] for token in tokens[position:end]) + b"\0"
-        first.ty = array_of(first.ty.base, len(data))
+        kind, basety = get_string_kind(first), first.ty.base
+        for token in tokens[position + 1:end]:
+            next_kind = get_string_kind(token)
+            if kind == "NONE":
+                kind, basety = next_kind, token.ty.base
+            elif next_kind != "NONE" and kind != next_kind:
+                raise CompileError(token, "unsupported non-standard concatenation of string literals")
+        if basety.size > 1:
+            for token in tokens[position:end]:
+                if token.ty.base.size == 1:
+                    converted = tokenize_string_literal(token, basety)
+                    token.ty, token.str = converted.ty, converted.str
+        size = first.ty.base.size
+        data = b"".join(token.str[:-token.ty.base.size] for token in tokens[position:end]) + b"\0" * size
+        first.ty = array_of(first.ty.base, len(data) // size)
         first.str = data
         del tokens[position + 1:end]
         position += 1

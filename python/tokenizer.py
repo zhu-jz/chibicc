@@ -194,6 +194,14 @@ def read_utf32_string_literal(source, start, quote, ty):
                  ty=array_of(ty, len(data) // 4), str=bytes(data)), end + 1
 
 
+def tokenize_string_literal(token, basety):
+    if basety.size == 2:
+        converted, _ = read_utf16_string_literal(token.text, 0, 0)
+    else:
+        converted, _ = read_utf32_string_literal(token.text, 0, 0, basety)
+    return converted
+
+
 def read_char_literal(source, start, quote=None, ty=ty_int):
     position = (start if quote is None else quote) + 1
     if position >= len(source) or source[position] == "\0":

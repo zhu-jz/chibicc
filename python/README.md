@@ -1,16 +1,22 @@
-# Lesson 236: Accept dollar signs in GNU identifiers
+# Lesson 237: Join ordinary and wide string literals
 
-Original chibicc commit: [`adb8b988897758d0d4f74dcd9129bff0831634ae`](https://github.com/rui314/chibicc/commit/adb8b988897758d0d4f74dcd9129bff0831634ae).
+Original chibicc commit: [`238277714ddc407f966f3c503e13a114d6a91630`](https://github.com/rui314/chibicc/commit/238277714ddc407f966f3c503e13a114d6a91630).
 Earlier explanations are available in Git history.
 
-The identifier ranges now accept $ as both a first and subsequent character,
-following the original GNU extension. Names such as $$$, a$b and $0 become
-single IDENT tokens. They work in local declarations and macro names through
-the existing parser and preprocessor paths.
+Adjacent ordinary strings now adopt a neighboring L/u/U encoding before
+concatenation. The compiler re-reads each ordinary source spelling in that
+encoding, so literal Unicode characters become wide units, while numeric byte
+escapes retain their individual numeric values. Different non-ordinary kinds
+are rejected with the original diagnostic.
+
+The Python joining loop is generalized to remove whole element terminators
+and compute an element count, matching the original's existing second pass.
+It preserves token metadata while re-reading payloads, rather than overwriting
+C token structs. Early -E output still prints the first source spelling only.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){int $$$=42;return $$$;}
+int main(void){unsigned short x[]="α" u"β";return x[1]-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,13 +24,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Local names disappear into frame offsets in assembly; main loads that slot
-and returns 42. Tests check raw spellings, local and macro names, trailing-dollar
-global/function symbols and original fixtures. Python adds the same dollar
-range to both tables, rather than relying on Python identifier rules. This
-commit changes accepted token characters only; symbol printing keeps the
-original assembler syntax, including its limitations for leading-dollar
-external symbols.
+Both literals become UTF-16 and one zero terminator remains. Array initialization
+stores those units and x[1] is 946. Tests verify both orders, surrogate values,
+wide/wide joining, initializer use, numeric escape re-reading, incompatible
+prefix errors and original fixtures. The original's exact-spelling u8 kind
+check does not recognize a complete u8 string token; we retain that historical
+classification quirk rather than promising every mixed-prefix extension.
 
 ## Tests and attribution
 

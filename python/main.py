@@ -1,6 +1,6 @@
-"""Lesson 236: Accept dollar signs in GNU identifiers.
+"""Lesson 237: Join ordinary and wide string literals.
 
-Based on chibicc commit adb8b988897758d0d4f74dcd9129bff0831634ae.
+Based on chibicc commit 238277714ddc407f966f3c503e13a114d6a91630.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

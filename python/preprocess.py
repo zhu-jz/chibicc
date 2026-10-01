@@ -130,6 +130,13 @@ def preprocess(tokens, files=None):
                 body, position = copy_line(tokens, position + 2)
                 macros[name.text] = Macro(name.text, body)
                 continue
+            if tokens[position].text == "undef":
+                name = tokens[position + 1]
+                if name.kind != "IDENT":
+                    raise CompileError(name, "macro name must be an identifier")
+                position = skip_line(tokens, position + 2)
+                macros.pop(name.text, None)
+                continue
             if tokens[position].text == "if":
                 value, position = eval_const_expr(tokens, position)
                 conditions.append(CondIncl(token, bool(value)))

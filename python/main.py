@@ -1,6 +1,6 @@
-"""Lesson 167: Add object-like macros.
+"""Lesson 168: Add #undef.
 
-Based on chibicc commit 97d33ad3bdc21c26356253046902d4b166bd115b.
+Based on chibicc commit 9ad60e41d512158d942d1bf3808682ede6ef5118.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,32 +1,28 @@
-# Lesson 167: Add object-like macros
+# Lesson 168: Add #undef
 
-Original chibicc commit: [`97d33ad3bdc21c26356253046902d4b166bd115b`](https://github.com/rui314/chibicc/commit/97d33ad3bdc21c26356253046902d4b166bd115b).
+Original chibicc commit: [`9ad60e41d512158d942d1bf3808682ede6ef5118`](https://github.com/rui314/chibicc/commit/9ad60e41d512158d942d1bf3808682ede6ef5118).
 Earlier explanations are available in Git history.
 
-`#define NAME replacement` stores a line of replacement tokens. Encountering
-that identifier copies its body into the token stream and resumes scanning,
-so replacements can contain other macro names. A dictionary records the most
-recent definition, replacing the original C linked-list search. Definitions
-share state across included files but are reset for each compilation.
+`#undef NAME` makes that identifier cease to be a macro. Undefining an unknown
+name is harmless; a later definition can give it a new body. The name must be
+an identifier and extra tokens use the existing warning behavior.
 
-Expansion is token substitution: strings are untouched, empty bodies remove
-the name, and operator precedence is determined after substitution. Conversion
-of identifiers to keywords still happens last, allowing a keyword spelling to
-be a macro name. This historical step has no protection against recursive
-macro definitions, and does not expand macros in `#if` expressions yet.
+The C macro list records a deleted entry to hide older definitions. Python's
+dictionary already keeps only the latest definition, so removing its entry has
+the same effect. Definitions in skipped branches remain untouched.
 
 ```sh
-printf '#define VALUE 3+4\nint main(void){return VALUE*5;}\n' > /tmp/lesson.c
-python3 python/main.py -E /tmp/lesson.c
+printf '#define VALUE 7\n#undef VALUE\nint main(void){int VALUE=42;return VALUE;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 23
+echo $?  # 42
 ```
 
-After expansion the parser sees `3+4*5`. Assembly multiplies 4 by 5, adds 3,
-leaves 23 in `%rax`, and returns. Tests cover precedence, replacement, chained
-and empty macros, strings, keyword spellings, discarded definitions and errors.
+After removal, `VALUE` is a local variable. Assembly stores 42 in its stack
+slot and loads it for the return value in `%rax`. Tests cover overriding then
+undefining, defining again, unknown names, skipped directives and restoring
+keyword spellings. The original fixture now undefines its keyword macros.
 
 ## Tests and attribution
 

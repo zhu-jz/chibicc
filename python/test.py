@@ -72,6 +72,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_undef_directives(self):
+        self.assert_program_returns('#define VALUE 7\n#define VALUE 11\n#undef VALUE\nint main(void){int VALUE=42;return VALUE;}\n', 42)
+        self.assert_program_returns('#undef UNKNOWN\n#define VALUE 7\n#undef VALUE\n#define VALUE 11\nint main(void){return VALUE;}\n', 11)
+        self.assert_program_returns('#define VALUE 7\n#if 0\n#undef VALUE\n#endif\nint main(void){return VALUE;}\n', 7)
+        self.assert_program_returns('#define if 7\n#undef if\nint main(void){if (1) return 42;return 0;}\n', 42)
+        result = compile_program('#undef 123\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('macro name must be an identifier', result.stderr)
+
     def test_object_like_macros(self):
         self.assert_program_returns('#define VALUE 3+4\nint main(void){return VALUE*5;}\n', 23)
         self.assert_program_returns('#define VALUE 3\n#define VALUE 42\nint main(void){return VALUE;}\n', 42)

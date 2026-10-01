@@ -11,7 +11,7 @@ import unittest
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
-from tokenizer import tokenize as tokenize_raw, tokenize_file
+from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 
@@ -72,6 +72,25 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_line_continuation(self):
+        self.assertEqual(remove_backslash_newline('a\\\nb\\\nc\nd\n'), 'abc\n\n\nd\n')
+        self.assertEqual(remove_backslash_newline('a\\\nb'), 'ab\n')
+        self.assert_program_returns('int main(void){return size\\\nof(char);}\n', 1)
+        self.assert_program_returns('#define VALUE 7+\\\n35\nint main(void){return VALUE;}\n', 42)
+        self.assert_program_returns('int main(void){return sizeof("ab\\\ncd");}\n', 5)
+        self.assert_program_returns('// comment\\\ninvalid code\nint main(void){return 42;}\n', 42)
+        result = compile_program('#define VALUE \\\n42\n\nint main(void){return missing;}\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('-:4: int main(void){return missing;}', result.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'source.c'
+            path.write_text('int val\\\nue;\nint answer;\n')
+            files = []
+            tokens = tokenize_file(path, files)
+            self.assertEqual(tokens[1].text, 'value')
+            self.assertEqual(tokens[4].line_no, 3)
+            self.assertEqual(files[0].contents.count('\n'), 3)
+
     def test_macro_expansion_spacing(self):
         prefix = '#define STR(x) #x\n#define FORWARD(x) STR(x)\n'
         for definition, expected in (

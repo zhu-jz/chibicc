@@ -29,9 +29,28 @@ def read_file(path):
     return source
 
 
+def remove_backslash_newline(source):
+    result = []
+    position = 0
+    pending_newlines = 0
+    while position < len(source):
+        if source.startswith("\\\n", position):
+            position += 2
+            pending_newlines += 1
+            continue
+        character = source[position]
+        result.append(character)
+        position += 1
+        if character == "\n":
+            result.append("\n" * pending_newlines)
+            pending_newlines = 0
+    result.append("\n" * pending_newlines)
+    return "".join(result)
+
+
 def tokenize_file(path, files):
     path = str(path)
-    source = read_file(path)
+    source = remove_backslash_newline(read_file(path))
     file = File(path, len(files) + 1, source)
     files.append(file)
     try:

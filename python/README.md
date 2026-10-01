@@ -1,31 +1,35 @@
-# Lesson 182: Preserve macro expansion spacing
+# Lesson 183: Support backslash-newline continuation
 
-Original chibicc commit: [`8075582c21496530e3b1847f5bad11c42941066e`](https://github.com/rui314/chibicc/commit/8075582c21496530e3b1847f5bad11c42941066e).
+Original chibicc commit: [`b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5`](https://github.com/rui314/chibicc/commit/b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5).
 Earlier explanations are available in Git history.
 
-The first replacement token now inherits the invoking macro token's beginning-
-of-line and preceding-space flags. Empty replacements transfer those flags to
-the following token. A substituted argument's first token similarly inherits
-the parameter's flags from the replacement body.
+Reading a source file now removes each backslash followed immediately by a
+newline before tokenization. This can join identifiers, continue macro bodies,
+or extend a line comment. It also applies inside string literals because the
+transformation precedes lexical interpretation.
 
-These flags do not change expression evaluation, but they affect `-E` output
-and stringizing through another macro. A wrapper containing `foo.x` now yields
-`"foo.bar"`, while `foo. x` yields `"foo. bar"`. The change uses straightforward
-field assignments, matching the original C metadata updates.
+A counter delays each removed newline until the next ordinary newline, where
+it adds blank lines. Later source lines therefore retain their physical line
+numbers. Tokens within a continued logical line use its opening line number,
+matching the original approach. Python constructs a new string rather than
+moving characters within a mutable C buffer. Raw in-memory tokenizer calls
+remain untransformed; file and stdin compilation use the new reading stage.
 
 ```sh
-printf '#define VALUE 42\nint main(void){return VALUE;}\n' > /tmp/lesson.c
-python3 python/main.py -E /tmp/lesson.c
+cat > /tmp/lesson.c <<'C'
+#define VALUE 7+\
+35
+int main(void){return VALUE;}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly still loads 42 into `%rax` and returns. New tests inspect nested
-stringizing with and without spaces, retained newlines for both macro kinds,
-spacing after empty expansion and executable behavior. The earlier recursive
-macro output snapshot changes to reflect the corrected leading-space behavior.
+The replacement is the token expression `7+35`; assembly adds those values
+and returns 42 in `%rax`. Tests cover joined identifiers, macros, strings,
+continued comments, delayed newline counts and a later line's diagnostic.
 
 ## Tests and attribution
 

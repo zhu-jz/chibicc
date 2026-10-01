@@ -1,6 +1,6 @@
-"""Lesson 182: Preserve macro expansion spacing.
+"""Lesson 183: Support backslash-newline continuation.
 
-Based on chibicc commit 8075582c21496530e3b1847f5bad11c42941066e.
+Based on chibicc commit b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

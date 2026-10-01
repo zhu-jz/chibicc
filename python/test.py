@@ -77,6 +77,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_buffered_assembly_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / 'main.c', Path(directory) / 'main.s'
+            source.write_text('int main(void){return &1;}')
+            output.write_text('existing assembly\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-S', '-o', str(output), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('not an lvalue', result.stderr)
+            self.assertEqual(output.read_text(), 'existing assembly\n')
+            output.unlink()
+            result = subprocess.run([sys.executable, str(COMPILER), '-S', '-o', str(output), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertFalse(output.exists())
+            source.write_text('int main(void){return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-S', '-o', str(output), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('  mov $42, %rax\n', output.read_text())
+        failed = compile_program('int main(void){return &1;}')
+        self.assertEqual(failed.stdout, '')
+
     def test_bitfield_address_rejection(self):
         for expression in ('&x.a', '&(x.a)', '&p->a'):
             result = compile_program('int main(void){struct T{int a:3;int b;}x;struct T*p=&x;' + expression + ';return 0;}')

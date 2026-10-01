@@ -1,6 +1,6 @@
-"""Lesson 214: Reject addresses of bitfields.
+"""Lesson 215: Buffer assembly before writing output.
 
-Based on chibicc commit c302a969d8217ab46113d494b8cd773cf057193d.
+Based on chibicc commit 2bdc6b800c1dbe6db584b91046785d4c48c41fb2.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -153,6 +153,7 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
             print_tokens(tokens, opt_o)
             return 0
         program = parse(tokens)
+        # Finish all code generation in memory before opening the destination.
         assembly = codegen(program, files)
         write_output(output_path, assembly)
     except CompileError as error:

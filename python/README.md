@@ -1,27 +1,28 @@
-# Lesson 214: Reject addresses of bitfields
+# Lesson 215: Buffer assembly before writing output
 
-Original chibicc commit: [`c302a969d8217ab46113d494b8cd773cf057193d`](https://github.com/rui314/chibicc/commit/c302a969d8217ab46113d494b8cd773cf057193d).
+Original chibicc commit: [`2bdc6b800c1dbe6db584b91046785d4c48c41fb2`](https://github.com/rui314/chibicc/commit/2bdc6b800c1dbe6db584b91046785d4c48c41fb2).
 Earlier explanations are available in Git history.
 
-Unary & now checks the typed operand and reports cannot take address of
-bitfield for a direct bitfield member. A field can start between bytes and
-share storage with neighbors, so C has no ordinary pointer to its value.
-Taking the containing struct's address remains valid, including the temporary
-used by compound assignments. Python raises CompileError at the & token.
+This original commit prevents code-generation errors from leaving partial
+assembly files. The Python port already accumulates instructions in a list
+and returns a complete string before write_output opens the destination, so
+we retain that design and add explicit regression coverage for the guarantee.
+A comment marks the boundary in cc1; no second buffering abstraction is needed.
 
 ```sh
-printf 'int main(void){struct T{int a:3;int b;}x={1,42};int*p=&x.b;return *p;}\n' > /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The ordinary member b still has a byte address: lea plus its offset forms
-the pointer, and the load returns 42. Replacing &x.b with &x.a gives the new
-diagnostic before assembly generation. Tests cover direct, parenthesized and
-arrow forms, valid ordinary members, existing bitfield updates and upstream
-fixtures. There is no new runtime instruction for this parser restriction.
+The completed buffer contains main's mov $42 and return instructions. For
+invalid code such as return &1, generation raises not an lvalue before the
+output is opened. Tests verify an existing output stays intact, an absent one
+stays absent, stdout has no partial assembly and a successful output is complete.
+As in the original, the final file write is not an atomic rename: failure during
+that write itself can still leave partial data. -E behavior is unchanged.
 
 ## Tests and attribution
 

@@ -419,6 +419,8 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
                 conditions.pop()
                 position = skip_line(tokens, position + 1)
                 continue
+            if tokens[position].text == "error":
+                raise CompileError(tokens[position], "error")
             if tokens[position].at_bol:
                 continue
             raise CompileError(tokens[position], "invalid preprocessor directive")

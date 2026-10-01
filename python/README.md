@@ -1,31 +1,29 @@
-# Lesson 186: Add default include paths
+# Lesson 187: Add #error
 
-Original chibicc commit: [`a939a7a90638631c296dfb63d857b24555b25327`](https://github.com/rui314/chibicc/commit/a939a7a90638631c296dfb63d857b24555b25327).
+Original chibicc commit: [`e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7`](https://github.com/rui314/chibicc/commit/e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7).
 Earlier explanations are available in Git history.
 
-The internal compiler now appends default search directories after user `-I`
-entries: `include/` beside its entry point, `/usr/local/include`,
-`/usr/include/x86_64-linux-gnu`, and `/usr/include`. The order follows the C
-commit. Quoted includes still try their source directory first.
+An active `#error` directive immediately raises a compile error at the directive
+name. It runs during preprocessing, including in `-E` mode. A directive inside
+a skipped conditional branch is never visited and therefore does not fail.
 
-For Python, the entry point is main.py or the packaged .pyz file, so each can
-find an adjacent include directory. Defaults are added only in the internal
-compilation process, avoiding duplicates in the driver. No new bundled headers
-are introduced in this original commit. Finding system headers does not imply
-that every header's language/preprocessor features are supported yet.
+The original implementation reports the literal message `error`; it does not
+use any text after the directive. Python preserves that early behavior with
+the existing CompileError type and source-location formatter. Included headers
+retain their own filenames and line numbers in this diagnostic.
 
 ```sh
-printf '#include <linux/limits.h>\nint main(void){return PATH_MAX/128;}\n' > /tmp/lesson.c
+printf '#if 0\n#error unreachable\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 32 on Ubuntu, where PATH_MAX is 4096
+echo $?  # 42
 ```
 
-The header's constant expands into integer division. Assembly computes its
-quotient, leaves 32 in `%rax`, and returns. Tests verify search ordering, an
-adjacent header for a freshly packaged compiler, and Ubuntu's Linux limits
-header when installed. Original C sources remain unchanged.
+The inactive directive emits nothing; the selected main loads 42 into `%rax`
+and returns. An active `#error` stops before assembly is written. Tests check
+active and skipped branches, empty directive text, preprocessing-only mode,
+empty assembly output on failure and diagnostics from included headers.
 
 ## Tests and attribution
 

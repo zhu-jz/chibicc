@@ -1,6 +1,6 @@
-"""Lesson 186: Add default include paths.
+"""Lesson 187: Add #error.
 
-Based on chibicc commit a939a7a90638631c296dfb63d857b24555b25327.
+Based on chibicc commit e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

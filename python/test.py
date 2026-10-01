@@ -73,6 +73,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_error_directive(self):
+        for source in ('#error explanation\n', '#if 1\n#error\n#endif\n'):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('^ error\n', result.stderr)
+            self.assertEqual(result.stdout, '')
+        self.assert_program_returns('#if 0\n#error unreachable\n#endif\nint main(void){return 42;}\n', 42)
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                input='#error stop\n', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('^ error\n', result.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / 'error.h'
+            source = Path(directory) / 'main.c'
+            header.write_text('#error stop\n')
+            source.write_text('#include "error.h"\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertTrue(result.stderr.startswith(str(header) + ':1:'), result.stderr)
+
     def test_default_include_paths(self):
         paths = ['/custom']
         add_default_include_paths('/tmp/compiler/main.py', paths)

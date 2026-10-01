@@ -911,6 +911,12 @@ class Parser:
         if init.ty.kind == "ARRAY":
             return self.array_initializer(position, init)
         if init.ty.kind == "STRUCT":
+            if self.tokens[position].text != "{":
+                expression, end = self.assign(position)
+                add_type(expression)
+                if expression.ty.kind == "STRUCT":
+                    init.expr = expression
+                    return end
             return self.struct_initializer(position, init)
         init.expr, position = self.assign(position)
         return position
@@ -937,7 +943,7 @@ class Parser:
                 assignment = self.create_lvar_init(child, ty.base, child_designation, token)
                 expression = Node("COMMA", expression, assignment, tok=token)
             return expression
-        if ty.kind == "STRUCT":
+        if ty.kind == "STRUCT" and init.expr is None:
             expression = Node("NULL_EXPR", tok=token)
             for member in ty.members:
                 child_designation = InitDesg(parent=designation, member=member)

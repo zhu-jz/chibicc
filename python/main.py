@@ -1,6 +1,6 @@
-"""Lesson 102: Local struct initializers.
+"""Lesson 103: Struct copy initializers.
 
-Based on chibicc commit e9d2c46ab3cc8b8518df289a4fc24a9e3fc9b3fe.
+Based on chibicc commit aca19dd35027a12e245bfa52e6a98968e0cd2a9c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

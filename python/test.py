@@ -60,6 +60,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_copy_initializers(self):
+        for source in [
+            "int main(){struct T{int a,b;} x={1,42};struct T y=x;return y.b;}",
+            "int main(){struct T{int a;} x={42};struct T y=(x);return y.a;}",
+            "int main(){struct T{int a;} x={42};struct U{struct T t;} u={x};return u.t.a;}",
+            "int main(){struct T{char a[9];} x={};x.a[8]=42;struct T y=x;return y.a[8];}",
+        ]:
+            self.assert_program_returns(source, 42)
+        assembly = compile_program("int main(){struct T{int a;} x={42};struct T y=x;return y.a;}").stdout
+        self.assertIn("  mov 3(%rax), %r8b\n  mov %r8b, 3(%rdi)\n", assembly)
+
     def test_struct_initializers(self):
         for source, expected in [
             ("int main(){struct T{char a;int b;} x={1,42};return x.b;}", 42),
@@ -73,9 +84,6 @@ class ExpressionCompilerTests(unittest.TestCase):
         function = parse_body("struct T{char a;int b;} x={1,42};")
         self.assertEqual([member.idx for member in function.locals[0].ty.members], [0, 1])
         self.assertIn("  add $4, %rax\n", compile_program("int main(){struct T{char a;int b;} x={1,42};return x.b;}").stdout)
-        result = compile_program("int main(){struct T{int x;} a={42};struct T b=a;return b.x;}")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("expected '{'", result.stderr)
 
     def test_deduced_array_lengths(self):
         for source, expected in [

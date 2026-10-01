@@ -1,29 +1,27 @@
-# Lesson 269: Choose the input language explicitly
+# Lesson 270: Treat preprocessing inputs as C automatically
 
-Original chibicc commit: [`ee0a951b30646023ccc9a144afb4b380bf8d09b1`](https://github.com/rui314/chibicc/commit/ee0a951b30646023ccc9a144afb4b380bf8d09b1).
+Original chibicc commit: [`4064871212049d82af3632941d15e6a0757ebc3c`](https://github.com/rui314/chibicc/commit/4064871212049d82af3632941d15e6a0757ebc3c).
 Earlier explanations are available in Git history.
 
-The driver accepts attached or separate -x c, -x assembler and -x none forms.
-C and assembler override the filename extension; none restores extension-based
-selection. Object files ending in .o always retain their object-file role.
-Stdin now requires -xc or -x assembler because it has no recognized extension.
+After parsing options, -E now forces the language selection to C. This allows
+preprocessing stdin or a file with an arbitrary suffix without explicitly using
+-xc. Because the implication happens after all options, it also overrides an
+explicit -x assembler or -x none when -E is present.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.data
-python3 python/main.py -xc -S -o /tmp/lesson.s /tmp/lesson.data
+printf '#define VALUE 42\nint main(void){return VALUE;}\n' > /tmp/lesson.data
+python3 python/main.py -E -o /tmp/lesson.c /tmp/lesson.data
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Despite the .data suffix, the input is parsed as C and assembly loads and returns
-42. Tests compile C under an arbitrary suffix, assemble stdin into a real ELF
-object, link that object even with -xc present, reset with -x none and reject
-unknown languages. Existing stdin tests now pass -xc, matching original driver
-fixture changes. Python uses descriptive strings instead of C's FileType enum.
-The original driver stores one final language value for every input, rather than
-tracking -x state separately for each input path. The earlier assembly-input
-linking omission is unchanged by this step.
+The first compiler invocation emits preprocessed C with VALUE replaced by 42;
+the second emits assembly that loads and returns that constant. Tests verify
+stdin, unknown suffixes and both explicit language overrides, alongside existing
+language-selection and original fixture tests. Python stores the forced C string
+where C stores its FILE_C enum. Object-file precedence remains unchanged.
 
 ## Tests and attribution
 

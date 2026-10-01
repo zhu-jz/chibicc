@@ -82,6 +82,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_preprocess_implies_c_language(self):
+        for options in ([], ['-xassembler'], ['-xnone']):
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', *options, '-'], input='#define X 42\nX\n', capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (0, '42\n'), result.stderr)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source.data'
+            source.write_text('#define X 42\nX\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (0, '42\n'), result.stderr)
+
     def test_explicit_input_language(self):
         result = subprocess.run([sys.executable, str(COMPILER), '-S', '-o-', '-'], input='int x;', capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)

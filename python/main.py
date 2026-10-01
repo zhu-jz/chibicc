@@ -1,6 +1,6 @@
-"""Lesson 269: Choose the input language explicitly.
+"""Lesson 270: Treat preprocessing inputs as C automatically.
 
-Based on chibicc commit ee0a951b30646023ccc9a144afb4b380bf8d09b1.
+Based on chibicc commit 4064871212049d82af3632941d15e6a0757ebc3c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -150,6 +150,8 @@ def parse_args(arguments):
     include_paths.extend(idirafter)
     if not input_paths:
         raise CompileError(None, "no input files")
+    if opt_E:
+        opt_x = "C"
     return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x
 
 

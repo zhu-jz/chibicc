@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_literal_bits(self):
+        for spelling, kind, value in (("1.5f", "FLOAT", 1.5), (".1E4f", "FLOAT", 1000.0),
+                                      ("0x10.1p0", "DOUBLE", 16.0625), ("8f", "FLOAT", 8.0),
+                                      ("5.l", "DOUBLE", 5.0)):
+            token = tokenize(spelling)[0]
+            self.assertEqual((token.ty.kind, token.fvalue), (kind, value))
+        helper = '__attribute__((naked)) long bits(void){__asm__("movq %xmm0,%rax\\nret");}'
+        self.assert_program_returns("long bits(void);int main(void){1.5;return bits()==4609434218613702656;}", 1, helper)
+        self.assert_program_returns("long bits(void);int main(void){1.5f;return bits()==1069547520;}", 1, helper)
+        self.assert_program_returns("int main(void){return sizeof(8f)+sizeof(0.0);}", 12)
+        assembly = compile_program("int main(void){1.5f;return 42;}").stdout
+        self.assertIn("  mov $1069547520, %eax  # float 1.500000\n  movq %rax, %xmm0\n", assembly)
+
     def test_unnamed_prototype_parameters(self):
         self.assert_program_returns("int f(int,int*);int main(void){int x=20;return f(22,&x);}", 42, "int f(int a,int *b){return a+*b;}")
         function = parse(tokenize("int f(int,char*,int[3]);"))[0]
@@ -151,8 +164,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         self.assertIn("  shr %cl, %rax\n", compile_program("int main(void){return -1ULL>>63;}").stdout)
         for spelling in ("1lL", "1UU", "1LLL", "1ULx"):
-            with self.assertRaises(CompileError):
-                tokenize(spelling)
+            self.assertEqual(compile_program(f"int main(void){{return {spelling};}}").returncode, 1)
 
     def test_unsigned_integer_operations(self):
         for source, expected in [
@@ -916,11 +928,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             token = tokenize(spelling)[0]
             self.assertEqual((token.text, token.value), (spelling, value))
             self.assert_program_returns(f"int main(void){{return {spelling};}}", value & 255)
-        for spelling, position in [("08", 1), ("0b2", 1), ("0xG", 1), ("123abc", 3), ("0x", 1)]:
-            with self.assertRaises(CompileError) as caught:
-                tokenize(spelling)
-            self.assertEqual(caught.exception.position, position)
-            self.assertEqual(str(caught.exception), "invalid digit")
+        for spelling in ("08", "0b2", "0xG", "123abc", "0x"):
+            self.assertEqual(compile_program(f"int main(void){{return {spelling};}}").returncode, 1)
         self.assertIn("  mov $42, %rax\n", compile_program("int main(void){return 0x2a;}").stdout)
 
     def test_postfix_increment(self):

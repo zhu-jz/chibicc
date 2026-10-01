@@ -5,6 +5,8 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 
+import struct
+
 from common import CompileError, align_to
 from type import is_integer
 
@@ -128,6 +130,17 @@ class CodeGenerator:
                                   "  mov $0, %al", "  rep stosb"))
             return
         if node.kind == "NUM":
+            if node.ty.kind in ("FLOAT", "DOUBLE"):
+                format_code = "f" if node.ty.kind == "FLOAT" else "d"
+                try:
+                    data = struct.pack("<" + format_code, node.fvalue)
+                except OverflowError:
+                    data = struct.pack("<" + format_code, float("inf"))
+                bits = int.from_bytes(data, "little")
+                register = "%eax" if node.ty.kind == "FLOAT" else "%rax"
+                self.assembly.extend((f"  mov ${bits}, {register}  # {node.ty.kind.lower()} {node.fvalue:.6f}",
+                                      "  movq %rax, %xmm0"))
+                return
             self.assembly.append(f"  mov ${node.value}, %rax")
             return
         if node.kind == "NEG":

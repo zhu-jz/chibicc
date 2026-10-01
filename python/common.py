@@ -26,6 +26,7 @@ class Token:
     ty: Optional["Type"] = field(default=None, compare=False)
     str: bytes = b""  # String bytes, including the terminating zero.
     line_no: int = field(default=0, compare=False)
+    fvalue: float = 0.0
 
 
 class CompileError(Exception):
@@ -141,6 +142,7 @@ class Node:
     cont_label: Optional[str] = field(default=None, compare=False)
     cases: list["Node"] = field(default_factory=list, compare=False)
     default_case: Optional["Node"] = field(default=None, compare=False)
+    fvalue: float = 0.0
 
 
 @dataclass

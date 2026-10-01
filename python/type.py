@@ -19,10 +19,16 @@ ty_uchar = Type("CHAR", size=1, align=1, is_unsigned=True)
 ty_ushort = Type("SHORT", size=2, align=2, is_unsigned=True)
 ty_uint = Type("INT", size=4, align=4, is_unsigned=True)
 ty_ulong = Type("LONG", size=8, align=8, is_unsigned=True)
+ty_float = Type("FLOAT", size=4, align=4)
+ty_double = Type("DOUBLE", size=8, align=8)
 
 
 def is_integer(ty):
     return ty.kind in ("BOOL", "CHAR", "SHORT", "INT", "LONG", "ENUM")
+
+
+def is_flonum(ty):
+    return ty.kind in ("FLOAT", "DOUBLE")
 
 
 def copy_type(ty):

@@ -5,10 +5,12 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import string
+import re
 import sys
 
 from common import CompileError, Token
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
+from type import ty_float, ty_double
 
 
 def read_file(path):
@@ -99,7 +101,7 @@ def read_char_literal(source, start):
     return Token("NUM", source[start:end + 1], start, value, ty=ty_int), end + 1
 
 
-def read_int_literal(source, start):
+def read_int_literal(source, start, check_range=True):
     position = start
     base = 10
     alphanumeric = string.ascii_letters + string.digits
@@ -119,7 +121,7 @@ def read_int_literal(source, start):
         value = int(source[first_digit:position], base)
     except ValueError:
         raise CompileError(start, "integer is too large to convert") from None
-    if value > 2**64 - 1:
+    if check_range and value > 2**64 - 1:
         raise CompileError(start, "integer must fit in unsigned 64 bits")
     is_long = is_unsigned = False
     suffix = source[position:]
@@ -138,8 +140,6 @@ def read_int_literal(source, start):
     elif suffix[:1] in ("U", "u"):
         is_unsigned = True
         position += 1
-    if position < len(source) and source[position] in alphanumeric:
-        raise CompileError(position, "invalid digit")
     if is_long and is_unsigned:
         ty = ty_ulong
     elif is_long:
@@ -156,9 +156,39 @@ def read_int_literal(source, start):
         ty = ty_uint
     else:
         ty = ty_int
-    if value >= 2**63:
+    if 2**63 <= value < 2**64:
         value -= 2**64
     return Token("NUM", source[start:position], start, value, ty=ty), position
+
+
+def read_number(source, start):
+    if source[start] != ".":
+        token, position = read_int_literal(source, start, check_range=False)
+        if position == len(source) or source[position] not in ".eEfF":
+            if token.value >= 2**64:
+                raise CompileError(start, "integer must fit in unsigned 64 bits")
+            return token, position
+    hexadecimal = source[start:start + 2].lower() == "0x"
+    if hexadecimal:
+        pattern = r"0[xX](?:[0-9a-fA-F]+(?:\.[0-9a-fA-F]*)?|\.[0-9a-fA-F]+)(?:[pP][+-]?[0-9]+)?"
+    else:
+        pattern = r"(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
+    match = re.match(pattern, source[start:])
+    if match is None:
+        raise CompileError(start, "invalid floating literal")
+    spelling = match.group()
+    try:
+        value = float.fromhex(spelling) if hexadecimal else float(spelling)
+    except OverflowError:
+        value = float("inf")
+    position = start + len(spelling)
+    ty = ty_double
+    if position < len(source) and source[position] in "fF":
+        ty = ty_float
+        position += 1
+    elif position < len(source) and source[position] in "lL":
+        position += 1
+    return Token("NUM", source[start:position], start, ty=ty, fvalue=value), position
 
 
 def is_ident1(character):
@@ -212,8 +242,8 @@ def tokenize(source):
             position += 1
             continue
 
-        if "0" <= character <= "9":
-            token, position = read_int_literal(source, position)
+        if "0" <= character <= "9" or (character == "." and position + 1 < len(source) and "0" <= source[position + 1] <= "9"):
+            token, position = read_number(source, position)
             tokens.append(token)
             continue
 

@@ -1,36 +1,42 @@
-# Lesson 138: Unnamed prototype parameters
+# Lesson 139: Floating-point literals
 
-Original chibicc commit: [`1fad2595d6fa67e57cd795d4faac4306e42e72c5`](https://github.com/rui314/chibicc/commit/1fad2595d6fa67e57cd795d4faac4306e42e72c5).
+Original chibicc commit: [`1e57f72d8adf15937856a3ca3ca0e16ccb37421e`](https://github.com/rui314/chibicc/commit/1e57f72d8adf15937856a3ca3ca0e16ccb37421e).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Declarators may now omit their identifier, allowing prototypes such as
-`int f(int, char *);`. Types record name_pos even when name is absent. Variable,
-typedef, function and definition-parameter contexts explicitly require names
-and report the appropriate missing-name diagnostic. Prototype parameters need
-only their types.
+Numeric tokens and nodes now carry fvalue alongside integer value. Decimal
+fractions/exponents and hexadecimal fractions can form floating constants; f/F
+chooses four-byte float, while no suffix or l/L chooses eight-byte double.
+The emitter places the IEEE bit pattern in an integer register and moves it into
+xmm0. sizeof can inspect these literal types.
 
-Python uses optional Token fields and preserves name_pos during array-to-pointer
-parameter adjustment; that gives a readable error for an omitted array parameter
-name instead of dereferencing a null diagnostic token. Representative object
-token metadata is added as upstream does, ready for later uses. There are no
-changes to argument passing or type conversion.
+Python uses float/float.fromhex and struct.pack with explicit little-endian
+encoding, replacing C strtod and union bit reinterpretation. Float32 overflow
+becomes infinity like a target float conversion. Integer overflow remains a port
+diagnostic. As upstream, integer trial parsing no longer rejects leftover letters;
+malformed integer spellings are rejected later by the parser.
+
+This step adds constants only. Floating type keywords, arithmetic, conversions,
+variables and floating function signatures are not yet fully implemented. The
+historical scanner recognizes hex floats when a fraction triggers float parsing;
+hex exponent-only spellings are not added ahead of the original history.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int);int main(void){return f(42);}int f(int x){return x;}\n' > /tmp/lesson138.c
-python3 python/main.py /tmp/lesson138.c > /tmp/lesson138.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson138 /tmp/lesson138.s
-/tmp/lesson138
+printf 'int main(void){1.5f;return sizeof(1.5f);}\n' > /tmp/lesson139.c
+python3 python/main.py /tmp/lesson139.c > /tmp/lesson139.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson139 /tmp/lesson139.s
+/tmp/lesson139
 echo $?
 ```
 
-The prototype emits no function body. Main passes 42 in edi, and the later named
-parameter definition returns it, giving exit status 42. Tests cover unnamed
-scalar/pointer/array prototypes, preserved token positions, required-name errors,
-updated declaration diagnostics, emitted calls, execution, and original C code.
+The literal emits `mov $1069547520,%eax` followed by `movq %rax,%xmm0`, encoding
+float32 1.5. Main's integer return is sizeof(float), so exit status is 4. Tests
+inspect actual xmm0 bits with a small assembly helper, check decimal/hex spellings,
+suffix types, exact instructions, sizeof, malformed integers, execution, and the
+updated original literal program.
 
 ## Tests and attribution
 

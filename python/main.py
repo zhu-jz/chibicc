@@ -1,6 +1,6 @@
-"""Lesson 138: Unnamed prototype parameters.
+"""Lesson 139: Floating-point literals.
 
-Based on chibicc commit 1fad2595d6fa67e57cd795d4faac4306e42e72c5.
+Based on chibicc commit 1e57f72d8adf15937856a3ca3ca0e16ccb37421e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

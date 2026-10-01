@@ -1,29 +1,32 @@
-# Lesson 187: Add #error
+# Lesson 188: Add predefined macros
 
-Original chibicc commit: [`e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7`](https://github.com/rui314/chibicc/commit/e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7).
+Original chibicc commit: [`5f5a8507ff2f2509c27ac1a196fd1874345e5e95`](https://github.com/rui314/chibicc/commit/5f5a8507ff2f2509c27ac1a196fd1874345e5e95).
 Earlier explanations are available in Git history.
 
-An active `#error` directive immediately raises a compile error at the directive
-name. It runs during preprocessing, including in `-E` mode. A directive inside
-a skipped conditional branch is never visited and therefore does not fail.
+Preprocessing initializes the original set of 41 built-in object-like macros.
+They identify the x86-64 Linux target, describe C type sizes and language
+assumptions, and supply a few alternate keyword spellings. They are ordinary
+macro definitions afterward: source can redefine or undefine them.
 
-The original implementation reports the literal message `error`; it does not
-use any text after the directive. Python preserves that early behavior with
-the existing CompileError type and source-location formatter. Included headers
-retain their own filenames and line numbers in this diagnostic.
+Each Python compilation constructs a fresh dictionary, preventing changes from
+leaking into the next compilation. Built-in replacement tokens have a synthetic
+`<built-in>` source file, matching C. Values follow this historical compiler,
+not the host Python process or GCC: long double is still eight bytes, and some
+provided keyword aliases refer to syntax not implemented at this stage.
 
 ```sh
-printf '#if 0\n#error unreachable\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
+printf '#if __STDC__ && defined(__x86_64__)\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The inactive directive emits nothing; the selected main loads 42 into `%rax`
-and returns. An active `#error` stops before assembly is written. Tests check
-active and skipped branches, empty directive text, preprocessing-only mode,
-empty assembly output on failure and diagnostics from included headers.
+The target condition selects main; assembly loads 42 into `%rax` and returns.
+Tests check target conditions, type-size agreement, the unsigned size type,
+empty label prefix, the alignment alias, redefinition and reset between calls.
+The original fixture's new __STDC__ assertion runs unchanged.
 
 ## Tests and attribution
 

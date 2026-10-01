@@ -431,11 +431,65 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
     return tokens
 
 
+def init_macros():
+    definitions = {
+        '_LP64': '1',
+        '__C99_MACRO_WITH_VA_ARGS': '1',
+        '__ELF__': '1',
+        '__LP64__': '1',
+        '__SIZEOF_DOUBLE__': '8',
+        '__SIZEOF_FLOAT__': '4',
+        '__SIZEOF_INT__': '4',
+        '__SIZEOF_LONG_DOUBLE__': '8',
+        '__SIZEOF_LONG_LONG__': '8',
+        '__SIZEOF_LONG__': '8',
+        '__SIZEOF_POINTER__': '8',
+        '__SIZEOF_PTRDIFF_T__': '8',
+        '__SIZEOF_SHORT__': '2',
+        '__SIZEOF_SIZE_T__': '8',
+        '__SIZE_TYPE__': 'unsigned long',
+        '__STDC_HOSTED__': '1',
+        '__STDC_NO_ATOMICS__': '1',
+        '__STDC_NO_COMPLEX__': '1',
+        '__STDC_NO_THREADS__': '1',
+        '__STDC_NO_VLA__': '1',
+        '__STDC_VERSION__': '201112L',
+        '__STDC__': '1',
+        '__USER_LABEL_PREFIX__': '',
+        '__alignof__': '_Alignof',
+        '__amd64': '1',
+        '__amd64__': '1',
+        '__chibicc__': '1',
+        '__const__': 'const',
+        '__gnu_linux__': '1',
+        '__inline__': 'inline',
+        '__linux': '1',
+        '__linux__': '1',
+        '__signed__': 'signed',
+        '__typeof__': 'typeof',
+        '__unix': '1',
+        '__unix__': '1',
+        '__volatile__': 'volatile',
+        '__x86_64': '1',
+        '__x86_64__': '1',
+        'linux': '1',
+        'unix': '1',
+    }
+    macros = {}
+    for name, source in definitions.items():
+        file = File("<built-in>", 1, source)
+        tokens = tokenize(source)
+        for token in tokens:
+            token.file = file
+        macros[name] = Macro(name, tokens)
+    return macros
+
+
 def preprocess(tokens, files=None, include_paths=()):
     if files is None:
         files = []
     conditions = []
-    preprocess2(tokens, files, {}, conditions, include_paths)
+    preprocess2(tokens, files, init_macros(), conditions, include_paths)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     convert_keywords(tokens)

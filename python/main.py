@@ -1,6 +1,6 @@
-"""Lesson 187: Add #error.
+"""Lesson 188: Add predefined macros.
 
-Based on chibicc commit e7fdc2e3f1d20d38ad61f6cb87e72c613b7696c7.
+Based on chibicc commit 5f5a8507ff2f2509c27ac1a196fd1874345e5e95.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

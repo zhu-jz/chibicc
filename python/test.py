@@ -73,6 +73,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_predefined_macros(self):
+        self.assert_program_returns('#if __STDC__ && defined(__x86_64__) && defined(__linux__)\nint main(void){return 42;}\n#else\n#error target\n#endif\n', 42)
+        self.assert_program_returns('int main(void){return __SIZEOF_POINTER__==sizeof(void*) && __SIZEOF_LONG_DOUBLE__==sizeof(long double);}', 1)
+        self.assert_program_returns('__SIZE_TYPE__ value=18446744073709551615UL;int main(void){return value>0;}', 1)
+        self.assert_program_returns('__USER_LABEL_PREFIX__ int main(void){return __alignof__(long);}', 8)
+        self.assert_program_returns('#undef __STDC__\n#if defined(__STDC__)\n#error removed\n#endif\n#define __STDC__ 7\nint main(void){return __STDC__;}\n', 7)
+        self.assertEqual(tokenize('__STDC__')[0].value, 1)
+        self.assertEqual(tokenize('#undef __STDC__\n__STDC__\n')[0].kind, 'IDENT')
+        self.assertEqual(tokenize('__STDC__')[0].value, 1)
+
     def test_error_directive(self):
         for source in ('#error explanation\n', '#if 1\n#error\n#endif\n'):
             result = compile_program(source)

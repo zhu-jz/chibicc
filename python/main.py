@@ -1,6 +1,6 @@
-"""Lesson 200: Pass struct and union arguments.
+"""Lesson 201: Receive struct and union parameters.
 
-Based on chibicc commit 5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3.
+Based on chibicc commit d63b1f410a7aa3d308d0620d640f417a87b0c838.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

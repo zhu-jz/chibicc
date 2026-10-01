@@ -149,6 +149,19 @@ class CodeGenerator:
         self.assembly.extend((f"  movsd (%rsp), %xmm{index}", "  add $8, %rsp"))
         self.depth -= 1
 
+    def store_gp(self, register, offset, size):
+        registers = {1: ARGREG8, 2: ARGREG16, 4: ARGREG32, 8: ARGREG}
+        if size in registers:
+            self.assembly.append(f"  mov {registers[size][register]}, {offset}(%rbp)")
+            return
+        for i in range(size):
+            self.assembly.extend((f"  mov {ARGREG8[register]}, {offset + i}(%rbp)",
+                                  f"  shr $8, {ARGREG[register]}"))
+
+    def store_fp(self, register, offset, size):
+        instruction = "movss" if size == 4 else "movsd"
+        self.assembly.append(f"  {instruction} %xmm{register}, {offset}(%rbp)")
+
     def push_args(self, args):
         stack, gp, fp = 0, 0, 0
         for arg in args:
@@ -513,23 +526,6 @@ class CodeGenerator:
             return
         raise CompileError(node.tok, "invalid statement")
 
-    def store_fp(self, index, var):
-        instruction = "movss" if var.ty.size == 4 else "movsd"
-        self.assembly.append(f"  {instruction} %xmm{index}, {var.offset}(%rbp)")
-
-    def store_gp(self, index, var):
-        if var.ty.size == 1:
-            register = ARGREG8[index]
-        elif var.ty.size == 2:
-            register = ARGREG16[index]
-        elif var.ty.size == 4:
-            register = ARGREG32[index]
-        elif var.ty.size == 8:
-            register = ARGREG[index]
-        else:
-            raise CompileError(var.ty.name, "unsupported parameter size")
-        self.assembly.append(f"  mov {register}, {var.offset}(%rbp)")
-
     def generate(self, program, files=()):
         self.assembly = []
         for file in files:
@@ -559,7 +555,17 @@ class CodeGenerator:
                 continue
             top, gp, fp = 16, 0, 0
             for var in function.params:
-                if var.ty.kind in ("FLOAT", "DOUBLE"):
+                ty = var.ty
+                if ty.kind in ("STRUCT", "UNION"):
+                    on_stack = True
+                    if ty.size <= 16:
+                        fp1 = has_flonum(ty, 0, 8)
+                        fp2 = has_flonum(ty, 8, 16, 8)
+                        if fp + fp1 + fp2 < FP_MAX and gp + (not fp1) + (not fp2) < GP_MAX:
+                            fp += fp1 + fp2
+                            gp += (not fp1) + (not fp2)
+                            on_stack = False
+                elif ty.kind in ("FLOAT", "DOUBLE"):
                     on_stack = fp >= FP_MAX
                     fp += 1
                 else:
@@ -598,15 +604,31 @@ class CodeGenerator:
             for var in function.params:
                 if var.offset > 0:
                     continue
-                if var.ty.kind in ("FLOAT", "DOUBLE"):
+                ty = var.ty
+                if ty.kind in ("STRUCT", "UNION"):
+                    assert ty.size <= 16
+                    if has_flonum(ty, 0, 8):
+                        self.store_fp(fp, var.offset, min(8, ty.size))
+                        fp += 1
+                    else:
+                        self.store_gp(gp, var.offset, min(8, ty.size))
+                        gp += 1
+                    if ty.size > 8:
+                        if has_flonum(ty, 8, 16):
+                            self.store_fp(fp, var.offset + 8, ty.size - 8)
+                            fp += 1
+                        else:
+                            self.store_gp(gp, var.offset + 8, ty.size - 8)
+                            gp += 1
+                elif ty.kind in ("FLOAT", "DOUBLE"):
                     if fp >= 8:
                         raise CompileError(var.ty.name, "at most 8 floating parameters are supported")
-                    self.store_fp(fp, var)
+                    self.store_fp(fp, var.offset, ty.size)
                     fp += 1
                 else:
                     if gp >= len(ARGREG):
                         raise CompileError(var.ty.name, "at most 6 parameters are supported")
-                    self.store_gp(gp, var)
+                    self.store_gp(gp, var.offset, ty.size)
                     gp += 1
             self.gen_stmt(function.body)
             assert self.depth == 0

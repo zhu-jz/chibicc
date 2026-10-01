@@ -77,6 +77,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aggregate_parameter_definitions(self):
+        for declaration, initializer, expression in [
+            ('struct T{int a;double b;};', '{12,30}', 'x.a+x.b'),
+            ('struct T{double a[2];};', '{{12,30}}', 'x.a[0]+x.a[1]'),
+            ('struct T{char a[3];};', '{{12,15,15}}', 'x.a[0]+x.a[1]+x.a[2]'),
+            ('struct T{long a,b,c;};', '{12,15,15}', 'x.a+x.b+x.c'),
+            ('union T{long a;double b;};', '{42}', 'x.a'),
+        ]:
+            kind = declaration.split()[0]
+            definition = declaration + f'int f({kind} T x){{return {expression};}}'
+            caller = f'int main(void){{{kind} T x={initializer};return f(x);}}'
+            self.assert_program_returns(definition + caller, 42)
+            self.assert_program_returns(definition + 'int call(void);int main(void){return call();}', 42,
+                                        declaration + f'int f({kind} T);' + caller.replace('main(void)', 'call(void)'))
+        assembly = compile_program('struct T{char a[3];};int f(struct T x){return x.a[2];}').stdout
+        self.assertIn('  shr $8, %rdi\n', assembly)
+
     def test_aggregate_argument_calls(self):
         for declaration, initializer, expression in [
             ('struct T{int a;double b;};', '{12,30}', 'x.a+x.b'),

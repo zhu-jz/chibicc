@@ -1,34 +1,28 @@
-# Lesson 200: Pass struct and union arguments
+# Lesson 201: Receive struct and union parameters
 
-Original chibicc commit: [`5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3`](https://github.com/rui314/chibicc/commit/5e0f8c47e3bd91f589710a28f09b718d4a0ec6f3).
+Original chibicc commit: [`d63b1f410a7aa3d308d0620d640f417a87b0c838`](https://github.com/rui314/chibicc/commit/d63b1f410a7aa3d308d0620d640f417a87b0c838).
 Earlier explanations are available in Git history.
 
-Calls now copy aggregates instead of casting them to a scalar. Values larger
-than sixteen bytes go on the stack, rounded to eight-byte slots. Smaller ones
-are classified recursively in two eight-byte ranges: an all-floating range
-uses XMM, and any integer or pointer member makes its range use a GP register.
-Arrays and nested aggregates participate in the same classification.
-
-The generated code copies each byte into a temporary stack area, then pops
-register chunks into argument registers. Stack chunks stay until the call
-returns. This commit changes callers only; GCC helper functions exercise the
-receiving side. Python uses loops and lists instead of recursive C linked lists.
-We retain this commit's strict register-limit comparisons and classification
-of an empty second range; boundary cases await the corresponding original fix.
+Aggregate parameters now use the same register/stack distinction on entry.
+Small register chunks are saved into local slots; unusual GP chunk sizes use
+byte stores and shifts, so a three-byte struct is handled without overwriting
+its neighbor. Large aggregates have positive offsets in the incoming area.
+Python factors the stores into straightforward methods instead of C switches.
 
 ```sh
-printf 'struct T{long a,b,c;};int f(struct T);int main(void){struct T x={12,15,15};return f(x);}\n' > /tmp/lesson.c
-printf 'struct T{long a,b,c;};int f(struct T x){return x.a+x.b+x.c;}\n' > /tmp/helper.c
+printf 'struct T{int a;double b;};int sum(struct T x){return x.a+x.b;}int main(void){struct T x={12,30};return sum(x);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s /tmp/helper.c
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Here sub $24 reserves the aggregate copy, byte moves fill it, and the caller
-removes thirty-two bytes including alignment padding after the call. Tests
-cover mixed integer/double structs, floating arrays, a three-byte struct, a
-large stack struct, a union, assembly cleanup, and the original C fixtures.
+The caller puts the integer chunk in rdi and the double chunk in xmm0. The
+callee stores them relative to rbp, accesses the members, and returns 42 in
+rax. Tests cover mixed and floating aggregates, a tiny struct, a large stack
+struct, unions, GCC callers, and the unchanged original C examples. This
+historical classifier retains its boundary comparisons and its shifted second
+range in parameter allocation; aggregate returns are still a later step.
 
 ## Tests and attribution
 

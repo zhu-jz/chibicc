@@ -1,6 +1,6 @@
-"""Lesson 183: Support backslash-newline continuation.
+"""Lesson 184: Add angle-bracket and macro-expanded includes.
 
-Based on chibicc commit b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5.
+Based on chibicc commit d85fc4ffcfb8875aa191481e5c153a1e07066f8e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -72,6 +72,36 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_angle_and_macro_includes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.c'
+            header = Path(directory) / 'answer.h'
+            header.write_text('#define VALUE 42\n')
+            for directive in ('#include <answer.h>\n',
+                              '#define HEADER "answer.h"\n#include HEADER\n',
+                              '#define HEADER < answer.h\n#include HEADER >\n'):
+                source.write_text(directive + 'int main(void){return VALUE;}\n')
+                result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assert_program_returns(result.stdout, 42)
+            literal_name = 'raw\\file.h'
+            (Path(directory) / literal_name).write_text('int main(void){return 7;}\n')
+            source.write_text('#include "' + literal_name + '"\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assert_program_returns(result.stdout, 7)
+            subdir = Path(directory) / 'sub'
+            subdir.mkdir()
+            source = subdir / 'main.c'
+            source.write_text('#include <answer.h>\nint main(void){return VALUE;}\n')
+            result = subprocess.run([sys.executable, str(COMPILER.resolve()), '-E', str(source)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assert_program_returns(result.stdout, 42)
+        result = compile_program('#include <missing.h\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected '>'", result.stderr)
+
     def test_line_continuation(self):
         self.assertEqual(remove_backslash_newline('a\\\nb\\\nc\nd\n'), 'abc\n\n\nd\n')
         self.assertEqual(remove_backslash_newline('a\\\nb'), 'ab\n')
@@ -453,7 +483,7 @@ int main(void){return 42;}
             self.assertEqual(result.returncode, 1)
             self.assertIn("missing.h", result.stderr)
             self.assertTrue(result.stderr.startswith(f"{source}:1:"), result.stderr)
-        self.assertIn("expected a filename", compile_program("#include <file.h>\n").stderr)
+        self.assertIn("cannot open", compile_program("#include <file.h>\n").stderr)
 
     def test_null_preprocessor_directives(self):
         self.assert_program_returns("#\n /* comment */ #\nint main(void){return 42;}\n#\n", 42)

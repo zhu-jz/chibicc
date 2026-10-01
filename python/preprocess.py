@@ -207,9 +207,11 @@ def read_const_expr(tokens, position, macros):
     return result, rest
 
 
-def join_tokens(tokens):
+def join_tokens(tokens, end=None):
     parts = []
     for index, token in enumerate(tokens):
+        if index == end:
+            break
         if token.kind == "EOF":
             break
         if index and token.has_space:
@@ -306,6 +308,26 @@ def expand_macro(tokens, position, files, macros, conditions):
     return True
 
 
+def read_include_filename(tokens, position, files, macros, conditions):
+    token = tokens[position]
+    if token.kind == "STR":
+        return token.text[1:-1], True, skip_line(tokens, position + 1)
+    if token.text == "<":
+        start = position + 1
+        while tokens[position].text != ">":
+            if tokens[position].at_bol or tokens[position].kind == "EOF":
+                raise CompileError(tokens[position], "expected '>'")
+            position += 1
+        name = join_tokens(tokens[start:position])
+        return name, False, skip_line(tokens, position + 1)
+    if token.kind == "IDENT":
+        line, rest = copy_line(tokens, position)
+        preprocess2(line, files, macros, conditions)
+        name, is_dquote, _ = read_include_filename(line, 0, files, macros, conditions)
+        return name, is_dquote, rest
+    raise CompileError(token, "expected a filename")
+
+
 def preprocess2(tokens, files, macros, conditions):
     result = []
     position = 0
@@ -317,19 +339,18 @@ def preprocess2(tokens, files, macros, conditions):
             position += 1
             if tokens[position].text == "include":
                 filename = tokens[position + 1]
-                if filename.kind != "STR":
-                    raise CompileError(filename, "expected a filename")
-                including_file = filename.file.name if filename.file else "-"
+                name, is_dquote, rest = read_include_filename(tokens, position + 1, files, macros, conditions)
+                including_file = token.file.name if token.file else "-"
                 directory = os.path.dirname(including_file) or "."
-                name = os.fsdecode(filename.str.split(b"\0", 1)[0])
-                path = name if name.startswith("/") else directory + "/" + name
+                path = name
+                if not name.startswith("/") and os.path.exists(directory + "/" + name):
+                    path = directory + "/" + name
                 try:
                     included = tokenize_file(path, files)
                 except CompileError as error:
                     if error.position is None:
                         raise CompileError(filename, str(error)) from None
                     raise
-                rest = skip_line(tokens, position + 2)
                 tokens[position - 1:rest] = [replace(tok) for tok in included[:-1]]
                 position -= 1
                 continue

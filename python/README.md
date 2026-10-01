@@ -1,35 +1,33 @@
-# Lesson 183: Support backslash-newline continuation
+# Lesson 184: Add angle-bracket and macro-expanded includes
 
-Original chibicc commit: [`b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5`](https://github.com/rui314/chibicc/commit/b33fe0ea828e6a8ff3ec2d8bd5845da2b337afa5).
+Original chibicc commit: [`d85fc4ffcfb8875aa191481e5c153a1e07066f8e`](https://github.com/rui314/chibicc/commit/d85fc4ffcfb8875aa191481e5c153a1e07066f8e).
 Earlier explanations are available in Git history.
 
-Reading a source file now removes each backslash followed immediately by a
-newline before tokenization. This can join identifiers, continue macro bodies,
-or extend a line comment. It also applies inside string literals because the
-transformation precedes lexical interpretation.
+Include operands now accept quoted strings, tokens between angle brackets,
+or an identifier whose expanded line becomes one of those forms. Quoted
+filenames use their original text instead of decoded string bytes, preserving
+literal backslashes. Angle-bracket filenames are reconstructed from tokens.
 
-A counter delays each removed newline until the next ordinary newline, where
-it adds blank lines. Later source lines therefore retain their physical line
-numbers. Tokens within a continued logical line use its opening line number,
-matching the original approach. Python constructs a new string rather than
-moving characters within a mutable C buffer. Raw in-memory tokenizer calls
-remain untransformed; file and stdin compilation use the new reading stage.
+Both forms first try a relative path beside the including file. If that path
+is absent, the filename itself is opened, allowing a working-directory path.
+This historical step has no configurable or system include search directories
+yet. The quote/angle distinction is recorded for the next stages. Python uses
+its existing filesystem operations and explicit return values instead of C
+output pointers. An unmatched angle bracket produces a diagnostic.
 
 ```sh
-cat > /tmp/lesson.c <<'C'
-#define VALUE 7+\
-35
-int main(void){return VALUE;}
-C
+printf '#define VALUE 42\n' > /tmp/answer.h
+printf '#define HEADER <answer.h>\n#include HEADER\nint main(void){return VALUE;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The replacement is the token expression `7+35`; assembly adds those values
-and returns 42 in `%rax`. Tests cover joined identifiers, macros, strings,
-continued comments, delayed newline counts and a later line's diagnostic.
+After including and expanding VALUE, assembly loads 42 into `%rax` and returns.
+Tests cover direct angle brackets, macro-expanded quoted or partial angle
+forms, raw backslashes, working-directory fallback and missing closing brackets.
+The updated original macro program includes both new headers unchanged.
 
 ## Tests and attribution
 

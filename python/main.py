@@ -1,6 +1,6 @@
-"""Lesson 103: Struct copy initializers.
+"""Lesson 104: Local union initializers.
 
-Based on chibicc commit aca19dd35027a12e245bfa52e6a98968e0cd2a9c.
+Based on chibicc commit 483b194a80e904c11c5c6d855303596145adacee.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

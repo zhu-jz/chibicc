@@ -60,6 +60,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_union_initializers(self):
+        for source, expected in [
+            ("int main(){union T{int a;char b[4];} x={0x01020304};return x.b[0];}", 4),
+            ("int main(){union T{int a;char b[4];} x={0x01020304};return x.b[1];}", 3),
+            ("int main(){union T{struct S{char a,b,c,d;} s;int n;} x={{4,3,2,1}};return x.n==0x01020304;}", 1),
+            ("int main(){union T{char a;long b;} x={42};return x.a;}", 42),
+            ("int main(){union T{char a;long b;} x={42};char *p=&x;return p[7];}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){union T{char a;long b;} x={42};return x.a;}").stdout
+        self.assertIn("  mov $8, %rcx\n", assembly)
+        self.assertIn("  mov %al, (%rdi)\n", assembly)
+        for source in ("int main(){union T{int a,b;} x={1,2};}",
+                       "int main(){union T{int a;} x={};}"):
+            self.assertEqual(compile_program(source).returncode, 1)
+
     def test_struct_copy_initializers(self):
         for source in [
             "int main(){struct T{int a,b;} x={1,42};struct T y=x;return y.b;}",

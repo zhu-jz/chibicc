@@ -49,7 +49,7 @@ def new_initializer(ty, is_flexible=False):
             init.is_flexible = True
             return init
         init.children = [new_initializer(ty.base) for _ in range(ty.array_len)]
-    elif ty.kind == "STRUCT":
+    elif ty.kind in ("STRUCT", "UNION"):
         init.children = [new_initializer(member.ty) for member in ty.members]
     return init
 
@@ -905,6 +905,16 @@ class Parser:
             index += 1
         return position + 1
 
+    def union_initializer(self, position, init):
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position], "expected '{'")
+        if not init.children:
+            raise CompileError(self.tokens[position], "union has no members")
+        position = self.initializer2(position + 1, init.children[0])
+        if self.tokens[position].text != "}":
+            raise CompileError(self.tokens[position], "expected '}'")
+        return position + 1
+
     def initializer2(self, position, init):
         if init.ty.kind == "ARRAY" and self.tokens[position].kind == "STR":
             return self.string_initializer(position, init)
@@ -918,6 +928,8 @@ class Parser:
                     init.expr = expression
                     return end
             return self.struct_initializer(position, init)
+        if init.ty.kind == "UNION":
+            return self.union_initializer(position, init)
         init.expr, position = self.assign(position)
         return position
 
@@ -951,6 +963,10 @@ class Parser:
                                                    child_designation, token)
                 expression = Node("COMMA", expression, assignment, tok=token)
             return expression
+        if ty.kind == "UNION":
+            member = ty.members[0]
+            child_designation = InitDesg(parent=designation, member=member)
+            return self.create_lvar_init(init.children[0], member.ty, child_designation, token)
         if init.expr is None:
             return Node("NULL_EXPR", tok=token)
         target = self.init_desg_expr(designation, token)

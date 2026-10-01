@@ -1,16 +1,16 @@
-# Lesson 227: Add U-prefixed character literals
+# Lesson 228: Read u8-prefixed string literals
 
-Original chibicc commit: [`2dac3afece31c27bf773efbc1f30c6a67088d3b6`](https://github.com/rui314/chibicc/commit/2dac3afece31c27bf773efbc1f30c6a67088d3b6).
+Original chibicc commit: [`57b21fe90296c867888d7c8c60d243bc254a39d7`](https://github.com/rui314/chibicc/commit/57b21fe90296c867888d7c8c60d243bc254a39d7).
 Earlier explanations are available in Git history.
 
-U-prefixed character literals now use unsigned int, preserving the decoded
-32-bit code-point bits. Unlike the preceding u prefix, supplementary characters
-keep their full value. sizeof(U'a') is 4, and shifts use unsigned semantics.
-The source prefix remains part of the token for macro stringizing.
+u8-prefixed strings now use the existing char-array reader. The prefix and
+quotes form one STR token; its payload is UTF-8 bytes followed by zero, just
+like an ordinary string at this stage. The reader accepts a separate quote
+position so diagnostics and stringizing retain the complete source spelling.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return U'🍣'-127801;}
+int main(void){char s[]=u8"α🌮";return sizeof(s)+35;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,12 +18,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The assembly loads code point 127843 and subtracts 127801. Tests verify ASCII,
-Greek, Japanese, emoji, unsigned high-bit shifts, size, token type, stringizing
-and original fixtures. Python reuses its code-point reader with ty_uint;
-wide L literals remain signed int and u literals remain unsigned short.
-This is character-literal support only; prefixed string literals await their
-own original commits.
+The two characters occupy six UTF-8 bytes plus zero; the initialized array
+has size 7. Its size plus 35 returns 42. Tests inspect the bytes and element
+type, initialize a char array, join adjacent strings, preserve the prefix in
+stringizing, diagnose an unclosed string and run original fixtures. Python
+keeps its existing UTF-8 encoding; this syntax adds no new runtime conversion.
+UTF-16, UTF-32 and wide string payloads remain separate later steps.
 
 ## Tests and attribution
 

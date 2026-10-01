@@ -1,6 +1,6 @@
-"""Lesson 227: Add U-prefixed character literals.
+"""Lesson 228: Read u8-prefixed string literals.
 
-Based on chibicc commit 2dac3afece31c27bf773efbc1f30c6a67088d3b6.
+Based on chibicc commit 57b21fe90296c867888d7c8c60d243bc254a39d7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

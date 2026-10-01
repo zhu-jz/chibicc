@@ -79,6 +79,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_utf8_string_literals(self):
+        token = tokenize('u8"α🌮"')[0]
+        self.assertEqual((token.text,token.str,token.ty.base.size,token.ty.array_len),('u8"α🌮"','α🌮'.encode()+b'\0',1,7))
+        self.assert_program_returns('int main(void){char s[]=u8"α🌮";return sizeof(s)+35;}',42)
+        self.assert_program_returns('int main(void){return sizeof(u8"abc" "def");}',7)
+        self.assertEqual(tokenize('#define S(x) #x\nS(u8"a")')[0].str,b'u8"a"\0')
+        result = compile_program('int main(void){return sizeof(u8"unclosed);}')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('unclosed string literal',result.stderr)
+
     def test_utf32_character_literals(self):
         for spelling,value in [("U'a'",97),("U'β'",946),("U'あ'",12354),("U'🍣'",127843)]:
             token = tokenize(spelling)[0]

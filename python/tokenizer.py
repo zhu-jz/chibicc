@@ -139,10 +139,11 @@ def string_literal_end(source, position):
     return position
 
 
-def read_string_literal(source, start):
-    end = string_literal_end(source, start + 1)
+def read_string_literal(source, start, quote=None):
+    quote = start if quote is None else quote
+    end = string_literal_end(source, quote + 1)
     data = bytearray()
-    position = start + 1
+    position = quote + 1
     while position < end:
         if source[position] == "\\":
             escaped = source[position + 1]
@@ -354,6 +355,10 @@ def tokenize(source):
 
         if character == '"':
             token, position = read_string_literal(source, position)
+            append_token(token)
+            continue
+        if source.startswith('u8"', position):
+            token, position = read_string_literal(source, position, position + 2)
             append_token(token)
             continue
 

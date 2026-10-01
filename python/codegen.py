@@ -613,6 +613,9 @@ class CodeGenerator:
         if node.kind == "EXPR_STMT":
             self.gen_expr(node.lhs)
             return
+        if node.kind == "ASM":
+            self.assembly.append("  " + node.asm_str)
+            return
         raise CompileError(node.tok, "invalid statement")
 
     def generate(self, program, files=()):

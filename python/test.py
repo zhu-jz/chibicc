@@ -81,6 +81,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_basic_asm_statements(self):
+        instructions = 'mov $42, %rax\\nmov %rbp, %rsp\\npop %rbp\\nret'
+        for modifiers in ('', 'volatile', 'inline volatile'):
+            source = 'int f(void){asm ' + modifiers + '("' + instructions + '");}int main(void){return f();}'
+            self.assert_program_returns(source, 42)
+            self.assertIn('  mov $42, %rax\nmov %rbp, %rsp\npop %rbp\nret\n', compile_program(source).stdout)
+        self.assert_program_returns('int main(void){asm("nop" "\\nnop");return 42;}', 42)
+        for operand in ('42', 'u"nop"', 'U"nop"'):
+            result = compile_program('int main(void){asm(' + operand + ');return 0;}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('expected string literal', result.stderr)
+
     def test_omitted_conditional_operand(self):
         for source, expected in [
             ('int main(void){return 42?:0;}', 42),

@@ -591,6 +591,8 @@ class Parser:
     #      | "while" "(" expr ")" stmt
     def stmt(self, position):
         token = self.tokens[position]
+        if token.text == "asm":
+            return self.asm_stmt(position)
         if self.tokens[position].text == "return":
             if self.tokens[position + 1].text == ";":
                 return Node("RETURN", tok=token), position + 2
@@ -741,6 +743,21 @@ class Parser:
                 raise CompileError(self.tokens[position + 1], "expected ';'")
             return Node("GOTO", unique_label=self.cont_label, tok=token), position + 2
         return self.expr_stmt(position)
+
+    def asm_stmt(self, position):
+        start = self.tokens[position]
+        position += 1
+        while self.tokens[position].text in ("volatile", "inline"):
+            position += 1
+        if self.tokens[position].text != "(":
+            raise CompileError(self.tokens[position], "expected '('")
+        token = self.tokens[position + 1]
+        if token.kind != "STR" or token.ty.base.kind != "CHAR":
+            raise CompileError(token, "expected string literal")
+        if self.tokens[position + 2].text != ")":
+            raise CompileError(self.tokens[position + 2], "expected ')'")
+        text = token.str.split(b"\0", 1)[0].decode('utf-8', errors='replace')
+        return Node("ASM", tok=start, asm_str=text), position + 3
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",

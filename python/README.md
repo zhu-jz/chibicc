@@ -1,28 +1,30 @@
-# Lesson 258: Omit the middle operand of a conditional
+# Lesson 259: Emit basic inline assembly statements
 
-Original chibicc commit: [`e28a612e9c2293182a83d5a7c6f48129455ce951`](https://github.com/rui314/chibicc/commit/e28a612e9c2293182a83d5a7c6f48129455ce951).
+Original chibicc commit: [`a2535163e232cd547b14960bf4232305d239741d`](https://github.com/rui314/chibicc/commit/a2535163e232cd547b14960bf4232305d239741d).
 Earlier explanations are available in Git history.
 
-GNU `a ?: b` now saves a in an unnamed local and rewrites the expression as
-`(tmp=a, tmp ? tmp : b)`. Saving the value is essential: an increment or function
-call in a must run once, even though its value is both the condition and result.
-The ordinary conditional type conversion still applies to the result branches.
+The parser now accepts `asm`, optional inline/volatile modifiers and a narrow
+string literal in parentheses. An ASM node stores the decoded string, and the
+statement generator writes it directly into the emitted assembly. Adjacent
+literals have already been joined by preprocessing.
 
 ```sh
-printf 'int main(void){int x=41;int y=++x?:0;return y+(x!=42);}\n' > /tmp/lesson.c
+printf '%s\n' 'int f(void){asm("mov $42, %rax\nmov %rbp, %rsp\npop %rbp\nret");}int main(void){return f();}' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly increments x, stores its value into the compiler's temporary, tests that
-saved value and reloads it for the true branch. The return also checks x stayed
-42. Tests cover true and false branches, nested expressions, single evaluation,
-floating and pointer values, plus the original arithmetic fixtures.
-Python builds the same assignment, comma and conditional Nodes explicitly;
-C allocates linked node structures. No dedicated assembly instruction is needed
-for the extension because existing expression generation handles the rewrite.
+The supplied instructions set rax to 42, restore the frame and return directly
+from f. Main calls f and returns that value. Restoring the frame is necessary
+because the compiler emitted f's prologue before the asm statement. Tests inspect
+the literal assembly, run modifier and concatenation cases, reject wide strings,
+and execute the original asm.c functions.
+This is basic asm only: there are no operand constraints or clobber lists. Python
+stores decoded text instead of C's byte pointer; embedded NUL truncates the text
+as in C, and invalid UTF-8 bytes become replacement characters. The original
+parser leaves a following semicolon for the next empty statement to consume.
 
 ## Tests and attribution
 

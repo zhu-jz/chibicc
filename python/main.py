@@ -1,6 +1,6 @@
-"""Lesson 258: Omit the middle operand of a conditional.
+"""Lesson 259: Emit basic inline assembly statements.
 
-Based on chibicc commit e28a612e9c2293182a83d5a7c6f48129455ce951.
+Based on chibicc commit a2535163e232cd547b14960bf4232305d239741d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

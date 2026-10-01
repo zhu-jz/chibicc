@@ -53,6 +53,7 @@ class Token:
     str: bytes = b""  # String bytes, including the terminating zero.
     line_no: int = field(default=0, compare=False)
     fvalue: float = 0.0
+
     at_bol: bool = field(default=False, compare=False)
     has_space: bool = field(default=False, compare=False)
     file: Optional[File] = field(default=None, compare=False)
@@ -183,6 +184,7 @@ class Node:
     cases: list["Node"] = field(default_factory=list, compare=False)
     default_case: Optional["Node"] = field(default=None, compare=False)
     fvalue: float = 0.0
+    asm_str: str = ""
 
 
 @dataclass

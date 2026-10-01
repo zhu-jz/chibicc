@@ -1582,6 +1582,8 @@ class Parser:
                 var.align = attr.align
             if self.tokens[position].text == "=":
                 position = self.gvar_initializer(position + 1, var)
+            elif not attr.is_extern:
+                var.is_tentative = True
         return position + 1
 
     def is_function(self, position):
@@ -1619,6 +1621,15 @@ class Parser:
             if referenced is not None:
                 self.mark_live(referenced)
 
+    def scan_globals(self):
+        remaining = []
+        for var in self.globals:
+            if var.is_tentative and any(other is not var and other.is_definition
+                                        and other.name == var.name for other in self.globals):
+                continue
+            remaining.append(var)
+        self.globals = remaining
+
     # program = (typedef | function-definition | global-variable)*
     def parse(self):
         position = 0
@@ -1635,6 +1646,7 @@ class Parser:
         for obj in self.globals:
             if obj.is_root:
                 self.mark_live(obj)
+        self.scan_globals()
         return self.globals
 
 

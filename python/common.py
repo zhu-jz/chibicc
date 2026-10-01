@@ -124,6 +124,7 @@ class Obj:
     is_function: bool = False
     is_definition: bool = False
     is_static: bool = False
+    is_tentative: bool = False
     params: list["Obj"] = field(default_factory=list)
     is_inline: bool = False
     is_live: bool = field(default=False, compare=False)

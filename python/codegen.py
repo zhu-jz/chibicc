@@ -628,8 +628,11 @@ class CodeGenerator:
                 alignment = max(16, var.align) if var.ty.kind == "ARRAY" and var.ty.size >= 16 else var.align
                 section = ".data" if var.init_data is not None else ".bss"
                 visibility = ".local" if var.is_static else ".globl"
-                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}",
-                                      f"  {section}", f"{var.name}:"])
+                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}"])
+                if var.is_tentative:
+                    self.assembly.append(f"  .comm {var.name}, {var.ty.size}, {alignment}")
+                    continue
+                self.assembly.extend([f"  {section}", f"{var.name}:"])
                 if var.init_data is not None:
                     relocations = {rel.offset: rel for rel in var.relocations}
                     position = 0

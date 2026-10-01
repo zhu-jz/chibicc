@@ -1,32 +1,31 @@
-# Lesson 264: Provide offsetof in stddef.h
+# Lesson 265: Emit common symbols for tentative globals
 
-Original chibicc commit: [`1b99badce48083c5fa6b8b5872e899c7d1a47f9a`](https://github.com/rui314/chibicc/commit/1b99badce48083c5fa6b8b5872e899c7d1a47f9a).
+Original chibicc commit: [`85e46b1071b54649740b35df939f32ed188c0e13`](https://github.com/rui314/chibicc/commit/85e46b1071b54649740b35df939f32ed188c0e13).
 Earlier explanations are available in Git history.
 
-The bundled stddef.h now defines offsetof(type,member) using a cast of zero to
-an aggregate pointer, a member reference and its address, cast to size_t. Existing
-layout and address-expression code already provide the implementation. There
-is no new builtin or parser rule in this original commit.
+File-scope definitions without an initializer now become tentative. Assembly
+emits `.comm name,size,alignment`, allowing the linker to combine common symbols
+or replace one with an initialized definition from another translation unit.
+Within a file, a scan discards a tentative object when another definition of the
+same name exists. Extern declarations alone do not allocate storage.
 
 ```sh
-printf '#include <stddef.h>\ntypedef struct{int a;char b;int c;double d;}T;int main(void){return offsetof(T,d)+26;}\n' > /tmp/lesson.c
+printf 'int x;int x=42;int main(void){return x;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Layout aligns d to offset 16. Assembly computes its address from a zero base
-without loading memory at that address, then adds 26 and returns 42. Tests cover
-all four offsets, nested fields and array members, constant-expression use,
-size_t width and the original offsetof.c fixture.
-The header is copied byte-for-byte from this original revision. Python's member
-objects carry offsets where C uses Member pointers; the macro's C spelling and
-meaning are otherwise unchanged.
-Python's separate constant evaluator now also handles numeric address constants,
-which the original shared eval2 routine already supported. This lets offsetof
-work in enum values as well as runtime expressions, without accepting unresolved
-global symbol addresses as integer constants.
+Only the initialized x is emitted in .data; main loads it through its RIP-relative
+address and returns 42. Tests also inspect common-symbol assembly and nm's C
+symbol class, run zero-initialized globals, link against an initialized GCC helper,
+and execute the original commonsym.c fixture. Static common objects remain local.
+Python filters an object-list snapshot instead of relinking C's global list.
+The original predicate has a bug: two tentative definitions can both be removed.
+We retain that predicate and test it; snapshot filtering avoids C's incidental
+order changes from relinking during the scan. Existing BSS snapshots are updated
+for common symbols; explicitly initialized zero values remain in .data.
 
 ## Tests and attribution
 

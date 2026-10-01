@@ -81,6 +81,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_tentative_definitions(self):
+        for source in ('int x;int x=42;int main(void){return x;}', 'int x=42;int x;int main(void){return x;}'):
+            self.assert_program_returns(source, 42)
+            self.assertEqual(len([obj for obj in parse(tokenize(source)) if obj.name == 'x']), 1)
+        self.assert_program_returns('int x;int main(void){return x;}', 0)
+        self.assert_program_returns('int x;int main(void){return x;}', 42, 'int x=42;')
+        self.assertIn('  .comm x, 4, 4\n', compile_program('int x;').stdout)
+        self.assertIn('  .comm x, 17, 16\n', compile_program('char x[17];').stdout)
+        self.assertNotIn('  .comm', compile_program('extern int x;').stdout)
+        self.assertNotIn('  .comm x,', compile_program('int x;int x;').stdout)
+
     def test_offsetof_macro(self):
         declaration = '#include <stddef.h>\ntypedef struct{int a;char b;int c;double d;}T;'
         for member, expected in [('a', 0), ('b', 4), ('c', 8), ('d', 16)]:
@@ -2212,21 +2223,21 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         var = parse(tokenize("struct T{int x;int y[];} g;"))[0]
         self.assertEqual((var.ty.size, var.ty.members[-1].ty.array_len), (4, 0))
-        self.assertIn("g:\n  .zero 4\n", compile_program("struct T{int x;int y[];} g;int main(void){return sizeof(g);}").stdout)
+        self.assertIn("  .comm g, 4, 4\n", compile_program("struct T{int x;int y[];} g;int main(void){return sizeof(g);}").stdout)
 
     def test_uninitialized_globals_in_bss(self):
         source = "int a;int b=0;char c[8];int main(void){return a+b+c[7];}"
         self.assert_program_returns(source, 0)
         assembly = compile_program(source).stdout
-        self.assertIn("  .globl a\n  .align 4\n  .bss\na:\n  .zero 4\n", assembly)
+        self.assertIn("  .globl a\n  .align 4\n  .comm a, 4, 4\n", assembly)
         self.assertIn("  .globl b\n  .align 4\n  .data\nb:\n  .byte 0\n", assembly)
-        self.assertIn("  .globl c\n  .align 1\n  .bss\nc:\n  .zero 8\n", assembly)
+        self.assertIn("  .globl c\n  .align 1\n  .comm c, 8, 1\n", assembly)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / "test.s").write_text(assembly)
             subprocess.run(["gcc", "-c", str(path / "test.s"), "-o", str(path / "test.o")], check=True, capture_output=True)
             symbols = subprocess.run(["nm", str(path / "test.o")], check=True, capture_output=True, text=True).stdout
-            self.assertRegex(symbols, r"(?m)^\w+ B a$")
+            self.assertRegex(symbols, r"(?m)^\w+ C a$")
             self.assertRegex(symbols, r"(?m)^\w+ D b$")
 
     def test_trailing_initializer_commas(self):
@@ -3527,7 +3538,7 @@ int main(void){return 42;}
             self.assert_program_returns("int x[4]; int main(void){x[0]=0;x[1]=1;x[2]=2;x[3]=3;"
                                         f"return x[{index}];}}", index)
         assembly = compile_program("int x; int main(void){return x;}").stdout
-        self.assertIn("  .globl x\n  .align 4\n  .bss\nx:\n  .zero 4\n", assembly)
+        self.assertIn("  .globl x\n  .align 4\n  .comm x, 4, 4\n", assembly)
         self.assertIn("  lea x(%rip), %rax\n", assembly)
         self.assert_program_returns("int x=3; int main(void){return x;}", 3)
         self.assertEqual(compile_program("int main(void){return x;} int x;").returncode, 1)

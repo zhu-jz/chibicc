@@ -1,6 +1,6 @@
-"""Lesson 264: Provide offsetof in stddef.h.
+"""Lesson 265: Emit common symbols for tentative globals.
 
-Based on chibicc commit 1b99badce48083c5fa6b8b5872e899c7d1a47f9a.
+Based on chibicc commit 85e46b1071b54649740b35df939f32ed188c0e13.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

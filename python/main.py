@@ -1,6 +1,6 @@
-"""Lesson 164: Skip nested conditionals in false branches.
+"""Lesson 165: Add #else.
 
-Based on chibicc commit aa570f3086ce3e2c5ac8bf6107c051fed5aabf89.
+Based on chibicc commit c6e81d22f8189cd7bfcfcc33e4ac462529418192.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

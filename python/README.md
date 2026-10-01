@@ -1,27 +1,30 @@
-# Lesson 164: Skip nested conditionals in false branches
+# Lesson 165: Add #else
 
-Original chibicc commit: [`aa570f3086ce3e2c5ac8bf6107c051fed5aabf89`](https://github.com/rui314/chibicc/commit/aa570f3086ce3e2c5ac8bf6107c051fed5aabf89).
+Original chibicc commit: [`c6e81d22f8189cd7bfcfcc33e4ac462529418192`](https://github.com/rui314/chibicc/commit/c6e81d22f8189cd7bfcfcc33e4ac462529418192).
 Earlier explanations are available in Git history.
 
-Skipping a false `#if` now recognizes nested `#if` blocks and recursively skips
-them through their matching `#endif`. Expressions and includes inside skipped
-blocks are never processed. The recursion follows the original implementation.
-Python returns safely at end of input so an incomplete nested block reports an
-unterminated directive instead of following a null C token pointer.
+`#else` selects the second branch when its `#if` expression was zero. Each
+conditional now records its opening token, whether the first branch was
+included, and whether an `#else` has appeared. A Python dataclass replaces the
+C linked stack entry; a list supplies the stack.
+
+Skipping nested blocks uses a second helper that passes their entire matching
+`#endif`, so inner `#else` directives cannot stop an outer skip. Stray and
+repeated `#else` directives are errors. The prior extra-token warning behavior
+is retained.
 
 ```sh
-printf '#if 0\n#if unknown\ninvalid C\n#endif\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
+printf '#if 0\ninvalid\n#else\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Only the `main` function reaches the parser. Its assembly loads the return
-value into `%rax`, restores the stack frame and returns. Tests exercise nested
-skips, ignored expressions and missing includes, executable exit status, and
-an incomplete nested directive. The original macro fixture also runs directly
-through the Python preprocessor.
+The chosen branch produces ordinary function assembly: load 42 into `%rax`,
+restore the stack frame and return. Neither the discarded branch nor the
+conditional directives produce instructions. Tests run both branch choices,
+nested alternatives, missing includes in discarded branches and diagnostics.
 
 ## Tests and attribution
 

@@ -5,11 +5,18 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import os
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from tokenizer import convert_keywords, tokenize_file, warn_tok
 from common import CompileError
 from parse import const_expr
+
+
+@dataclass
+class CondIncl:
+    tok: object
+    included: bool
+    context: str = "THEN"
 
 
 def skip_line(tokens, position):
@@ -23,15 +30,23 @@ def is_hash(token):
     return token.at_bol and token.text == "#"
 
 
+def skip_cond_incl2(tokens, position):
+    while tokens[position].kind != "EOF":
+        if is_hash(tokens[position]) and tokens[position + 1].text == "if":
+            position = skip_cond_incl2(tokens, position + 2)
+            continue
+        if is_hash(tokens[position]) and tokens[position + 1].text == "endif":
+            return min(position + 2, len(tokens) - 1)
+        position += 1
+    return position
+
+
 def skip_cond_incl(tokens, position):
     while tokens[position].kind != "EOF":
         if is_hash(tokens[position]) and tokens[position + 1].text == "if":
-            position = skip_cond_incl(tokens, position + 2)
-            if tokens[position].kind == "EOF":
-                return position
-            position += 1
+            position = skip_cond_incl2(tokens, position + 2)
             continue
-        if is_hash(tokens[position]) and tokens[position + 1].text == "endif":
+        if is_hash(tokens[position]) and tokens[position + 1].text in ("else", "endif"):
             break
         position += 1
     return position
@@ -87,8 +102,16 @@ def preprocess(tokens, files=None):
                 continue
             if tokens[position].text == "if":
                 value, position = eval_const_expr(tokens, position)
-                conditions.append(token)
+                conditions.append(CondIncl(token, bool(value)))
                 if not value:
+                    position = skip_cond_incl(tokens, position)
+                continue
+            if tokens[position].text == "else":
+                if not conditions or conditions[-1].context == "ELSE":
+                    raise CompileError(token, "stray #else")
+                conditions[-1].context = "ELSE"
+                position = skip_line(tokens, position + 1)
+                if conditions[-1].included:
                     position = skip_cond_incl(tokens, position)
                 continue
             if tokens[position].text == "endif":
@@ -104,7 +127,7 @@ def preprocess(tokens, files=None):
         position += 1
     result.append(tokens[position])
     if conditions:
-        raise CompileError(conditions[-1], "unterminated conditional directive")
+        raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     tokens[:] = result
     convert_keywords(tokens)
     return tokens

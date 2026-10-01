@@ -1,11 +1,13 @@
-"""Lesson 154: Separate the driver and compiler process.
+"""Lesson 155: Assemble output unless -S is given.
 
-Based on chibicc commit f3d96136f292dea83fd760098d189a6884f59eb0.
+Based on chibicc commit 140b43358c33fb5e9f86789541dbca306bb64fcc.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 import sys
 import subprocess
+from pathlib import Path
+import tempfile
 
 from codegen import codegen
 from common import CompileError
@@ -23,9 +25,14 @@ def parse_args(arguments):
     output_path = None
     opt_cc1 = False
     opt_trace = False
+    opt_S = False
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-S":
+            opt_S = True
+            position += 1
+            continue
         if argument == "-cc1":
             opt_cc1 = True
             position += 1
@@ -50,7 +57,7 @@ def parse_args(arguments):
         position += 1
     if input_path is None:
         raise CompileError(None, "no input files")
-    return input_path, output_path, opt_cc1, opt_trace
+    return input_path, output_path, opt_cc1, opt_trace, opt_S
 
 
 def write_output(path, assembly):
@@ -93,8 +100,7 @@ def cc1(filename, output_path):
     return 0
 
 
-def run_cc1(arguments, trace):
-    command = [sys.executable, sys.argv[0], *arguments, "-cc1"]
+def run_subprocess(command, trace):
     if trace:
         print(" ".join(command), file=sys.stderr)
     try:
@@ -104,12 +110,34 @@ def run_cc1(arguments, trace):
     return 0 if result.returncode == 0 else 1
 
 
+def run_cc1(arguments, input_path, output_path, trace):
+    command = [sys.executable, sys.argv[0], *arguments, "-cc1", input_path, "-o", output_path]
+    return run_subprocess(command, trace)
+
+
+def replace_extension(filename, extension):
+    name = Path(filename).name
+    dot = name.rfind(".")
+    if dot >= 0:
+        name = name[:dot]
+    return name + extension
+
+
 def main():
     try:
-        filename, output_path, opt_cc1, opt_trace = parse_args(sys.argv[1:])
+        filename, output_path, opt_cc1, opt_trace, opt_S = parse_args(sys.argv[1:])
         if opt_cc1:
             return cc1(filename, output_path)
-        return run_cc1(sys.argv[1:], opt_trace)
+        if output_path is None:
+            output_path = replace_extension(filename, ".s" if opt_S else ".o")
+        if opt_S:
+            return run_cc1(sys.argv[1:], filename, output_path, opt_trace)
+        with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
+            assembly_path = str(Path(directory) / "input.s")
+            status = run_cc1(sys.argv[1:], filename, assembly_path, opt_trace)
+            if status:
+                return status
+            return run_subprocess(["as", "-c", assembly_path, "-o", output_path], opt_trace)
     except CompileError as error:
         print(error, file=sys.stderr)
         return 1

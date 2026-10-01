@@ -1,35 +1,37 @@
-# Lesson 154: Separate the driver and compiler process
+# Lesson 155: Assemble output unless -S is given
 
-Original chibicc commit: [`f3d96136f292dea83fd760098d189a6884f59eb0`](https://github.com/rui314/chibicc/commit/f3d96136f292dea83fd760098d189a6884f59eb0).
+Original chibicc commit: [`140b43358c33fb5e9f86789541dbca306bb64fcc`](https://github.com/rui314/chibicc/commit/140b43358c33fb5e9f86789541dbca306bb64fcc).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The normal entry point now launches a child invocation of the same Python compiler
-with -cc1. That internal mode reads, tokenizes, parses, and generates assembly.
-The driver inherits stdin/stdout/stderr for the child, waits for it, and reports
-success or failure. -### prints the child command to stderr while still running it.
-It is a trace option at this historical point, not a dry run.
+The driver now writes a temporary assembly file and invokes GNU as to produce an
+object file. With -S, assembly itself is the final output. Without -o, it uses the
+input basename with .o or .s in the current directory. -S -o - writes assembly
+to stdout, and internal -cc1 remains the assembly-generating compiler process.
+The driver traces both child commands with -### and propagates their failures.
 
-Python's subprocess.run replaces the C fork/exec/wait sequence. It invokes the
-same Python source or archive entry point, never the original C compiler. Child
-errors retain their diagnostics and become driver status 1; launch failures
-receive a readable error. Compilation and emitted assembly are unchanged.
+Python uses a TemporaryDirectory for automatic cleanup and a list of subprocess
+arguments instead of C's temporary-file array and fork/exec code. The C-to-assembly
+compiler remains our implementation; as assembles that text. GCC is used only
+by the examples and tests to link object files. Existing assembly tests now
+request -S explicitly so they continue to check the same compiler output.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson154.c
-python3 python/main.py -### /tmp/lesson154.c > /tmp/lesson154.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson154 /tmp/lesson154.s
-/tmp/lesson154
+printf 'int main(void){return 42;}\n' > /tmp/lesson155.c
+python3 python/main.py -S -o /tmp/lesson155.s /tmp/lesson155.c
+python3 python/main.py -o /tmp/lesson155.o /tmp/lesson155.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson155 /tmp/lesson155.o
+/tmp/lesson155
 echo $?
 ```
 
-The displayed child command includes -cc1. Its assembly still places 42 in rax
-and returns through main's epilogue, so the shell displays exit status 42. Tests
-compare driver and direct -cc1 assembly, verify tracing and failure propagation,
-exercise output files and stdin, run the packaged compiler, and execute upstream.
+The assembly still places 42 in rax and returns. as turns it into an ELF relocatable
+object; GCC links it into an executable, whose shell exit status is 42. Tests
+check real object headers and execution, default names, explicit assembly output,
+tracing, temporary-file cleanup, assembler errors, and the original fixtures.
 
 ## Tests and attribution
 

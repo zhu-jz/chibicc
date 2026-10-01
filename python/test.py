@@ -20,13 +20,18 @@ PROLOGUE = "  .globl main\n  .text\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
 EPILOGUE = ".L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
 
 
+def compiler_command(*arguments):
+    """Request assembly explicitly for existing compiler and driver fixtures."""
+    return [sys.executable, str(COMPILER), "-S", "-o", "-", *arguments]
+
+
 def compile_program(*arguments):
     """Feed in-memory source fixtures to the compiler through stdin."""
     if len(arguments) == 1:
-        return subprocess.run([sys.executable, str(COMPILER), "-"],
+        return subprocess.run(compiler_command("-"),
                               input=arguments[0], capture_output=True, text=True)
     return subprocess.run(
-        [sys.executable, str(COMPILER), *arguments],
+        compiler_command(*arguments),
         capture_output=True,
         text=True,
     )
@@ -61,15 +66,45 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_assembler_driver_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "program.c"
+            source.write_text("int main(void){return 42;}\n")
+            result = subprocess.run([sys.executable, str(COMPILER), str(source)], cwd=directory,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            obj = Path(directory) / "program.o"
+            self.assertEqual(obj.read_bytes()[:4], b"\x7fELF")
+            self.assertEqual(obj.read_bytes()[16:18], b"\x01\x00")
+            executable = Path(directory) / "program"
+            subprocess.run(["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), str(obj)], check=True)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            result = subprocess.run([sys.executable, str(COMPILER), "-S", str(source)], cwd=directory,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("  mov $42, %rax\n", (Path(directory) / "program.s").read_text())
+            result = subprocess.run([sys.executable, str(COMPILER), "-###", "-o", str(obj), str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("as -c ", result.stderr)
+            temporary = result.stderr.splitlines()[0].rsplit(" -o ", 1)[1]
+            self.assertFalse(Path(temporary).exists())
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", directory, str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", "", str(source)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+
     def test_driver_and_cc1_split(self):
         source = "int main(void){return 42;}"
-        direct = subprocess.run([sys.executable, str(COMPILER), "-cc1", "-"],
+        direct = subprocess.run(compiler_command("-cc1", "-"),
                                 input=source, capture_output=True, text=True)
         driver = compile_program(source)
         self.assertEqual(direct.returncode, 0, direct.stderr)
         self.assertEqual(driver.returncode, 0, driver.stderr)
         self.assertEqual(driver.stdout, direct.stdout)
-        traced = subprocess.run([sys.executable, str(COMPILER), "-###", "-"],
+        traced = subprocess.run(compiler_command("-###", "-"),
                                 input=source, capture_output=True, text=True)
         self.assertEqual(traced.returncode, 0, traced.stderr)
         self.assertEqual(traced.stdout, direct.stdout)
@@ -1730,7 +1765,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             assembly = Path(directory) / "program.s"
             executable = Path(directory) / "program"
             source.write_text(source_text)
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(assembly), str(source)],
+            result = subprocess.run(compiler_command("-o", str(assembly), str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             subprocess.run(["gcc", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
@@ -1819,37 +1854,37 @@ class ExpressionCompilerTests(unittest.TestCase):
             expected = instruction_assembly(compile_program(source.read_text()).stdout)
             for arguments in [["-o", str(output), str(source)],
                               [str(source), "-o" + str(output)]]:
-                result = subprocess.run([sys.executable, str(COMPILER), *arguments],
+                result = subprocess.run(compiler_command(*arguments),
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(instruction_assembly(output.read_text()), expected)
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", "-", str(source)],
+            result = subprocess.run(compiler_command("-o", "-", str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(instruction_assembly(result.stdout), expected)
-            result = subprocess.run([sys.executable, str(COMPILER), "-o" + str(output), "-"],
+            result = subprocess.run(compiler_command("-o" + str(output), "-"),
                                     input=source.read_text(), capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(instruction_assembly(output.read_text()), expected)
             source.write_text("")
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
+            result = subprocess.run(compiler_command("-o", str(output), str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(output.read_text(), f'.file 1 "{source}"\n')
             source.write_text("int main(void){1=2;}")
             output.write_text("keep")
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(output), str(source)],
+            result = subprocess.run(compiler_command("-o", str(output), str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(output.read_text(), "keep")
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", directory, "-"],
+            result = subprocess.run(compiler_command("-o", directory, "-"),
                                     input="int main(void){return 0;}", capture_output=True, text=True)
             self.assertIn("cannot open output file", result.stderr)
-        result = subprocess.run([sys.executable, str(COMPILER), "--help"], capture_output=True, text=True)
+        result = subprocess.run(compiler_command("--help"), capture_output=True, text=True)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "")
         self.assertIn("chibicc", result.stderr)
-        result = subprocess.run([sys.executable, str(COMPILER), "-o"], capture_output=True, text=True)
+        result = subprocess.run(compiler_command("-o"), capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn("chibicc", result.stderr)
 
@@ -1861,21 +1896,21 @@ class ExpressionCompilerTests(unittest.TestCase):
             path = Path(directory) / "source with spaces.c"
             for contents in [source, source + "\n"]:
                 path.write_text(contents)
-                result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+                result = subprocess.run(compiler_command(str(path)),
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(instruction_assembly(result.stdout), instruction_assembly(expected.stdout))
             path.write_text("int main(void){\n return missing;\n}\n")
-            result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+            result = subprocess.run(compiler_command(str(path)),
                                     capture_output=True, text=True)
             prefix = f"{path}:2: "
             self.assertEqual(result.stderr, prefix + " return missing;\n"
                              + " " * (len(prefix) + 8) + "^ undefined variable\n")
             path.write_bytes(b"\xff")
-            result = subprocess.run([sys.executable, str(COMPILER), str(path)],
+            result = subprocess.run(compiler_command(str(path)),
                                     capture_output=True, text=True)
             self.assertIn("cannot decode", result.stderr)
-        result = subprocess.run([sys.executable, str(COMPILER), "/tmp/chibicc-no-such-source-40.c"],
+        result = subprocess.run(compiler_command("/tmp/chibicc-no-such-source-40.c"),
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
         self.assertIn("cannot open", result.stderr)
@@ -2824,7 +2859,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for arguments, expected in [((), "no input files\n"),
                                     (("--unknown",), "unknown argument: --unknown\n")]:
             with self.subTest(arguments=arguments):
-                result = subprocess.run([sys.executable, str(COMPILER), *arguments],
+                result = subprocess.run(compiler_command(*arguments),
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(result.stdout, "")

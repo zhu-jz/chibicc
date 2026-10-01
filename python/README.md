@@ -1,28 +1,31 @@
-# Lesson 201: Receive struct and union parameters
+# Lesson 202: Call functions returning aggregates
 
-Original chibicc commit: [`d63b1f410a7aa3d308d0620d640f417a87b0c838`](https://github.com/rui314/chibicc/commit/d63b1f410a7aa3d308d0620d640f417a87b0c838).
+Original chibicc commit: [`c72df1c9be535bdfd5b46609996bf1eaf540aced`](https://github.com/rui314/chibicc/commit/c72df1c9be535bdfd5b46609996bf1eaf540aced).
 Earlier explanations are available in Git history.
 
-Aggregate parameters now use the same register/stack distinction on entry.
-Small register chunks are saved into local slots; unusual GP chunk sizes use
-byte stores and shifts, so a three-byte struct is handled without overwriting
-its neighbor. Large aggregates have positive offsets in the incoming area.
-Python factors the stores into straightforward methods instead of C switches.
+The parser allocates an anonymous local return buffer for each aggregate call.
+Small results arrive in rax/rdx and xmm0/xmm1 according to their byte-range
+classes, then get copied into that buffer. The expression leaves its address
+in rax so member access and aggregate assignment work as usual.
+
+Large results use a hidden first argument: the caller passes the return
+buffer address in rdi, moving other arguments one GP register along. This
+commit implements the caller only; GCC helpers supply aggregate-returning
+functions. Python stores the buffer object directly on the call node.
 
 ```sh
-printf 'struct T{int a;double b;};int sum(struct T x){return x.a+x.b;}int main(void){struct T x={12,30};return sum(x);}\n' > /tmp/lesson.c
+printf 'struct T{long a,b,c;};struct T f(void);int main(void){struct T x=f();return x.a+x.b+x.c;}\n' > /tmp/lesson.c
+printf 'struct T{long a,b,c;};struct T f(void){return (struct T){12,15,15};}\n' > /tmp/helper.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s /tmp/helper.c
 /tmp/lesson
 echo $?  # 42
 ```
 
-The caller puts the integer chunk in rdi and the double chunk in xmm0. The
-callee stores them relative to rbp, accesses the members, and returns 42 in
-rax. Tests cover mixed and floating aggregates, a tiny struct, a large stack
-struct, unions, GCC callers, and the unchanged original C examples. This
-historical classifier retains its boundary comparisons and its shifted second
-range in parameter allocation; aggregate returns are still a later step.
+The hidden rdi points into main's frame. GCC fills that memory and returns
+its address in rax. Tests check both mixed chunk orders, floating chunks,
+tiny structs, unions, large results, hidden-argument register pressure,
+member access, assignment, and the original C fixtures.
 
 ## Tests and attribution
 

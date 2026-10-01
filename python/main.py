@@ -1,6 +1,6 @@
-"""Lesson 201: Receive struct and union parameters.
+"""Lesson 202: Call functions returning aggregates.
 
-Based on chibicc commit d63b1f410a7aa3d308d0620d640f417a87b0c838.
+Based on chibicc commit c72df1c9be535bdfd5b46609996bf1eaf540aced.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

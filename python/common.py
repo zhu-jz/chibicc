@@ -161,6 +161,7 @@ class Node:
     func_ty: Optional[Type] = field(default=None, compare=False)
     args: list["Node"] = field(default_factory=list)
     pass_by_stack: bool = field(default=False, compare=False)
+    ret_buffer: Optional["Obj"] = field(default=None, compare=False)
     member: Optional[Member] = None
     label: str = ""
     unique_label: Optional[str] = field(default=None, compare=False)

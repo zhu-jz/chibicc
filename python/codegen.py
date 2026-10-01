@@ -101,6 +101,9 @@ class CodeGenerator:
             self.gen_addr(node.lhs)
             self.assembly.append(f"  add ${node.member.offset}, %rax")
             return
+        if node.kind == "FUNCALL" and node.ret_buffer is not None:
+            self.gen_expr(node)
+            return
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
@@ -162,8 +165,11 @@ class CodeGenerator:
         instruction = "movss" if size == 4 else "movsd"
         self.assembly.append(f"  {instruction} %xmm{register}, {offset}(%rbp)")
 
-    def push_args(self, args):
+    def push_args(self, node):
+        args = node.args
         stack, gp, fp = 0, 0, 0
+        if node.ret_buffer is not None and node.ty.size > 16:
+            gp += 1
         for arg in args:
             ty = arg.ty
             arg.pass_by_stack = False
@@ -204,7 +210,30 @@ class CodeGenerator:
                     self.pushf()
                 else:
                     self.push()
+        if node.ret_buffer is not None and node.ty.size > 16:
+            self.assembly.append(f"  lea {node.ret_buffer.offset}(%rbp), %rax")
+            self.push()
         return stack
+
+    def copy_ret_buffer(self, var):
+        ty = var.ty
+        gp, fp = 0, 0
+        if has_flonum(ty, 0, 8):
+            self.store_fp(fp, var.offset, min(8, ty.size))
+            fp += 1
+        else:
+            for i in range(min(8, ty.size)):
+                self.assembly.extend((f"  mov %al, {var.offset + i}(%rbp)",
+                                      "  shr $8, %rax"))
+            gp += 1
+        if ty.size > 8:
+            if has_flonum(ty, 8, 16):
+                self.store_fp(fp, var.offset + 8, ty.size - 8)
+            else:
+                small, full = ("%al", "%rax") if gp == 0 else ("%dl", "%rdx")
+                for i in range(8, min(16, ty.size)):
+                    self.assembly.extend((f"  mov {small}, {var.offset + i}(%rbp)",
+                                          f"  shr $8, {full}"))
 
     def cmp_zero(self, ty):
         if ty.kind in ("FLOAT", "DOUBLE"):
@@ -287,9 +316,12 @@ class CodeGenerator:
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":
-            stack_args = self.push_args(node.args)
+            stack_args = self.push_args(node)
             self.gen_expr(node.lhs)
             gp, fp = 0, 0
+            if node.ret_buffer is not None and node.ty.size > 16:
+                self.pop(ARGREG[gp])
+                gp += 1
             for arg in node.args:
                 ty = arg.ty
                 if ty.kind in ("STRUCT", "UNION"):
@@ -329,6 +361,9 @@ class CodeGenerator:
             elif node.ty.kind == "SHORT":
                 instruction = "movzwl" if node.ty.is_unsigned else "movswl"
                 self.assembly.append(f"  {instruction} %ax, %eax")
+            if node.ret_buffer is not None and node.ty.size <= 16:
+                self.copy_ret_buffer(node.ret_buffer)
+                self.assembly.append(f"  lea {node.ret_buffer.offset}(%rbp), %rax")
             return
         if node.kind == "STMT_EXPR":
             for statement in node.body:

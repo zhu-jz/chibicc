@@ -422,8 +422,11 @@ class Parser:
             args.append(arg)
         if len(args) < len(function_ty.params):
             raise CompileError(self.tokens[position], "too few arguments")
-        return Node("FUNCALL", lhs=function, args=args, tok=self.tokens[position],
-                    ty=function_ty.return_ty, func_ty=function_ty), position + 1
+        node = Node("FUNCALL", lhs=function, args=args, tok=self.tokens[position],
+                    ty=function_ty.return_ty, func_ty=function_ty)
+        if node.ty.kind in ("STRUCT", "UNION"):
+            node.ret_buffer = self.new_lvar("", node.ty)
+        return node, position + 1
 
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):

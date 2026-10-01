@@ -1,6 +1,6 @@
-"""Lesson 179: Use the Python preprocessor for every upstream test.
+"""Lesson 180: Add the defined operator.
 
-Based on chibicc commit 769b5a0941694ccdcfe61528053c3d93cb53de80.
+Based on chibicc commit 5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

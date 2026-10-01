@@ -72,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_defined_operator(self):
+        for expression in ('defined VALUE', 'defined(VALUE)', 'defined(VALUE)&&!defined(UNKNOWN)',
+                           'defined(FUNCTION)', 'defined(VALUE)+defined(UNKNOWN)==1'):
+            self.assert_program_returns('#define VALUE UNKNOWN\n#define FUNCTION() 7\n#if ' + expression +
+                                        '\nint main(void){return 42;}\n#else\ninvalid\n#endif\n', 42)
+        self.assert_program_returns('#define VALUE 7\n#undef VALUE\n#if defined(VALUE)\ninvalid\n#else\nint main(void){return 11;}\n#endif\n', 11)
+        for expression, message in (('defined()', 'macro name must be an identifier'),
+                                    ('defined 123', 'macro name must be an identifier'),
+                                    ('defined(VALUE', "expected ')'")):
+            result = compile_program('#if ' + expression + '\n#endif\n')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_macro_token_pasting(self):
         for source, expected in (
                 ('#define P(x,y) x##y\nint main(void){return P(1,5);}\n', 15),

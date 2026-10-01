@@ -71,7 +71,7 @@ def copy_line(tokens, position):
 
 def eval_const_expr(tokens, position, files, macros, conditions):
     start = tokens[position]
-    expression, position = copy_line(tokens, position + 1)
+    expression, position = read_const_expr(tokens, position + 1, macros)
     preprocess2(expression, files, macros, conditions)
     if expression[0].kind == "EOF":
         raise CompileError(start, "no expression")
@@ -171,6 +171,37 @@ def tokenize_like(source, template):
         for token in tokens:
             token.file = file
     return tokens
+
+
+def new_num_token(value, template):
+    return tokenize_like(f"{value}\n", template)[0]
+
+
+def read_const_expr(tokens, position, macros):
+    line, rest = copy_line(tokens, position)
+    result = []
+    position = 0
+    while line[position].kind != "EOF":
+        start = line[position]
+        if start.text != "defined":
+            result.append(start)
+            position += 1
+            continue
+        position += 1
+        has_paren = line[position].text == "("
+        if has_paren:
+            position += 1
+        if line[position].kind != "IDENT":
+            raise CompileError(start, "macro name must be an identifier")
+        defined = find_macro(line[position], macros) is not None
+        position += 1
+        if has_paren:
+            if line[position].text != ")":
+                raise CompileError(line[position], "expected ')'")
+            position += 1
+        result.append(new_num_token(int(defined), start))
+    result.append(line[position])
+    return result, rest
 
 
 def join_tokens(tokens):

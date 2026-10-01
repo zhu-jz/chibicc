@@ -1,31 +1,32 @@
-# Lesson 179: Use the Python preprocessor for every upstream test
+# Lesson 180: Add the defined operator
 
-Original chibicc commit: [`769b5a0941694ccdcfe61528053c3d93cb53de80`](https://github.com/rui314/chibicc/commit/769b5a0941694ccdcfe61528053c3d93cb53de80).
+Original chibicc commit: [`5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a`](https://github.com/rui314/chibicc/commit/5cb2f89e6a49cac8ddb16f46df92c31fa2507b9a).
 Earlier explanations are available in Git history.
 
-Every upstream C test now enters the Python compiler as its original source
-file. The test runner no longer asks GCC to preprocess ordinary fixtures first.
-Includes, ASSERT parameter substitution and stringizing all run through our
-own preprocessor. The original macro test switches to the shared test header.
+Conditional expressions now recognize `defined NAME` and `defined(NAME)`.
+The operand must be an identifier. It becomes a numeric token containing 1
+when the macro exists and 0 otherwise, before the rest of the expression is
+macro-expanded. The operand's replacement body is never expanded for this test.
 
-This original commit changes the build/test workflow rather than the compiler
-algorithm. Python applies the same change to its unittest fixture runner;
-its packaged entry point uses that same runner. GCC assembles and links the
-emitted assembly with the unchanged C support helper. The helper supplies
-runtime assertions and is not the original compiler.
+The rewrite uses the existing tokenizer to create an ordinary integer token
+with its C type and synthetic source information. Arithmetic and logical
+operators then work through the usual constant-expression parser. This
+operator applies only in `#if` and `#elif` expressions; `#ifdef` remains a direct
+name lookup. Unknown ordinary identifiers still produce an error at this step.
 
 ```sh
-printf '#include "%s/python/test/test.h"\nint main(void){ASSERT(42,6*7);return 42;}\n' "$PWD" > /tmp/lesson.c
+printf '#define PRESENT\n#if defined(PRESENT) && !defined(ABSENT)\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s -xc python/test/common
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-ASSERT becomes a call with the expected value, actual expression and a generated
-string. Assembly multiplies 6 by 7 and passes arguments to the assertion helper,
-then returns 42 in `%rax`. All upstream programs are assembled, linked and run
-through both the source and packaged Python compiler entry points.
+The condition becomes `1 && !0` and selects the function. Assembly loads 42 into
+`%rax` and returns, with no runtime definition checks. Tests cover both syntaxes,
+logical/arithmetic combinations, function-like and undefined names, undefinition,
+unexpanded operands and malformed syntax.
 
 ## Tests and attribution
 

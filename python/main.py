@@ -1,6 +1,6 @@
-"""Lesson 184: Add angle-bracket and macro-expanded includes.
+"""Lesson 185: Add include directory options.
 
-Based on chibicc commit d85fc4ffcfb8875aa191481e5c153a1e07066f8e.
+Based on chibicc commit a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -24,6 +24,7 @@ def usage(status):
 
 def parse_args(arguments):
     input_paths = []
+    include_paths = []
     output_path = None
     base_file = None
     cc1_output = None
@@ -34,7 +35,7 @@ def parse_args(arguments):
     opt_E = False
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -79,6 +80,8 @@ def parse_args(arguments):
             output_path = arguments[position]
         elif argument.startswith("-o"):
             output_path = argument[2:]
+        elif argument.startswith("-I"):
+            include_paths.append(argument[2:])
         elif argument.startswith("-") and argument != "-":
             raise CompileError(None, f"unknown argument: {argument}")
         else:
@@ -86,7 +89,7 @@ def parse_args(arguments):
         position += 1
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths
 
 
 def write_output(path, assembly):
@@ -114,11 +117,11 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=()):
     files = []
     try:
         tokens = tokenize_file(filename, files)
-        tokens = preprocess(tokens, files)
+        tokens = preprocess(tokens, files, include_paths)
         if opt_E:
             print_tokens(tokens, opt_o)
             return 0
@@ -195,11 +198,11 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths) = parse_args(sys.argv[1:])
         if opt_cc1:
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

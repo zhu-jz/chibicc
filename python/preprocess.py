@@ -69,10 +69,10 @@ def copy_line(tokens, position):
     return line, position
 
 
-def eval_const_expr(tokens, position, files, macros, conditions):
+def eval_const_expr(tokens, position, files, macros, conditions, include_paths):
     start = tokens[position]
     expression, position = read_const_expr(tokens, position + 1, macros)
-    preprocess2(expression, files, macros, conditions)
+    preprocess2(expression, files, macros, conditions, include_paths)
     if expression[0].kind == "EOF":
         raise CompileError(start, "no expression")
     for index, token in enumerate(expression):
@@ -228,7 +228,7 @@ def paste(lhs, rhs):
     return tokens[0]
 
 
-def subst(body, args, files, macros, conditions):
+def subst(body, args, files, macros, conditions, include_paths):
     result = []
     position = 0
     while body[position].kind != "EOF":
@@ -273,7 +273,7 @@ def subst(body, args, files, macros, conditions):
             continue
         if argument is not None:
             expanded = [replace(tok) for tok in argument]
-            preprocess2(expanded, files, macros, conditions)
+            preprocess2(expanded, files, macros, conditions, include_paths)
             expanded[0].at_bol = token.at_bol
             expanded[0].has_space = token.has_space
             result.extend(replace(tok) for tok in expanded[:-1])
@@ -284,7 +284,7 @@ def subst(body, args, files, macros, conditions):
     return result
 
 
-def expand_macro(tokens, position, files, macros, conditions):
+def expand_macro(tokens, position, files, macros, conditions, include_paths):
     token = tokens[position]
     if token.text in token.hideset:
         return False
@@ -296,7 +296,7 @@ def expand_macro(tokens, position, files, macros, conditions):
             return False
         args, rest = read_macro_args(tokens, position, macro.params)
         hideset = (token.hideset & tokens[rest - 1].hideset) | {macro.name}
-        body = subst(macro.body, args, files, macros, conditions)
+        body = subst(macro.body, args, files, macros, conditions, include_paths)
         tokens[position:rest] = add_hideset(body[:-1], hideset)
         tokens[position].at_bol = token.at_bol
         tokens[position].has_space = token.has_space
@@ -308,7 +308,17 @@ def expand_macro(tokens, position, files, macros, conditions):
     return True
 
 
-def read_include_filename(tokens, position, files, macros, conditions):
+def search_include_paths(filename, include_paths):
+    if filename.startswith("/"):
+        return filename
+    for directory in include_paths:
+        path = directory + "/" + filename
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def read_include_filename(tokens, position, files, macros, conditions, include_paths):
     token = tokens[position]
     if token.kind == "STR":
         return token.text[1:-1], True, skip_line(tokens, position + 1)
@@ -322,29 +332,32 @@ def read_include_filename(tokens, position, files, macros, conditions):
         return name, False, skip_line(tokens, position + 1)
     if token.kind == "IDENT":
         line, rest = copy_line(tokens, position)
-        preprocess2(line, files, macros, conditions)
-        name, is_dquote, _ = read_include_filename(line, 0, files, macros, conditions)
+        preprocess2(line, files, macros, conditions, include_paths)
+        name, is_dquote, _ = read_include_filename(line, 0, files, macros, conditions, include_paths)
         return name, is_dquote, rest
     raise CompileError(token, "expected a filename")
 
 
-def preprocess2(tokens, files, macros, conditions):
+def preprocess2(tokens, files, macros, conditions, include_paths):
     result = []
     position = 0
     while tokens[position].kind != "EOF":
-        if expand_macro(tokens, position, files, macros, conditions):
+        if expand_macro(tokens, position, files, macros, conditions, include_paths):
             continue
         token = tokens[position]
         if is_hash(token):
             position += 1
             if tokens[position].text == "include":
                 filename = tokens[position + 1]
-                name, is_dquote, rest = read_include_filename(tokens, position + 1, files, macros, conditions)
+                name, is_dquote, rest = read_include_filename(tokens, position + 1, files, macros, conditions, include_paths)
                 including_file = token.file.name if token.file else "-"
                 directory = os.path.dirname(including_file) or "."
                 path = name
-                if not name.startswith("/") and os.path.exists(directory + "/" + name):
-                    path = directory + "/" + name
+                if not name.startswith("/"):
+                    if is_dquote and os.path.exists(directory + "/" + name):
+                        path = directory + "/" + name
+                    else:
+                        path = search_include_paths(name, include_paths) or name
                 try:
                     included = tokenize_file(path, files)
                 except CompileError as error:
@@ -365,7 +378,7 @@ def preprocess2(tokens, files, macros, conditions):
                 macros.pop(name.text, None)
                 continue
             if tokens[position].text == "if":
-                value, position = eval_const_expr(tokens, position, files, macros, conditions)
+                value, position = eval_const_expr(tokens, position, files, macros, conditions, include_paths)
                 conditions.append(CondIncl(token, bool(value)))
                 if not value:
                     position = skip_cond_incl(tokens, position)
@@ -386,7 +399,7 @@ def preprocess2(tokens, files, macros, conditions):
                 if conditions[-1].included:
                     position = skip_cond_incl(tokens, position)
                 else:
-                    value, position = eval_const_expr(tokens, position, files, macros, conditions)
+                    value, position = eval_const_expr(tokens, position, files, macros, conditions, include_paths)
                     if value:
                         conditions[-1].included = True
                     else:
@@ -416,11 +429,11 @@ def preprocess2(tokens, files, macros, conditions):
     return tokens
 
 
-def preprocess(tokens, files=None):
+def preprocess(tokens, files=None, include_paths=()):
     if files is None:
         files = []
     conditions = []
-    preprocess2(tokens, files, {}, conditions)
+    preprocess2(tokens, files, {}, conditions, include_paths)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     convert_keywords(tokens)

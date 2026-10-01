@@ -72,6 +72,35 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_include_directory_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / 'first', root / 'second'
+            first.mkdir()
+            second.mkdir()
+            (root / 'answer.h').write_text('#define VALUE 42\n')
+            (first / 'answer.h').write_text('#define VALUE 7\n')
+            (second / 'answer.h').write_text('#define VALUE 11\n')
+            source = root / 'main.c'
+            for include, paths, expected in (
+                    ('"answer.h"', [first, second], 42),
+                    ('<answer.h>', [first, second], 7),
+                    ('<answer.h>', [second, first], 11)):
+                source.write_text('#include ' + include + '\nint main(void){return VALUE;}\n')
+                result = subprocess.run([sys.executable, str(COMPILER), '-###', '-E',
+                                         *['-I' + str(path) for path in paths], str(source)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('-I' + str(paths[0]), result.stderr)
+                self.assert_program_returns(result.stdout, expected)
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('cannot open', result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), '-I'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('chibicc (Python)', result.stderr)
+
     def test_angle_and_macro_includes(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'main.c'
@@ -81,7 +110,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                               '#define HEADER "answer.h"\n#include HEADER\n',
                               '#define HEADER < answer.h\n#include HEADER >\n'):
                 source.write_text(directive + 'int main(void){return VALUE;}\n')
-                result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+                result = subprocess.run([sys.executable, str(COMPILER), '-E', '-I' + directory, str(source)], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assert_program_returns(result.stdout, 42)
             literal_name = 'raw\\file.h'
@@ -2295,7 +2324,7 @@ int main(void){return 42;}
         with tempfile.TemporaryDirectory() as directory:
             for source in sorted(fixtures.glob("*.c")):
                 with self.subTest(source=source.name):
-                    compiled = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+                    compiled = subprocess.run(compiler_command("-I" + str(fixtures), str(source)), capture_output=True, text=True)
                     self.assertEqual(compiled.returncode, 0, compiled.stderr)
                     assembly = Path(directory) / (source.stem + ".s")
                     executable = Path(directory) / source.stem

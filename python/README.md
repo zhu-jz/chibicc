@@ -1,33 +1,32 @@
-# Lesson 184: Add angle-bracket and macro-expanded includes
+# Lesson 185: Add include directory options
 
-Original chibicc commit: [`d85fc4ffcfb8875aa191481e5c153a1e07066f8e`](https://github.com/rui314/chibicc/commit/d85fc4ffcfb8875aa191481e5c153a1e07066f8e).
+Original chibicc commit: [`a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467`](https://github.com/rui314/chibicc/commit/a1dd6213c85dfa6f36f74fd00ade09ed9fa3e467).
 Earlier explanations are available in Git history.
 
-Include operands now accept quoted strings, tokens between angle brackets,
-or an identifier whose expanded line becomes one of those forms. Quoted
-filenames use their original text instead of decoded string bytes, preserving
-literal backslashes. Angle-bracket filenames are reconstructed from tokens.
+`-I<dir>` appends a directory to the include search list. Directories are tried
+in command-line order. A quoted filename first tries beside its source file;
+an angle-bracket filename goes directly to the search list. If no candidate
+exists, the literal filename is still tried as in the previous lesson.
 
-Both forms first try a relative path beside the including file. If that path
-is absent, the filename itself is opened, allowing a working-directory path.
-This historical step has no configurable or system include search directories
-yet. The quote/angle distinction is recorded for the next stages. Python uses
-its existing filesystem operations and explicit return values instead of C
-output pointers. An unmatched angle bracket produces a diagnostic.
+The driver forwards its options when re-executing the compiler, and explicit
+Python function arguments carry the search list through preprocessing. The
+upstream fixture runner now supplies its test directory, matching the C
+Makefile. This historical CLI supports the attached form only: use `-I/tmp`,
+not a separate `-I /tmp` pair. A trailing bare `-I` is rejected by the precheck.
 
 ```sh
-printf '#define VALUE 42\n' > /tmp/answer.h
-printf '#define HEADER <answer.h>\n#include HEADER\nint main(void){return VALUE;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+mkdir -p /tmp/lesson-include
+printf '#define VALUE 42\n' > /tmp/lesson-include/answer.h
+printf '#include <answer.h>\nint main(void){return VALUE;}\n' > /tmp/lesson.c
+python3 python/main.py -I/tmp/lesson-include -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-After including and expanding VALUE, assembly loads 42 into `%rax` and returns.
-Tests cover direct angle brackets, macro-expanded quoted or partial angle
-forms, raw backslashes, working-directory fallback and missing closing brackets.
-The updated original macro program includes both new headers unchanged.
+The selected header defines VALUE; the function assembly loads 42 into `%rax`
+and returns. Tests check quote versus angle precedence, directory ordering,
+option forwarding, failed lookup and a missing option operand.
 
 ## Tests and attribution
 

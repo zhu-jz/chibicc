@@ -42,9 +42,12 @@ def new_sub(lhs, rhs, token):
     raise CompileError(token, "invalid operands")
 
 
-def new_initializer(ty):
+def new_initializer(ty, is_flexible=False):
     init = Initializer(ty)
     if ty.kind == "ARRAY":
+        if is_flexible and ty.size < 0:
+            init.is_flexible = True
+            return init
         init.children = [new_initializer(ty.base) for _ in range(ty.array_len)]
     return init
 
@@ -815,16 +818,17 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
-            if ty.size < 0:
-                raise CompileError(self.tokens[position], "variable has incomplete type")
             if ty.kind == "VOID":
                 raise CompileError(self.tokens[position], "variable declared void")
             var = self.new_lvar(ty.name.text, ty)
-            if self.tokens[position].text != "=":
-                continue
-            expression, position = self.lvar_initializer(position + 1, var)
-            token = self.tokens[position]
-            statements.append(Node("EXPR_STMT", lhs=expression, tok=token))
+            if self.tokens[position].text == "=":
+                expression, position = self.lvar_initializer(position + 1, var)
+                token = self.tokens[position]
+                statements.append(Node("EXPR_STMT", lhs=expression, tok=token))
+            if var.ty.size < 0:
+                raise CompileError(ty.name, "variable has incomplete type")
+            if var.ty.kind == "VOID":
+                raise CompileError(ty.name, "variable declared void")
         return Node("BLOCK", body=statements, tok=self.tokens[position]), position + 1
 
     def skip_excess_element(self, position):
@@ -838,6 +842,9 @@ class Parser:
 
     def string_initializer(self, position, init):
         token = self.tokens[position]
+        if init.is_flexible:
+            complete = new_initializer(array_of(init.ty.base, token.ty.array_len))
+            init.__dict__.update(complete.__dict__)
         count = min(init.ty.array_len, len(token.str))
         for index in range(count):
             byte = token.str[index]
@@ -845,10 +852,26 @@ class Parser:
             init.children[index].expr = Node("NUM", value=value, tok=token)
         return position + 1
 
+    def count_array_init_elements(self, position, ty):
+        dummy = new_initializer(ty.base)
+        count = 0
+        while self.tokens[position].text != "}":
+            if count:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            position = self.initializer2(position, dummy)
+            count += 1
+        return count
+
     def array_initializer(self, position, init):
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
         position += 1
+        if init.is_flexible:
+            count = self.count_array_init_elements(position, init.ty)
+            complete = new_initializer(array_of(init.ty.base, count))
+            init.__dict__.update(complete.__dict__)
         index = 0
         while self.tokens[position].text != "}":
             if index:
@@ -871,7 +894,7 @@ class Parser:
         return position
 
     def initializer(self, position, ty):
-        init = new_initializer(ty)
+        init = new_initializer(ty, is_flexible=True)
         position = self.initializer2(position, init)
         return init, position
 
@@ -898,6 +921,7 @@ class Parser:
     def lvar_initializer(self, position, var):
         token = self.tokens[position]
         init, position = self.initializer(position, var.ty)
+        var.ty = init.ty
         expression = self.create_lvar_init(init, var.ty, InitDesg(var=var), token)
         zero = Node("MEMZERO", var=var, tok=token)
         return Node("COMMA", zero, expression, tok=token), position

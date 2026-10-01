@@ -130,6 +130,7 @@ class Initializer:
     tok: Optional[Token] = None
     expr: Optional[Node] = None
     children: list["Initializer"] = field(default_factory=list)
+    is_flexible: bool = False
 
 
 @dataclass

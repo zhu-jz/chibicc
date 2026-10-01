@@ -60,6 +60,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_deduced_array_lengths(self):
+        for source, expected in [
+            ("int main(){int a[]={1,2,42};return a[2];}", 42),
+            ("int main(){int a[]={1,2,3};return sizeof(a);}", 12),
+            ('int main(){char s[]="abc";return sizeof(s);}', 4),
+            ('typedef char T[];int main(){T a="abc";T b="x";return sizeof(a)+sizeof(b);}', 6),
+            ("int main(){int a[][2]={{1,2},{3,42}};return a[1][1];}", 42),
+            ("int main(){int i=0;int a[]={++i,++i};return i+a[0]+a[1];}", 5),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("int a[]={1,2,3};")
+        self.assertEqual((function.locals[0].ty.array_len, function.locals[0].ty.size), (3, 12))
+        self.assertIn("  mov $12, %rcx\n", compile_program("int main(){int a[]={1,2,3};return sizeof(a);}").stdout)
+        result = compile_program("int main(){int a[];}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("variable has incomplete type", result.stderr)
+
     def test_string_initializers(self):
         for source, expected in [
             ('int main(){char a[4]="abc";return a[2];}', 99),

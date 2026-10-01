@@ -1,6 +1,6 @@
-"""Lesson 100: String literal array initializers.
+"""Lesson 101: Infer array lengths from initializers.
 
-Based on chibicc commit 0d717373cc9e247fc6f6a0e02b0bbd424f0d70b0.
+Based on chibicc commit 5b955336032881edf835a50fb63f9581af1efd73.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

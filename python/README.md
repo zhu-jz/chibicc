@@ -1,33 +1,35 @@
-# Lesson 114: Void parameter lists
+# Lesson 115: Global alignment directives
 
-Original chibicc commit: [`7a1f816783064a12156807fe0a4d760c2e212d4e`](https://github.com/rui314/chibicc/commit/7a1f816783064a12156807fe0a4d760c2e212d4e).
+Original chibicc commit: [`157356c769d777b1721da8218724608081137fe2`](https://github.com/rui314/chibicc/commit/157356c769d777b1721da8218724608081137fe2).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A literal `void` immediately followed by the closing parenthesis now represents
-an empty function parameter list. `int f(void)` therefore declares a function
-with no parameter objects. Normal named parameter parsing handles other lists.
+The data emitter now writes `.align N` for each global object's type alignment.
+Consecutive objects within a section can therefore receive padding before
+naturally aligned int, long, pointer, and aggregate storage. Local alignment was
+already handled while assigning stack offsets.
 
-Python returns the function type and next token index, following upstream's
-special case. This commit does not add full argument-count checking or equate
-an arbitrary typedef of void with this syntactic special case. Existing empty
-`()` lists retain their earlier behavior.
+Python emits the same byte-based GNU assembler directive as upstream. The exact
+historical ordering places .align before the section directive; when switching
+between .data and .bss it consequently aligns the previously selected section.
+This commit does not yet fix that ordering. Tests check directives and actual
+addresses for consecutive objects within one section.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void){return 42;}int main(void){return f();}\n' > /tmp/lesson114.c
-python3 python/main.py /tmp/lesson114.c > /tmp/lesson114.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson114 /tmp/lesson114.s
-/tmp/lesson114
+printf 'long g=42;char pad=1;int main(){return g;}\n' > /tmp/lesson115.c
+python3 python/main.py /tmp/lesson115.c > /tmp/lesson115.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson115 /tmp/lesson115.s
+/tmp/lesson115
 echo $?
 ```
 
-Main calls f without setting argument registers. f moves 42 into rax and returns;
-main returns the same value, giving exit status 42. Tests check declarations and
-definitions, empty parameter types and objects, emitted call, mixed-list rejection,
-actual execution, and updated original function examples.
+The emitter's global order places pad first, then `.align 8` before g, adding
+padding in .data. Main loads g and returns exit status 42. Tests verify byte
+alignment directives for all scalar widths, real global addresses in .data and
+.bss, section expectations, execution, and all original C examples.
 
 ## Tests and attribution
 

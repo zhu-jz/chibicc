@@ -60,6 +60,16 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_alignment_directives(self):
+        for source in [
+            "long g;char pad;int main(){return (long)&g%8;}",
+            "long g=42;char pad=1;int main(){return (long)&g%8;}",
+        ]:
+            self.assert_program_returns(source, 0)
+        assembly = compile_program("char c;short s;int i;long l;int main(){return 0;}").stdout
+        for name, alignment in (("c", 1), ("s", 2), ("i", 4), ("l", 8)):
+            self.assertIn(f"  .globl {name}\n  .align {alignment}\n", assembly)
+
     def test_void_parameter_lists(self):
         self.assert_program_returns("int f(void);int f(void){return 42;}int main(void){return f();}", 42)
         function = next(var for var in parse(tokenize("int f(void){return 42;}")) if var.is_function)
@@ -100,9 +110,9 @@ class ExpressionCompilerTests(unittest.TestCase):
         source = "int a;int b=0;char c[8];int main(){return a+b+c[7];}"
         self.assert_program_returns(source, 0)
         assembly = compile_program(source).stdout
-        self.assertIn("  .globl a\n  .bss\na:\n  .zero 4\n", assembly)
-        self.assertIn("  .globl b\n  .data\nb:\n  .byte 0\n", assembly)
-        self.assertIn("  .globl c\n  .bss\nc:\n  .zero 8\n", assembly)
+        self.assertIn("  .globl a\n  .align 4\n  .bss\na:\n  .zero 4\n", assembly)
+        self.assertIn("  .globl b\n  .align 4\n  .data\nb:\n  .byte 0\n", assembly)
+        self.assertIn("  .globl c\n  .align 1\n  .bss\nc:\n  .zero 8\n", assembly)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             (path / "test.s").write_text(assembly)
@@ -1415,7 +1425,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns("int x[4]; int main(){x[0]=0;x[1]=1;x[2]=2;x[3]=3;"
                                         f"return x[{index}];}}", index)
         assembly = compile_program("int x; int main(){return x;}").stdout
-        self.assertIn("  .globl x\n  .bss\nx:\n  .zero 4\n", assembly)
+        self.assertIn("  .globl x\n  .align 4\n  .bss\nx:\n  .zero 4\n", assembly)
         self.assertIn("  lea x(%rip), %rax\n", assembly)
         self.assert_program_returns("int x=3; int main(){return x;}", 3)
         self.assertEqual(compile_program("int main(){return x;} int x;").returncode, 1)

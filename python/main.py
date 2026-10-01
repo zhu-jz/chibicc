@@ -1,6 +1,6 @@
-"""Lesson 114: Void parameter lists.
+"""Lesson 115: Global alignment directives.
 
-Based on chibicc commit 7a1f816783064a12156807fe0a4d760c2e212d4e.
+Based on chibicc commit 157356c769d777b1721da8218724608081137fe2.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

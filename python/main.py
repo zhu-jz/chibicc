@@ -1,6 +1,6 @@
-"""Lesson 239: Select array elements in initializers.
+"""Lesson 240: Infer array bounds from designated elements.
 
-Based on chibicc commit c618c3b582de1d0b10b334a4f2ba6b85d5128940.
+Based on chibicc commit 835cd24b2c4598ee784d8bfd1c0427bfa948b947.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -80,6 +80,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_inferred_designated_array_bounds(self):
+        for source,expected in [
+            ('int main(void){char x[]={[10-3]=1,2,3};return sizeof(x);}',10),
+            ('int main(void){char x[][2]={[8][1]=1,2};return sizeof(x);}',20),
+            ('int x[]={[4]=42,[0]=1};int main(void){return sizeof(x)+x[4];}',62),
+            ('int main(void){int x[]={[0]=12,[3]=30};return x[0]+x[3]+x[1]+x[2];}',42),
+        ]:
+            self.assert_program_returns(source,expected)
+
     def test_array_designated_initializers(self):
         for source,expected in [
             ('int main(void){int x[5]={1,[3]=20,21,[0]=2};return x[0]+x[3]+x[4];}',43),

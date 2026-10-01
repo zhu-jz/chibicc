@@ -1,29 +1,29 @@
-# Lesson 239: Select array elements in initializers
+# Lesson 240: Infer array bounds from designated elements
 
-Original chibicc commit: [`c618c3b582de1d0b10b334a4f2ba6b85d5128940`](https://github.com/rui314/chibicc/commit/c618c3b582de1d0b10b334a4f2ba6b85d5128940).
+Original chibicc commit: [`835cd24b2c4598ee784d8bfd1c0427bfa948b947`](https://github.com/rui314/chibicc/commit/835cd24b2c4598ee784d8bfd1c0427bfa948b947).
 Earlier explanations are available in Git history.
 
-An array initializer can now move its cursor with [index]=value. Subsequent
-ordinary values continue after that element. Nested designators reach nested
-arrays; the brace-free continuation logic stops before an outer designator so
-its enclosing initializer can resume. Repeated writes replace the stored
-initializer expression, while untouched elements retain zero or an earlier value.
+The array-bound counting pass now tracks the initializer cursor and its
+maximum position. A designator can move backward without shrinking the bound,
+or forward beyond the number of explicit values. Nested initializer parsing
+handles the continuation needed to count rows. The completed array is then
+initialized by the existing designator pass.
 
 ```sh
-printf 'int main(void){int x[6]={[4]=42};return x[4]+x[0];}\n' > /tmp/lesson.c
+printf 'int main(void){int x[]={[0]=12,[3]=30};return x[0]+x[3]+x[1]+x[2];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The initializer tree stores 42 at element four. Local zeroing plus the ordinary
-indexed assignment produces the assembly; globals use the same tree serializer.
-Tests cover cursor movement, repeated writes, nested arrays, compound literals,
-zero filling, bounds/type errors and original fixtures. Python returns the
-index and next token as a tuple. It explicitly rejects negative indices instead
-of allowing C's out-of-bounds pointer access or Python's wraparound indexing.
-Inferred array bounds do not yet understand designators in this original step.
+The inferred bound is four; zeroing fills the two gaps and indexed stores
+supply 12 and 30. Tests check forward and backward designators, computed
+indices, inferred rows, global size and original fixtures. Python uses a
+dummy initializer plus local index/maximum variables where C uses output
+pointers. The original redundantly repeats its flexible-array check; Python
+keeps one equivalent check. Range syntax is recognized only by this counting
+pass at this step; range assignment has not yet been added.
 
 ## Tests and attribution
 

@@ -1102,16 +1102,27 @@ class Parser:
         return self.initializer2(position + 1, init)
 
     def count_array_init_elements(self, position, ty):
-        dummy = new_initializer(ty.base)
-        count = 0
+        dummy = new_initializer(ty.base, is_flexible=True)
+        index = maximum = 0
+        first = True
         while not self.is_end(position):
-            if count:
+            if not first:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
-            position = self.initializer2(position, dummy)
-            count += 1
-        return count
+            first = False
+            if self.tokens[position].text == "[":
+                index, position = self.const_expr(position + 1)
+                if self.tokens[position].text == "...":
+                    index, position = self.const_expr(position + 1)
+                if self.tokens[position].text != "]":
+                    raise CompileError(self.tokens[position], "expected ']'")
+                position = self.designation(position + 1, dummy)
+            else:
+                position = self.initializer2(position, dummy)
+            index += 1
+            maximum = max(maximum, index)
+        return maximum
 
     def array_initializer(self, position, init):
         if self.tokens[position].text != "{":

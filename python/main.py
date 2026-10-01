@@ -1,6 +1,6 @@
-"""Lesson 211: Initialize global struct bitfields.
+"""Lesson 212: Update bitfields with compound assignments.
 
-Based on chibicc commit 441a89b80babf98d3feb13e4594ee01eb6cc4dd5.
+Based on chibicc commit 54c2b3b18fb80235ad9ee53cac3966e8aad9e12a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

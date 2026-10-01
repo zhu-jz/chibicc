@@ -148,9 +148,20 @@ class Parser:
         return evaluate_constant(node), position
 
     def to_assign(self, binary):
-        """Lower A op= B while evaluating A's address exactly once."""
+        """Lower A op= B while evaluating A's base address exactly once."""
         add_type(binary.lhs)
         add_type(binary.rhs)
+        if binary.lhs.kind == "MEMBER":
+            token = binary.tok
+            var = self.new_lvar("", pointer_to(binary.lhs.lhs.ty))
+            save = Node("ASSIGN", Node("VAR", var=var, tok=token),
+                        Node("ADDR", lhs=binary.lhs.lhs, tok=token), tok=token)
+            target = Node("MEMBER", lhs=Node("DEREF", lhs=Node("VAR", var=var, tok=token), tok=token),
+                          member=binary.lhs.member, tok=token)
+            value = Node("MEMBER", lhs=Node("DEREF", lhs=Node("VAR", var=var, tok=token), tok=token),
+                         member=binary.lhs.member, tok=token)
+            assignment = Node("ASSIGN", target, Node(binary.kind, value, binary.rhs, tok=token), tok=token)
+            return Node("COMMA", save, assignment, tok=token)
         token = binary.tok
         temporary = self.new_lvar("", pointer_to(binary.lhs.ty))
         save_address = Node("ASSIGN", Node("VAR", var=temporary, tok=token),

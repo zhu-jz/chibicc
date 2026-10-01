@@ -77,6 +77,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bitfield_compound_assignments(self):
+        for expression, expected in [('x.b++', 2), ('++x.b', 3), ('x.b+=40', 42),
+                                     ('x.b*=21', 42), ('x.b=42', 42)]:
+            self.assert_program_returns('int main(void){struct T{int a:10,b:10,c:10;}x={1,2,3};return ' + expression + ';}', expected)
+        self.assert_program_returns('int main(void){struct T{int a:10,b:10;}x[2]={{1,2},{3,4}};int i=0;x[i++].b+=40;return i+x[0].a+x[0].b;}', 44)
+        self.assert_program_returns('int main(void){struct T{int a:10,b:10;}x={1,2};x.b<<=2;return x.a+x.b;}', 9)
+
     def test_global_bitfield_initializers(self):
         source = 'struct T{char a;unsigned int b:5,c:10;}g={1,31,42},z={};int main(void){return g.c+z.a+z.b+z.c;}'
         self.assert_program_returns(source, 42)

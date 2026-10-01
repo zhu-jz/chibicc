@@ -1,27 +1,30 @@
-# Lesson 211: Initialize global struct bitfields
+# Lesson 212: Update bitfields with compound assignments
 
-Original chibicc commit: [`441a89b80babf98d3feb13e4594ee01eb6cc4dd5`](https://github.com/rui314/chibicc/commit/441a89b80babf98d3feb13e4594ee01eb6cc4dd5).
+Original chibicc commit: [`54c2b3b18fb80235ad9ee53cac3966e8aad9e12a`](https://github.com/rui314/chibicc/commit/54c2b3b18fb80235ad9ee53cac3966e8aad9e12a).
 Earlier explanations are available in Git history.
 
-Global initializer serialization now merges each struct bitfield's masked
-constant into its storage unit. Other members retain their ordinary byte
-serialization. Uninitialized fields remain zero. Python reads and writes the
-little-endian buffer with int.from_bytes and to_bytes instead of C casts to
-integer pointers, avoiding dependence on the host's alignment or byte order.
+Member compound assignments now save a pointer to the containing aggregate,
+then read and assign its member through that pointer. This preserves bitfield
+metadata and evaluates the base only once. Prefix/postfix increments use the
+same rewriting. Ordinary member updates follow this path too.
+
+Bitfield stores also preserve their expression result in r8 while merging the
+storage unit. Python builds explicit nodes with a shared temporary object
+instead of the C pointer-based constructors.
 
 ```sh
-printf 'struct T{unsigned int a:6,b:4;}g={42,7};int main(void){return g.a;}\n' > /tmp/lesson.c
+printf 'int main(void){struct T{int a:10,b:10;}x={1,2};return x.b+=40;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The data section contains the packed initial word. Main loads it and shifts
-to isolate a, leaving 42 in rax. Tests inspect exact initializer bytes and run
-signed fields, zero-filled trailing fields, arrays and original fixtures.
-The original stops processing struct members at the first absent bitfield
-initializer; that historical rule is retained. Union serialization is unchanged.
+Assembly extracts b, adds 40, merges the updated bits and restores the value
+from r8 to rax. Tests cover arithmetic and shifts, prefix/postfix results,
+ordinary assignment results, side-effecting bases, neighbor preservation and
+upstream fixtures. The original returns the assigned value before truncating
+it to the bitfield width; we retain that behavior at this step.
 
 ## Tests and attribution
 

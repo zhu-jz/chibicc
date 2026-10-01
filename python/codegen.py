@@ -350,6 +350,7 @@ class CodeGenerator:
             self.gen_expr(node.rhs)
             if node.lhs.kind == "MEMBER" and node.lhs.member.is_bitfield:
                 member = node.lhs.member
+                self.assembly.append("  mov %rax, %r8")
                 mask = ((1 << member.bit_width) - 1) << member.bit_offset
                 self.assembly.extend(("  mov %rax, %rdi",
                                       f"  and ${(1 << member.bit_width) - 1}, %rdi",
@@ -358,6 +359,9 @@ class CodeGenerator:
                 self.load(member.ty)
                 self.assembly.extend((f"  mov ${~mask}, %r9", "  and %r9, %rax",
                                       "  or %rdi, %rax"))
+                self.store(node.ty)
+                self.assembly.append("  mov %r8, %rax")
+                return
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":

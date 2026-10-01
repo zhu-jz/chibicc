@@ -1,6 +1,6 @@
-"""Lesson 244: Find fields inside anonymous structs.
+"""Lesson 245: Align diagnostic carets with displayed Unicode text.
 
-Based on chibicc commit 95eb5b01b30b24d68cbeb3991f65c617fc2a35cb.
+Based on chibicc commit 37998be0c183508e54f10f57d63d87e6e7eb0607.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

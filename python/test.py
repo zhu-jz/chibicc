@@ -11,13 +11,13 @@ from unittest.mock import patch
 import time
 
 from codegen import CodeGenerator
-from common import CompileError, Node, Obj, Token
+from common import CompileError, Node, Obj, Token, File, format_diagnostic
 from parse import parse
 from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline, canonicalize_newline, convert_universal_chars
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 from main import add_default_include_paths
-from unicode import is_ident1, is_ident2
+from unicode import is_ident1, is_ident2, char_width, display_width
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -80,6 +80,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unicode_diagnostic_columns(self):
+        for character, width in [('a', 1), ('漢', 2), ('🍣', 2), ('\u0300', 0), ('\t', 0), ('\u303f', 1)]:
+            self.assertEqual(char_width(character), width)
+        self.assertEqual(display_width('漢a\u0300 '), 4)
+        file = File('x.c', 1, '漢a\u0300 ?\n')
+        self.assertEqual(format_diagnostic(file, 4, 'bad'), 'x.c:1: 漢a\u0300 ?\n' + ' ' * 11 + '^ bad')
+        source = 'int main(void){/*漢字\u0300*/return missing;}'
+        result = compile_program(source)
+        self.assertEqual(result.returncode, 1)
+        caret = result.stderr.splitlines()[1].index('^')
+        self.assertEqual(caret, len('-:1: ') + source.index('missing') + 1)
+
     def test_anonymous_struct_designators(self):
         for source, expected in [
             ('int main(void){struct{struct{int a;struct{int b;};};int c;}x={1,2,3,.b=4,5};return x.a+x.b+x.c;}', 10),

@@ -1,28 +1,28 @@
-# Lesson 244: Find fields inside anonymous structs
+# Lesson 245: Align diagnostic carets with displayed Unicode text
 
-Original chibicc commit: [`95eb5b01b30b24d68cbeb3991f65c617fc2a35cb`](https://github.com/rui314/chibicc/commit/95eb5b01b30b24d68cbeb3991f65c617fc2a35cb).
+Original chibicc commit: [`37998be0c183508e54f10f57d63d87e6e7eb0607`](https://github.com/rui314/chibicc/commit/37998be0c183508e54f10f57d63d87e6e7eb0607).
 Earlier explanations are available in Git history.
 
-A struct designator can now name a field inside an anonymous struct member.
-The lookup first selects the anonymous container, then leaves `.field` unconsumed
-so recursive designation can find the inner field. Ordinary named members still
-advance past the field name immediately.
+Diagnostics now measure the displayed columns before an error. The original
+Unicode tables assign zero columns to combining and control characters, two
+to selected East Asian and emoji ranges, and one to other characters. Counting
+UTF-8 bytes or Python characters alone can put a caret under the wrong column.
 
 ```sh
-printf 'int main(void){struct{struct{int a,b;};int c;}x={.b=12,30};return x.a+x.b+x.c;}\n' > /tmp/lesson.c
+printf 'int main(void){int 漢字=42;return 漢字;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly zeroes the object, stores 12 into the inner b field and 30 into c,
-then loads and adds them. The anonymous struct contributes its member offsets
-but needs no extra runtime representation. Tests cover nested anonymous structs,
-global initialization and an anonymous struct inside a union, plus original fixtures.
-Python returns a Member and token-list index instead of a C pointer and output
-parameter. This original step searches anonymous structs; anonymous union lookup
-in initializer designators is not extended here.
+Assembly stores and reloads 42 exactly as for an ASCII local name; local names
+do not affect machine instructions. The new tests also provoke an undefined
+identifier after wide and combining characters and check the caret column.
+Python sums widths over Unicode characters; C decodes UTF-8 bytes while scanning.
+We preserve the original fixed range tables rather than using the host Python
+Unicode database. Their control-character width, including tabs, is zero;
+terminal tab expansion is not modeled by this original commit.
 
 ## Tests and attribution
 

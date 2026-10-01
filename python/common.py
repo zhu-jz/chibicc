@@ -6,6 +6,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 
 from dataclasses import dataclass, field
 from typing import Optional
+from unicode import display_width
 
 
 def align_to(value, alignment):
@@ -32,7 +33,7 @@ def format_diagnostic(file, position, message, line_no=None):
         line_end = len(source)
     line_no = line_no or source.count("\n", 0, line_start) + 1
     prefix = f"{file.name}:{line_no}: "
-    caret = " " * (len(prefix) + position - line_start) + "^ " + message
+    caret = " " * (len(prefix) + display_width(source[line_start:position])) + "^ " + message
     return prefix + source[line_start:line_end] + "\n" + caret
 
 

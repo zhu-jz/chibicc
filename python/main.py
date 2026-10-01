@@ -1,6 +1,6 @@
-"""Lesson 276: Pass library arguments to the linker.
+"""Lesson 277: Strip executable symbols with -s.
 
-Based on chibicc commit bc2527944a83c1bc951a429530f39e93dc5235b2.
+Based on chibicc commit c32f0e21e71f43e64a7b98c9d96d4c513d42ba37.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -47,6 +47,7 @@ def parse_args(arguments):
     opt_E = False
     opt_fcommon = True
     opt_x = None
+    ld_extra_args = []
     position = 0
     while position < len(arguments):
         if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-cc1-input", "-cc1-output"):
@@ -60,6 +61,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-s":
+            ld_extra_args.append(argument)
+            position += 1
+            continue
         if argument.startswith("-l"):
             input_paths.append(argument)
             position += 1
@@ -156,7 +161,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args
 
 
 def parse_opt_x(language):
@@ -276,7 +281,7 @@ def find_gcc_library_path():
     raise CompileError(None, "gcc library path is not found")
 
 
-def run_linker(inputs, output, trace):
+def run_linker(inputs, output, trace, extra_args=()):
     library = find_library_path()
     gcc_library = find_gcc_library_path()
     command = ["ld", "-o", output, "-m", "elf_x86_64", "-dynamic-linker",
@@ -284,7 +289,7 @@ def run_linker(inputs, output, trace):
                f"{gcc_library}/crtbegin.o", f"-L{gcc_library}", f"-L{library}", f"-L{library}/..",
                "-L/usr/lib64", "-L/lib64", "-L/usr/lib/x86_64-linux-gnu",
                "-L/usr/lib/x86_64-pc-linux-gnu", "-L/usr/lib/x86_64-redhat-linux",
-               "-L/usr/lib", "-L/lib", *inputs, "-lc", "-lgcc", "--as-needed", "-lgcc_s",
+               "-L/usr/lib", "-L/lib", *extra_args, *inputs, "-lc", "-lgcc", "--as-needed", "-lgcc_s",
                "--no-as-needed", f"{gcc_library}/crtend.o", f"{library}/crtn.o"]
     return run_subprocess(command, trace)
 
@@ -292,7 +297,7 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
@@ -332,7 +337,7 @@ def main():
                 if status:
                     return status
             if linker_inputs:
-                return run_linker(linker_inputs, opt_o if opt_o is not None else "a.out", opt_trace)
+                return run_linker(linker_inputs, opt_o if opt_o is not None else "a.out", opt_trace, ld_extra_args)
         return 0
     except CompileError as error:
         print(error, file=sys.stderr)

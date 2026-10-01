@@ -87,6 +87,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_strip_link_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.c'
+            source.write_text('int main(void){return 42;}')
+            for stripped in (False, True):
+                executable = Path(directory) / ('stripped' if stripped else 'normal')
+                result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(source), *(['-s'] if stripped else [])], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+                symbols = subprocess.run(['nm', str(executable)], capture_output=True, text=True)
+                self.assertEqual(' main' in symbols.stdout, not stripped)
+
     def test_library_link_options(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'main.c'

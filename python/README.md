@@ -1,26 +1,26 @@
-# Lesson 276: Pass library arguments to the linker
+# Lesson 277: Strip executable symbols with -s
 
-Original chibicc commit: [`bc2527944a83c1bc951a429530f39e93dc5235b2`](https://github.com/rui314/chibicc/commit/bc2527944a83c1bc951a429530f39e93dc5235b2).
+Original chibicc commit: [`c32f0e21e71f43e64a7b98c9d96d4c513d42ba37`](https://github.com/rui314/chibicc/commit/c32f0e21e71f43e64a7b98c9d96d4c513d42ba37).
 Earlier explanations are available in Git history.
 
-Arguments beginning with -l are now collected alongside input files and passed
-to ld in their original order. They are not treated as source filenames. For
-example, -lm asks the linker to resolve math functions from libm.
+The driver accepts -s and keeps it in a separate list of extra linker arguments.
+It passes those arguments to ld before the input objects. Stripping removes the
+ordinary symbol table from the linked executable without changing its behavior.
 
 ```sh
-printf 'double sqrt(double);int main(void){return sqrt(1764.0);}\n' > /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s -lm
+gcc -s -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -o /tmp/lesson /tmp/lesson.c -lm
+python3 python/main.py -s -o /tmp/lesson /tmp/lesson.c
+nm /tmp/lesson
 ```
 
-Assembly passes 1764 in xmm0, calls sqrt, and converts its floating return value
-42 to the integer return register. GCC in the example and our compiler's driver
-both link libm. A test links and runs that call through our own driver and checks
-its traced linker arguments. Python uses the existing subprocess argument list;
-the original accepts attached -lname syntax, without adding a separate -l name form.
+Assembly still defines main and returns 42 in rax. The linker resolves that name
+before removing the final symbol table. Tests build both stripped and ordinary
+executables, check their exit status and use nm to check whether main remains.
+Python passes the extra argument list explicitly where C stores a global array.
 
 ## Tests and attribution
 

@@ -60,6 +60,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_variadic_floating_offsets(self):
+        prefix = "typedef struct V{int gp_offset;int fp_offset;void *overflow;void *registers;} V;"
+        function = "int f(double d,int n,...){V *v=(V*)__va_area__;char *p=v->registers;return *(int*)(p+v->gp_offset)+*(double*)(p+v->fp_offset);}"
+        self.assert_program_returns(prefix + function + "int main(void){return f(7.0,1,20,22.0f);}", 42)
+        self.assert_program_returns(prefix + function + "int call(void);int main(void){return call();}", 42,
+                                    "int f(double,int,...);int call(void){return f(7.0,1,20,22.0);}")
+        assembly = compile_program("int f(double x,int y,float z,...){return y;}").stdout
+        self.assertIn("  movl $8,", assembly)
+        self.assertIn("  movl $64,", assembly)
+        self.assertIn("  movl $48,", compile_program("int f(int x,...){return x;}").stdout)
+
     def test_default_float_argument_promotion(self):
         self.assert_program_returns("int f();int main(void){float x=20.5f;return f(x,21.5f);}", 42,
                                     "int f(double a,double b){return a+b;}")

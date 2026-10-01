@@ -1,6 +1,6 @@
-"""Lesson 146: Default float argument promotion.
+"""Lesson 147: Variadic floating parameter offsets.
 
-Based on chibicc commit 8b14859f63a8389882bdb9330de592a112affa18.
+Based on chibicc commit e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -496,8 +496,10 @@ class CodeGenerator:
                                   f"  sub ${function.stack_size}, %rsp"])
             if function.va_area is not None:
                 offset = function.va_area.offset
-                self.assembly.extend((f"  movl ${len(function.params) * 8}, {offset}(%rbp)",
-                                      f"  movl $0, {offset + 4}(%rbp)",
+                fp_count = sum(var.ty.kind in ("FLOAT", "DOUBLE") for var in function.params)
+                gp_count = len(function.params) - fp_count
+                self.assembly.extend((f"  movl ${gp_count * 8}, {offset}(%rbp)",
+                                      f"  movl ${48 + fp_count * 8}, {offset + 4}(%rbp)",
                                       f"  movq %rbp, {offset + 16}(%rbp)",
                                       f"  addq ${offset + 24}, {offset + 16}(%rbp)"))
                 for index, register in enumerate(ARGREG):

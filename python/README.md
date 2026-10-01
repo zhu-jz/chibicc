@@ -1,36 +1,35 @@
-# Lesson 146: Default float argument promotion
+# Lesson 147: Variadic floating parameter offsets
 
-Original chibicc commit: [`8b14859f63a8389882bdb9330de592a112affa18`](https://github.com/rui314/chibicc/commit/8b14859f63a8389882bdb9330de592a112affa18).
+Original chibicc commit: [`e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93`](https://github.com/rui314/chibicc/commit/e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-When a call runs out of declared parameter types, a float argument now receives
-an explicit cast to double. This applies to variadic trailing arguments and to
-old-style empty parameter lists. Fixed float parameters still receive float.
-The syntax tree records the cast; cvtss2sd performs the conversion at runtime.
+A variadic function now counts its fixed integer and floating parameters separately.
+Its saved argument header starts gp_offset at eight times the integer count and
+fp_offset at 48 plus eight times the floating count. The first six saved integer
+registers occupy 48 bytes; floating register slots follow them.
 
-Python implements this as one extra parser branch, matching the original C.
-This step adds the floating promotion only. The historical caller still leaves
-the variadic SSE-register count in al unspecified; promotion itself can be tested
-reliably by calling a GCC helper through an old-style declaration and inspecting
-the variadic argument tree.
+Python counts the parameter list directly, matching the original linked-list loop.
+This historical save area uses eight-byte floating slots rather than the full
+sixteen-byte System V slots. The tests check that actual layout and the original
+single-floating-argument forwarding example. This change concerns the callee's
+header; the caller's al bookkeeping remains incomplete in the original commit.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int add();int main(void){float x=20.5f;return add(x,21.5f);}\n' > /tmp/lesson146.c
-printf 'int add(double x,double y){return x+y;}\n' > /tmp/lesson146-helper.c
-python3 python/main.py /tmp/lesson146.c > /tmp/lesson146.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson146 /tmp/lesson146.s /tmp/lesson146-helper.c
-/tmp/lesson146
+printf 'typedef struct V{int gp;int fp;void *overflow;void *regs;} V;int f(double x,...){V *v=(V*)__va_area__;return *(double*)((char*)v->regs+v->fp);}int main(void){return f(1.0,42.0);}\n' > /tmp/lesson147.c
+python3 python/main.py /tmp/lesson147.c > /tmp/lesson147.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson147 /tmp/lesson147.s
+/tmp/lesson147
 echo $?
 ```
 
-Each float converts to double before being saved and restored into xmm0/xmm1.
-The helper returns integer 42, which the shell shows as the executable's exit
-status. Tests check omitted, variadic, and fixed parameter types, the conversion
-instruction, linked execution, and the original sprintf example.
+The prologue saves xmm0 and xmm1 and writes fp_offset=56. Adding that offset to
+regs finds the first trailing double, 42.0. Conversion to int produces shell exit
+status 42. Tests cover mixed fixed parameters, trailing integers and doubles,
+calls from GCC, header instructions, execution, and original forwarding code.
 
 ## Tests and attribution
 

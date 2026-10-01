@@ -1,6 +1,6 @@
-"""Lesson 169: Expand macros in conditional expressions.
+"""Lesson 170: Stop recursive object-like expansion with hidesets.
 
-Based on chibicc commit 2651448084a56dd0b960989798772e71e12e6c30.
+Based on chibicc commit acce00228b842af35df5af8c97398765a386ab1e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

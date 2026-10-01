@@ -72,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_recursive_object_macros(self):
+        self.assert_program_returns('int main(void){int VALUE=6;\n#define VALUE VALUE+3\nreturn VALUE;}\n', 9)
+        self.assert_program_returns('int main(void){int FIRST=3;\n#define FIRST SECOND*5\n#define SECOND FIRST+2\nreturn FIRST;}\n', 13)
+        tokens = tokenize('#define FIRST SECOND\n#define SECOND FIRST\nFIRST FIRST\n')
+        self.assertEqual([t.text for t in tokens[:-1]], ['FIRST', 'FIRST'])
+        for token in tokens[:-1]:
+            self.assertEqual(token.hideset, frozenset({'FIRST', 'SECOND'}))
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                input='#define SELF SELF\nSELF\n', capture_output=True,
+                                text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, ' SELF\n')
+
     def test_macros_in_conditions(self):
         self.assert_program_returns('''#define VALUE NEXT
 #define NEXT 5

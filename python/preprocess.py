@@ -85,11 +85,19 @@ def find_macro(token, macros):
     return None
 
 
+def add_hideset(tokens, hideset):
+    return [replace(token, hideset=token.hideset | hideset) for token in tokens]
+
+
 def expand_macro(tokens, position, macros):
-    macro = find_macro(tokens[position], macros)
+    token = tokens[position]
+    if token.text in token.hideset:
+        return False
+    macro = find_macro(token, macros)
     if macro is None:
         return False
-    tokens[position:position + 1] = [replace(token) for token in macro.body[:-1]]
+    hideset = token.hideset | {macro.name}
+    tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)
     return True
 
 

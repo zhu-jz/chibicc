@@ -1,30 +1,32 @@
-# Lesson 169: Expand macros in conditional expressions
+# Lesson 170: Stop recursive object-like expansion with hidesets
 
-Original chibicc commit: [`2651448084a56dd0b960989798772e71e12e6c30`](https://github.com/rui314/chibicc/commit/2651448084a56dd0b960989798772e71e12e6c30).
+Original chibicc commit: [`acce00228b842af35df5af8c97398765a386ab1e`](https://github.com/rui314/chibicc/commit/acce00228b842af35df5af8c97398765a386ab1e).
 Earlier explanations are available in Git history.
 
-Before evaluating a `#if` or eligible `#elif` expression, the preprocessor now
-expands macros in its copied token line. The same macro definitions are shared
-with ordinary source processing. Keyword conversion and the final unmatched
-conditional check remain in the outer entry point.
+Each token now carries a set of macro names already used in its expansion.
+Expanding a macro copies its replacement tokens, combines their existing
+hidesets with the invoking token's hideset, and adds the current macro name.
+A name found in its own token's hideset is passed through without expansion.
+This stops both direct and indirect recursion while permitting other expansions.
 
-A small internal preprocessing function accepts the shared dictionaries and
-conditional stack explicitly instead of relying on C global variables. Empty
-expansions produce `no expression`; identifiers that remain undefined still
-produce the parser's undefined-variable diagnostic at this historical step.
+Python uses immutable `frozenset` values instead of C linked lists. Shared sets
+cannot accidentally change a different token's expansion history, and set union
+expresses the original operation directly.
 
 ```sh
-printf '#define VALUE 5\n#if VALUE-5\ninvalid\n#elif VALUE\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf 'int main(void){int VALUE=6;\n#define VALUE VALUE+3\nreturn VALUE;}\n' > /tmp/lesson.c
+python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 9
 ```
 
-The first expression becomes `5-5`, selecting the second branch. Generated
-assembly loads 42 into `%rax` and returns; macro evaluation adds no runtime
-instructions. Tests cover chained definitions, arithmetic conditions, empty
-expansions and expressions skipped after an earlier successful branch.
+The return expression becomes `VALUE+3`, where the surviving identifier refers
+to the local variable. Assembly loads that variable, adds 3 and returns 9 in
+`%rax`. Tests inspect hidesets, run direct and indirect recursion, and check
+preprocessing finishes within a timeout. The complete source and packaged
+compiler suites are also checked at this milestone.
 
 ## Tests and attribution
 

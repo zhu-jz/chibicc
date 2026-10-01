@@ -48,6 +48,7 @@ class Token:
     fvalue: float = 0.0
     at_bol: bool = field(default=False, compare=False)
     file: Optional[File] = field(default=None, compare=False)
+    hideset: frozenset[str] = field(default_factory=frozenset, compare=False)
 
 
 class CompileError(Exception):

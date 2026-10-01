@@ -1,6 +1,6 @@
-"""Lesson 260: Give inline functions internal linkage by default.
+"""Lesson 261: Emit only reachable static inline functions.
 
-Based on chibicc commit 31087f8d4bbc06e5bec44cb14cab3a922b5e4855.
+Based on chibicc commit e5f4ca90fd2bf950189c98ed7f1873c9f35131f3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

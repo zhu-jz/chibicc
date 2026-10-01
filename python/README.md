@@ -1,28 +1,31 @@
-# Lesson 260: Give inline functions internal linkage by default
+# Lesson 261: Emit only reachable static inline functions
 
-Original chibicc commit: [`31087f8d4bbc06e5bec44cb14cab3a922b5e4855`](https://github.com/rui314/chibicc/commit/31087f8d4bbc06e5bec44cb14cab3a922b5e4855).
+Original chibicc commit: [`e5f4ca90fd2bf950189c98ed7f1873c9f35131f3`](https://github.com/rui314/chibicc/commit/e5f4ca90fd2bf950189c98ed7f1873c9f35131f3).
 Earlier explanations are available in Git history.
 
-Function declarations now record inline. An inline function becomes static
-unless it also has extern; extern inline emits an externally visible function.
-This allows repeated inline definitions in separate translation units without
-duplicate global symbols. The compiler still emits normal calls and bodies.
+Functions now record referenced function names. Ordinary functions are roots;
+static inline functions become live only through references from live functions.
+A recursive walk marks each function before following its references, which
+handles recursive cycles without repeatedly traversing them. Code generation
+skips function bodies that remain unmarked.
 
 ```sh
-printf 'inline int f(void){return 42;}int main(void){return f();}\n' > /tmp/lesson.c
+printf 'static inline int unused(void){return 0;}static inline int f(void){return 42;}int main(void){return f();}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly gives f local linkage, generates its ordinary frame and return, then
-calls it from main. No machine-code inlining happens at this stage. Tests inspect
-function flags and symbols, link two files with repeated inline names, link an
-extern inline definition from another file, and run the original fixtures.
-Python adds boolean fields to declaration attributes and function objects;
-C adds matching struct fields. Storage-class diagnostic wording now includes
-inline, with the original validation condition preserved.
+Assembly contains main and f but no unused label or body. Main still calls f;
+this is removal of unused bodies, not call-site inlining. Tests check direct and
+transitive references, unused and referenced cycles, ordinary static roots and
+extern inline roots, and run original fixtures and translated driver scenarios.
+Python stores reference names in a list instead of C's growable StringArray.
+The original current-function state persists after a definition, so later
+file-scope references can be attached to that last function. This historical
+state behavior is retained. Literal data created while parsing dead bodies may
+also remain in the assembly; the original step only skips function text.
 
 ## Tests and attribution
 

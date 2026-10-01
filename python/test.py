@@ -81,6 +81,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_inline_liveness(self):
+        chain = 'static inline int f1(void){return 42;}static inline int f2(void){return f1();}'
+        for call, emitted in [('', set()), ('f1()', {'f1'}), ('f2()', {'f1', 'f2'})]:
+            source = chain + 'int main(void){return ' + (call or '42') + ';}'
+            self.assert_program_returns(source, 42)
+            assembly = compile_program(source).stdout
+            self.assertEqual({name for name in ('f1', 'f2') if '\n' + name + ':\n' in assembly}, emitted)
+        cycle = 'static inline void f2(void);static inline void f1(void){f2();}static inline void f2(void){f1();}'
+        for body, emitted in [('return 42;', set()), ('if(0)f1();return 42;', {'f1', 'f2'})]:
+            source = cycle + 'int main(void){' + body + '}'
+            self.assert_program_returns(source, 42)
+            assembly = compile_program(source).stdout
+            self.assertEqual({name for name in ('f1', 'f2') if '\n' + name + ':\n' in assembly}, emitted)
+        assembly = compile_program('static int f(void){return 1;}extern inline int g(void){return 2;}int main(void){return 42;}').stdout
+        self.assertIn('\nf:\n', assembly)
+        self.assertIn('\ng:\n', assembly)
+
     def test_inline_function_linkage(self):
         for prefix, local in [('inline', True), ('static inline', True), ('extern inline', False)]:
             source = prefix + ' int f(void){return 42;}int main(void){return f();}'

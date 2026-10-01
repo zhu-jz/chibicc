@@ -125,6 +125,9 @@ class Obj:
     is_static: bool = False
     params: list["Obj"] = field(default_factory=list)
     is_inline: bool = False
+    is_live: bool = field(default=False, compare=False)
+    is_root: bool = field(default=False, compare=False)
+    refs: list[str] = field(default_factory=list, compare=False)
     body: Optional["Node"] = None
     locals: list["Obj"] = field(default_factory=list)
     stack_size: int = 0

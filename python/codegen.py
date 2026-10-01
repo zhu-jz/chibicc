@@ -646,6 +646,8 @@ class CodeGenerator:
         for function in program:
             if not function.is_function or not function.is_definition:
                 continue
+            if not function.is_live:
+                continue
             top, gp, fp = 16, 0, 0
             for var in function.params:
                 ty = var.ty

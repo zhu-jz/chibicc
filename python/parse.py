@@ -571,6 +571,11 @@ class Parser:
                 if self.tokens[position + 1].text == "(":
                     raise CompileError(token, "implicit declaration of a function")
                 raise CompileError(token, "undefined variable")
+            if binding.var is not None and binding.var.is_function:
+                if self.current_fn is not None:
+                    self.current_fn.refs.append(binding.var.name)
+                else:
+                    binding.var.is_root = True
             if binding.var is None:
                 return Node("NUM", value=binding.enum_val, tok=token), position + 1
             return Node("VAR", var=binding.var, tok=token), position + 1
@@ -1529,6 +1534,7 @@ class Parser:
         function.is_definition = False
         function.is_static = attr.is_static or (attr.is_inline and not attr.is_extern)
         function.is_inline = attr.is_inline
+        function.is_root = not (function.is_static and function.is_inline)
         if self.tokens[position].text == ";":
             return position + 1
         function.is_definition = True
@@ -1598,6 +1604,21 @@ class Parser:
             self.push_scope(ty.name.text).type_def = ty
         return position + 1
 
+    def find_func(self, name):
+        for binding in self.scopes[0].vars:
+            if binding.name == name and binding.var is not None and binding.var.is_function:
+                return binding.var
+        return None
+
+    def mark_live(self, function):
+        if not function.is_function or function.is_live:
+            return
+        function.is_live = True
+        for name in function.refs:
+            referenced = self.find_func(name)
+            if referenced is not None:
+                self.mark_live(referenced)
+
     # program = (typedef | function-definition | global-variable)*
     def parse(self):
         position = 0
@@ -1611,6 +1632,9 @@ class Parser:
                 position = self.function(position, basety, attr)
             else:
                 position = self.global_variable(position, basety, attr)
+        for obj in self.globals:
+            if obj.is_root:
+                self.mark_live(obj)
         return self.globals
 
 

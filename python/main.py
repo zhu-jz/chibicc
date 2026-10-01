@@ -1,6 +1,6 @@
-"""Lesson 110: Trailing commas in enum and initializer lists.
+"""Lesson 111: Uninitialized globals in BSS.
 
-Based on chibicc commit fde464c47cb69e030b58d8d204a508d6babd3e09.
+Based on chibicc commit 3d216e3e06eee7ea3679503867a619c28458e8a7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

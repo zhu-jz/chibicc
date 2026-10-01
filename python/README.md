@@ -1,34 +1,33 @@
-# Lesson 110: Trailing commas in enum and initializer lists
+# Lesson 111: Uninitialized globals in BSS
 
-Original chibicc commit: [`fde464c47cb69e030b58d8d204a508d6babd3e09`](https://github.com/rui314/chibicc/commit/fde464c47cb69e030b58d8d204a508d6babd3e09).
+Original chibicc commit: [`3d216e3e06eee7ea3679503867a619c28458e8a7`](https://github.com/rui314/chibicc/commit/3d216e3e06eee7ea3679503867a619c28458e8a7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Enums and array/struct initializer lists now recognize both `}` and `,}` as
-their end. Array-length inference counts the same elements with either ending.
-Unbraced nested aggregates stop before the parent's trailing comma, leaving it
-for the parent to consume. Union initialization optionally skips one comma.
+Uninitialized globals now use the .bss section and .zero directives. The loader
+provides their zero-filled memory without storing all those zero bytes in the
+object file. Globals with explicit initializers use .data, even when their
+initializer evaluates to zero. Linker-resolved pointers still use .data.
 
-Python returns the next token index from consume_end instead of updating C's
-output pointer. The historical commit does not change scalar-brace parsing:
-`int x={42,};` is still rejected, even though scalar braces without a trailing
-comma work. Empty scalar and union braces remain unsupported.
+The Python check uses `init_data is not None`, rather than byte-buffer truthiness,
+matching the distinction between C's null and allocated data pointers. Section
+selection is the only compiler change; expression parsing is unchanged.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[]={1,2,42,};return a[2];}\n' > /tmp/lesson110.c
-python3 python/main.py /tmp/lesson110.c > /tmp/lesson110.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson110 /tmp/lesson110.s
-/tmp/lesson110
+printf 'int x;int y=42;int main(){return x+y;}\n' > /tmp/lesson111.c
+python3 python/main.py /tmp/lesson111.c > /tmp/lesson111.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson111 /tmp/lesson111.s
+/tmp/lesson111
 echo $?
 ```
 
-The trailing comma emits nothing. The inferred array still occupies 12 bytes,
-gets three int stores, and returns exit status 42. Tests cover arrays, structs,
-unions, enums, brace elision, length inference, assembly sizing, scalar grammar
-limits, and the original initializer suite.
+The emitter writes x in .bss with `.zero 4`, and y in .data with four bytes.
+Main loads both and returns 42. Tests check initialized-zero versus uninitialized
+objects, array zeroing, emitted sections, B/D symbol types in the assembled object
+using nm from build-essential, actual execution, and original C examples.
 
 ## Tests and attribution
 

@@ -77,6 +77,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_command_line_macro_undefinitions(self):
+        for arguments, source, expected in [
+            (['-Dfoo=bar', '-Ufoo'], 'foo', 'foo\n'),
+            (['-Ufoo', '-Dfoo=42'], 'foo', '42\n'),
+            (['-Dfoo=42', '-U', 'foo', '-Ufoo'], 'foo', 'foo\n'),
+            (['-U__STDC__'], '#ifdef __STDC__\nbad\n#else\n42\n#endif', '42\n'),
+            (['-Ufoo'], '#define foo 42\nfoo', '42\n'),
+        ]:
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', *arguments, '-'], input=source, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+        result = subprocess.run([sys.executable, str(COMPILER), '-', '-U'], input='', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+
     def test_command_line_macro_definitions(self):
         for arguments, source, expected in [
             (['-Dfoo'], 'foo', '1\n'), (['-D', 'foo=bar'], 'foo', 'bar\n'),

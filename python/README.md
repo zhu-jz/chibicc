@@ -1,30 +1,26 @@
-# Lesson 208: Define macros from command-line options
+# Lesson 209: Undefine macros from command-line options
 
-Original chibicc commit: [`fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5`](https://github.com/rui314/chibicc/commit/fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5).
+Original chibicc commit: [`be8b6f6d31f0c73c2aabffdf2794f20c69567cdb`](https://github.com/rui314/chibicc/commit/be8b6f6d31f0c73c2aabffdf2794f20c69567cdb).
 Earlier explanations are available in Git history.
 
--DNAME defines NAME as 1; -DNAME=value uses the replacement text after the
-first equals sign. Both attached and separate forms work, and -DNAME= is
-empty. Definitions are applied in command-line order after predefined macros.
-Internal compiler subprocesses receive the same options for every input file.
-
-Python passes an explicit macro dictionary through parsing and preprocessing
-rather than introducing C global state. Direct preprocess calls still get a
-fresh default dictionary. A missing separate -D value gets a usage error
-instead of the original's unchecked access past the argument array.
+-Uname and -U name remove a macro definition, including predefined names.
+-D and -U act in their original command-line order. Source directives then
+run normally, so a later #define can restore the name. #undef and -U now
+share one helper. Removing an unknown name is harmless.
 
 ```sh
-printf 'int main(void){return ANSWER;}\n' > /tmp/lesson.c
-python3 python/main.py -DANSWER=42 -S -o /tmp/lesson.s /tmp/lesson.c
+printf '#ifdef FLAG\n#error flag still defined\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -DFLAG -UFLAG -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-ANSWER becomes a numeric token before parsing, so the assembly contains the
-ordinary mov $42 and return path. Tests check both option forms, empty values,
-redefinition order, predefined overrides, #if, the executable driver and
-upstream C fixtures. This step adds object-like command-line macros only.
+The skipped #error contributes no assembly. Main still returns the immediate
+42 through rax. Tests exercise option forms and ordering, repeated removal,
+predefined names, later source definitions and original fixtures. Python removes
+the dictionary entry where C adds a deleted linked-list entry; expansion sees
+the same result. Missing separate -U arguments receive a usage error.
 
 ## Tests and attribution
 

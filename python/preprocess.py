@@ -408,7 +408,7 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
                 if name.kind != "IDENT":
                     raise CompileError(name, "macro name must be an identifier")
                 position = skip_line(tokens, position + 2)
-                macros.pop(name.text, None)
+                undef_macro(macros, name.text)
                 continue
             if tokens[position].text == "if":
                 value, position = eval_const_expr(tokens, position, files, macros, conditions, include_paths)
@@ -474,6 +474,10 @@ def line_macro(template):
     while template.origin is not None:
         template = template.origin
     return new_num_token(template.line_no, template)
+
+
+def undef_macro(macros, name):
+    macros.pop(name, None)
 
 
 def define_macro(macros, name, source):

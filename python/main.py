@@ -1,6 +1,6 @@
-"""Lesson 208: Define macros from command-line options.
+"""Lesson 209: Undefine macros from command-line options.
 
-Based on chibicc commit fc69f5c6f9b3aeb5d6ee61353f0ed0df28f954c5.
+Based on chibicc commit be8b6f6d31f0c73c2aabffdf2794f20c69567cdb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -13,7 +13,7 @@ import glob
 from codegen import codegen
 from common import CompileError, format_diagnostic
 from parse import parse
-from preprocess import preprocess, init_macros, define_macro
+from preprocess import preprocess, init_macros, define_macro, undef_macro
 from tokenizer import tokenize_file
 
 
@@ -45,7 +45,7 @@ def parse_args(arguments):
     opt_E = False
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -53,6 +53,14 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument.startswith("-U"):
+            name = argument[2:]
+            if argument == "-U":
+                position += 1
+                name = arguments[position]
+            undef_macro(macros, name)
+            position += 1
+            continue
         if argument.startswith("-D"):
             definition = argument[2:]
             if argument == "-D":

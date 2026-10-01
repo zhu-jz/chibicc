@@ -826,6 +826,8 @@ class Parser:
         return ty, position + 1
 
     def array_dimensions(self, position, ty):
+        while self.tokens[position].text in ("static", "restrict"):
+            position += 1
         if self.tokens[position].text == "]":
             ty, position = self.type_suffix(position + 1, ty)
             return array_of(ty, -1), position

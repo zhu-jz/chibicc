@@ -1,6 +1,6 @@
-"""Lesson 136: Recognizing ignored declaration qualifiers.
+"""Lesson 137: Ignored keywords in array dimensions.
 
-Based on chibicc commit b77355427575385b6f0b6c0a914600b79b4e4412.
+Based on chibicc commit 93d12771d009924fb598b088dc4bd9b67fd9a09a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

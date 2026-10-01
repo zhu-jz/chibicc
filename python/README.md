@@ -1,35 +1,33 @@
-# Lesson 136: Recognizing ignored declaration qualifiers
+# Lesson 137: Ignored keywords in array dimensions
 
-Original chibicc commit: [`b77355427575385b6f0b6c0a914600b79b4e4412`](https://github.com/rui314/chibicc/commit/b77355427575385b6f0b6c0a914600b79b4e4412).
+Original chibicc commit: [`93d12771d009924fb598b088dc4bd9b67fd9a09a`](https://github.com/rui314/chibicc/commit/93d12771d009924fb598b088dc4bd9b67fd9a09a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The parser recognizes const, volatile, auto, register, restrict, __restrict,
-__restrict__, and _Noreturn, then intentionally ignores them. Declaration
-specifiers accept all of these; qualifiers immediately after pointer stars accept
-const, volatile and restrict spellings. A shared pointers routine handles named
-and abstract declarators.
+Array dimension parsing now skips repeated static and restrict before a bound.
+This accepts parameter spelling such as `int a[restrict static 3]`; its array
+type still adjusts to an int pointer as before. The keywords impose no minimum
+length checks or extra runtime behavior in this historical compiler.
 
-This is syntax compatibility, as in upstream: const does not prevent assignment,
-volatile does not change memory operations, and _Noreturn does not change control
-flow. Python uses the same keyword sets and simple loops. Qualifier-only
-specifiers retain the compiler's historical default-int behavior.
+The original title mentions const, but its actual diff handles static and
+restrict only. Python follows that diff, so `[const 3]` remains rejected. Existing
+type/declaration qualifier support does not automatically apply inside brackets.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){const volatile int x=42;int *const p=&x;return *p;}\n' > /tmp/lesson136.c
-python3 python/main.py /tmp/lesson136.c > /tmp/lesson136.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson136 /tmp/lesson136.s
-/tmp/lesson136
+printf 'int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}\n' > /tmp/lesson137.c
+python3 python/main.py /tmp/lesson137.c > /tmp/lesson137.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson137 /tmp/lesson137.s
+/tmp/lesson137
 echo $?
 ```
 
-The qualifiers produce no instructions. Assembly initializes x and p, follows
-the pointer, and returns exit status 42. Tests cover declaration and pointer
-qualifiers, abstract casts, intentionally writable const objects, identical
-assembly with/without qualifiers, execution, and new original const/compat code.
+The caller passes the array address in rdi. f stores that pointer, adds eight
+bytes for index two, and returns 42. Tests check accepted keyword order,
+parameter pointer adjustment, emitted register storage, the actual const
+limitation, execution, and the original compatibility program.
 
 ## Tests and attribution
 

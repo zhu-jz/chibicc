@@ -60,6 +60,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_array_dimension_keywords(self):
+        self.assert_program_returns("int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}", 42)
+        function = parse(tokenize("int f(int a[static restrict 3]);"))[0]
+        self.assertEqual((function.ty.params[0].kind, function.ty.params[0].base.kind), ("PTR", "INT"))
+        assembly = compile_program("int f(int a[restrict static 3]){return a[2];}").stdout
+        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+        self.assertEqual(compile_program("int f(int a[const 3]);").returncode, 1)
+
     def test_ignored_qualifiers(self):
         for source in [
             "int main(void){const int x=42;return x;}",

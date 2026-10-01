@@ -155,13 +155,22 @@ def quote_string(text):
 
 
 def new_str_token(text, template):
-    source = quote_string(text)
-    tokens = tokenize(source)
+    return tokenize_like(quote_string(text), template)[0]
+
+
+def tokenize_like(source, template):
+    file = None
     if template.file is not None:
         file = File(template.file.name, template.file.file_no, source)
+    try:
+        tokens = tokenize(source)
+    except CompileError as error:
+        error.file = file
+        raise
+    if file is not None:
         for token in tokens:
             token.file = file
-    return tokens[0]
+    return tokens
 
 
 def join_tokens(tokens):
@@ -173,6 +182,14 @@ def join_tokens(tokens):
             parts.append(" ")
         parts.append(token.text)
     return "".join(parts)
+
+
+def paste(lhs, rhs):
+    text = lhs.text + rhs.text
+    tokens = tokenize_like(text, lhs)
+    if len(tokens) != 2 or tokens[0].kind == "EOF":
+        raise CompileError(lhs, f"pasting forms '{text}', an invalid token")
+    return tokens[0]
 
 
 def subst(body, args, files, macros, conditions):
@@ -187,7 +204,37 @@ def subst(body, args, files, macros, conditions):
             result.append(new_str_token(join_tokens(argument), token))
             position += 2
             continue
+        if token.text == "##":
+            if not result:
+                raise CompileError(token, "'##' cannot appear at start of macro expansion")
+            rhs = body[position + 1]
+            if rhs.kind == "EOF":
+                raise CompileError(token, "'##' cannot appear at end of macro expansion")
+            argument = args.get(rhs.text)
+            if argument is not None:
+                if argument[0].kind != "EOF":
+                    result[-1] = paste(result[-1], argument[0])
+                    result.extend(replace(tok) for tok in argument[1:-1])
+            else:
+                result[-1] = paste(result[-1], rhs)
+            position += 2
+            continue
         argument = args.get(token.text)
+        if argument is not None and body[position + 1].text == "##":
+            rhs = body[position + 2]
+            if rhs.kind == "EOF":
+                raise CompileError(body[position + 1], "'##' cannot appear at end of macro expansion")
+            if argument[0].kind == "EOF":
+                other = args.get(rhs.text)
+                if other is not None:
+                    result.extend(replace(tok) for tok in other[:-1])
+                else:
+                    result.append(replace(rhs))
+                position += 3
+            else:
+                result.extend(replace(tok) for tok in argument[:-1])
+                position += 1
+            continue
         if argument is not None:
             expanded = [replace(tok) for tok in argument]
             preprocess2(expanded, files, macros, conditions)

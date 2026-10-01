@@ -1,6 +1,6 @@
-"""Lesson 177: Add macro stringizing.
+"""Lesson 178: Add macro token pasting.
 
-Based on chibicc commit 8f6f7925a04ca070167a38b8952a1a0bb7b63d23.
+Based on chibicc commit 8f561aed9b7a47c38afd8c1cc75bc9a700ae97b5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

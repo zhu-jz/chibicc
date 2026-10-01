@@ -234,7 +234,7 @@ def add_line_numbers(source, tokens):
 
 def read_punct(source, position):
     operators = ("<<=", ">>=", "...", "==", "!=", "<=", ">=", "->", "+=", "-=",
-                 "*=", "/=", "++", "--", "%=", "&=", "|=", "^=", "&&", "||", "<<", ">>")
+                 "*=", "/=", "++", "--", "%=", "&=", "|=", "^=", "&&", "||", "<<", ">>", "##")
     for operator in operators:
         if source.startswith(operator, position):
             return operator

@@ -72,6 +72,25 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macro_token_pasting(self):
+        for source, expected in (
+                ('#define P(x,y) x##y\nint main(void){return P(1,5);}\n', 15),
+                ('#define P(x,y) x##y\nint main(void){return P(0,xff);}\n', 255),
+                ('#define P(x,y) x##y\nint main(void){int foobar=42;return P(foo,bar);}\n', 42),
+                ('#define P(x,y) x##y\nint main(void){return P(5,)+P(,7);}\n', 12),
+                ('#define i 5\n#define P(x,y) x##y\nint main(void){int i3=100;return P(1+i,3);}\n', 101),
+                ('#define P(x) x##5\nint main(void){return P(1+2);}\n', 26),
+                ('#define P(x) 2##x\nint main(void){return P(1+2);}\n', 23),
+                ('#define P(x,y,z) x##y##z\nint main(void){return P(1,2,3);}\n', 123)):
+            self.assert_program_returns(source, expected)
+        for source, message in (
+                ('#define P(x,y) x##y\nP(+,*)\n', 'an invalid token'),
+                ('#define P() ##1\nP()\n', "'##' cannot appear at start"),
+                ('#define P(x) x##\nP(1)\n', "'##' cannot appear at end")):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_macro_stringizing(self):
         tokens = tokenize('#define STR(x) #x\nSTR( a!b  ' + chr(96) + '""c )\n')
         self.assertEqual(tokens[0].kind, 'STR')

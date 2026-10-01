@@ -64,12 +64,17 @@ def instruction_assembly(assembly):
     return "".join(lines)
 
 
+def declared_locals(function):
+    """Local declarations and existing expression temporaries, excluding alloca bookkeeping."""
+    return [var for var in function.locals if var is not function.alloca_bottom]
+
+
 def grammar_tree(node):
     """Compare syntax trees without generated casts or initialization zeroing."""
     if isinstance(node, list):
         return [grammar_tree(child) for child in node]
     if isinstance(node, Obj):
-        return replace(node, body=grammar_tree(node.body))
+        return replace(node, body=grammar_tree(node.body), locals=declared_locals(node))
     if not isinstance(node, Node):
         return node
     if node.kind == "CAST" and node.tok is node.lhs.tok:
@@ -82,6 +87,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_builtin_alloca(self):
+        for source, expected in [
+            ('int main(void){char *p=alloca(3);p[0]=12;p[2]=30;return p[0]+p[2];}', 42),
+            ('int main(void){char *p=alloca(3);char *q=alloca(17);return p-q;}', 32),
+            ('int main(void){char *p=1+(char*)alloca(3)+1;p[-2]=40;return p[-2]+2;}', 42),
+            ('int f(int x,char *p,int y){*p=x+y;return *p;}int main(void){return f(12,alloca(16),30);}', 42),
+            ('int main(void){int i=0;char *p=alloca(++i);return i==1?(unsigned long)p%16+42:0;}', 42),
+            ('int f(int x){char *p=alloca(x);p[0]=42;return p[0];}int main(void){return f(16);}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program('int main(void){return *(char*)alloca(16)=42;}').stdout
+        self.assertIn('  and $0xfffffff0, %edi\n', assembly)
+        self.assertIn('  mov (%rax), %r8b\n  mov %r8b, (%rdx)\n', assembly)
+        self.assertNotIn('alloca@GOTPCREL', assembly)
+
     def test_preprocess_implies_c_language(self):
         for options in ([], ['-xassembler'], ['-xnone']):
             result = subprocess.run([sys.executable, str(COMPILER), '-E', *options, '-'], input='#define X 42\nX\n', capture_output=True, text=True)
@@ -694,7 +714,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         program = parse(tokenize('int main(void){_Alignas(32)char x[17];return 0;}'))
         CodeGenerator().generate(program)
         function = next(var for var in program if var.is_function)
-        self.assertEqual(next(var.offset for var in function.locals if var.name == 'x') % 32, 0)
+        self.assertEqual(next(var.offset for var in declared_locals(function) if var.name == 'x') % 32, 0)
         self.assert_program_returns('int main(void){char x[17];return _Alignof(x);}',1)
         assembly = compile_program('char x[17];').stdout
         self.assertIn('  .globl x\n  .align 16\n', assembly)
@@ -744,7 +764,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         for members, size in [('int a:3;int:0;int c:5;',8), ('int a:3;int:0;',4),
                               ('char a;long:0;char b;',16), ('int:0;int c:5;',4)]:
             self.assert_program_returns('int main(void){return sizeof(struct T{' + members + '});}', size)
-        ty = next(var.ty for var in parse_body('struct T{int a:3;int:0;int b:5;}x;return 0;').locals if var.name == 'x')
+        ty = next(var.ty for var in declared_locals(parse_body('struct T{int a:3;int:0;int b:5;}x;return 0;')) if var.name == 'x')
         self.assertIsNone(ty.members[1].name)
         self.assertEqual((ty.members[2].offset,ty.members[2].bit_offset), (4,0))
 
@@ -773,7 +793,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected)
         function = parse_body('struct T{short a;char b;int c:2,d:3,e:3;}x;return 0;')
-        ty = next(var.ty for var in function.locals if var.name == 'x')
+        ty = next(var.ty for var in declared_locals(function) if var.name == 'x')
         self.assertEqual([(m.offset,m.bit_offset,m.bit_width) for m in ty.members[-3:]], [(0,24,2),(0,26,3),(0,29,3)])
         self.assertEqual(ty.size, 4)
         assembly = compile_program('int main(void){struct T{int a:3;}x={7};return x.a;}').stdout
@@ -935,7 +955,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = CodeGenerator().generate(program)
         function = next(obj for obj in program if obj.is_function)
         self.assertEqual([var.offset for var in function.params[-2:]], [16, 24])
-        self.assertEqual(function.stack_size, 32)
+        self.assertEqual(function.stack_size, 48)
         self.assertEqual(CodeGenerator().generate(program), assembly)
         self.assertIn('  lea 16(%rbp), %rax\n', assembly)
 
@@ -1763,7 +1783,7 @@ int main(void){return 42;}
         result = compile_program("typedef int F(void);int apply(F){return 0;}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("parameter name omitted", result.stderr)
-        self.assertIn("  mov %rdi, -8(%rbp)\n", compile_program("int apply(int fn(void)){return fn();}").stdout)
+        self.assertIn("  mov %rdi, -16(%rbp)\n", compile_program("int apply(int fn(void)){return fn();}").stdout)
 
     def test_function_pointer_calls(self):
         for source, expected in [
@@ -1861,8 +1881,8 @@ int main(void){return 42;}
         self.assert_program_returns("int call(void);double f(int a,double b,float c){return a+b+c;}int main(void){return call();}", 42,
                                     "double f(int,double,float);int call(void){return f(20,20.5,1.5);}")
         assembly = compile_program("double f(float x,double y){return x+y;}").stdout
-        self.assertIn("  movss %xmm0, -4(%rbp)\n", assembly)
-        self.assertIn("  movsd %xmm1, -16(%rbp)\n", assembly)
+        self.assertIn("  movss %xmm0, -12(%rbp)\n", assembly)
+        self.assertIn("  movsd %xmm1, -24(%rbp)\n", assembly)
 
     def test_floating_external_calls(self):
         helper = "float f(float a,float b){return a+b;}double d(double a,double b){return a+b;}double mix(int a,double b,int c,float d){return a+b+c+d;}"
@@ -1979,7 +1999,7 @@ int main(void){return 42;}
         function = parse(tokenize("int f(int a[static restrict 3]);"))[0]
         self.assertEqual((function.ty.params[0].kind, function.ty.params[0].base.kind), ("PTR", "INT"))
         assembly = compile_program("int f(int a[restrict static 3]){return a[2];}").stdout
-        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+        self.assertIn("  mov %rdi, -16(%rbp)\n", assembly)
         self.assertEqual(compile_program("int f(int a[const 3]);").returncode, 1)
 
     def test_ignored_qualifiers(self):
@@ -2214,7 +2234,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         program = parse(tokenize("int f(void){static int x=42;return x;}"))
         function = next(var for var in program if var.is_function)
-        self.assertEqual(function.locals, [])
+        self.assertEqual(declared_locals(function), [])
         assembly = compile_program("int f(void){static int x=42;return x;}").stdout
         self.assertIn("  .data\n.L..2:\n  .byte 42\n", assembly)
         self.assertNotIn("  rep stosb\n", assembly)
@@ -2257,7 +2277,7 @@ int main(void){return 42;}
         self.assert_program_returns(source, 42, "int g=21;int f(int x){return x;}int h(int x){return x;}")
         self.assert_program_returns("int main(void){int g=42;{extern int g;g=1;}return g;}", 42, "int g=0;")
         function = next(var for var in parse(tokenize(source)) if var.name == "main")
-        self.assertEqual(function.locals, [])
+        self.assertEqual(declared_locals(function), [])
         assembly = compile_program(source).stdout
         self.assertNotIn("g:\n", assembly)
         self.assertIn("  call *%r10\n", assembly)
@@ -2464,7 +2484,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         function = parse_body("struct T{char a;int b;} x={1,42};")
-        self.assertEqual([member.idx for member in function.locals[0].ty.members], [0, 1])
+        self.assertEqual([member.idx for member in declared_locals(function)[0].ty.members], [0, 1])
         self.assertIn("  add $4, %rax\n", compile_program("int main(void){struct T{char a;int b;} x={1,42};return x.b;}").stdout)
 
     def test_deduced_array_lengths(self):
@@ -2478,7 +2498,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         function = parse_body("int a[]={1,2,3};")
-        self.assertEqual((function.locals[0].ty.array_len, function.locals[0].ty.size), (3, 12))
+        self.assertEqual((declared_locals(function)[0].ty.array_len, declared_locals(function)[0].ty.size), (3, 12))
         self.assertIn("  mov $12, %rcx\n", compile_program("int main(void){int a[]={1,2,3};return sizeof(a);}").stdout)
         result = compile_program("int main(void){int a[];}")
         self.assertEqual(result.returncode, 1)
@@ -2708,7 +2728,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         function = parse_body("struct T *p;struct T{int x;};struct T a;")
-        a, p = function.locals
+        a, p = declared_locals(function)
         self.assertIs(p.ty.base, a.ty)
         self.assertEqual((a.ty.size, a.ty.align), (4, 4))
         result = compile_program("int main(void){struct T x;}")
@@ -2730,12 +2750,12 @@ int main(void){return 42;}
                          ("PTR", 8, "ARRAY", 3))
         self.assertEqual(param.ty.name.text, "x")
         assembly = compile_program("int f(int x[]){return x[0];}").stdout
-        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+        self.assertIn("  mov %rdi, -16(%rbp)\n", assembly)
 
     def test_incomplete_arrays(self):
         self.assert_program_returns("int main(void){return sizeof(int(*)[][10]);}", 8)
         self.assert_program_returns("int main(void){int a[2];a[1]=42;int (*p)[]=a;return (*p)[1];}", 42)
-        ty = parse_body("int (*p)[][10];").locals[0].ty
+        ty = declared_locals(parse_body("int (*p)[][10];"))[0].ty
         self.assertEqual((ty.kind, ty.size, ty.base.array_len, ty.base.size), ("PTR", 8, -1, -40))
         for source in ("int main(void){int x[];}", "int main(void){int x[][10];}"):
             result = compile_program(source)
@@ -2830,7 +2850,7 @@ int main(void){return 42;}
         function = parse_body("char x=1;x++;")
         node = function.body.body[-1].lhs
         self.assertEqual((node.kind, node.ty.kind), ("CAST", "CHAR"))
-        self.assertEqual(len([var for var in function.locals if var.name == ""]), 1)
+        self.assertEqual(len([var for var in declared_locals(function) if var.name == ""]), 1)
         self.assertEqual(compile_program("int main(void){return 1++;}").returncode, 1)
 
     def test_prefix_increment(self):
@@ -2860,8 +2880,8 @@ int main(void){return 42;}
         function = parse_body("int x=2;x+=5;")
         node = grammar_tree(function.body.body[-1].lhs)
         self.assertEqual((node.kind, node.lhs.kind, node.rhs.kind), ("COMMA", "ASSIGN", "ASSIGN"))
-        self.assertEqual(function.locals[0].name, "")
-        self.assertEqual(function.locals[0].ty.kind, "PTR")
+        self.assertEqual(declared_locals(function)[0].name, "")
+        self.assertEqual(declared_locals(function)[0].ty.kind, "PTR")
         self.assertEqual([token.text for token in tokenize("+= -= *= /=")[:-1]], ["+=", "-=", "*=", "/="])
         self.assertEqual(compile_program("int main(void){1+=2;}").returncode, 1)
 
@@ -2908,7 +2928,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         function = next(obj for obj in parse(tokenize("enum {answer=42};int main(void){return answer;}")) if obj.is_function and obj.is_definition)
-        self.assertEqual(function.locals, [])
+        self.assertEqual(declared_locals(function), [])
         self.assertIn("  mov $42, %rax\n", compile_program("enum {answer=42};int main(void){return answer;}").stdout)
         for source, message in [
             ("enum Missing x;", "unknown enum type"),
@@ -3097,7 +3117,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         self.assertEqual(compile_program("typedef int T;").stdout, '  .file 1 "-"\n')
         program = parse_body("typedef int T;T x=1;")
-        self.assertEqual([var.name for var in program.locals], ["x"])
+        self.assertEqual([var.name for var in declared_locals(program)], ["x"])
         for source, message in [
             ("int main(void){{typedef int T;}T x;}", "undefined variable"),
             ("int main(void){typedef int T;return T;}", "undefined variable"),
@@ -3110,7 +3130,7 @@ int main(void){return 42;}
     def test_long_long_alias(self):
         for spelling in ["long long", "long long int", "int long long", "long int long"]:
             self.assert_program_returns("int main(void){" + spelling + " x;return sizeof(x);}", 8)
-            ty = parse_body(spelling + " x;").locals[0].ty
+            ty = declared_locals(parse_body(spelling + " x;"))[0].ty
             self.assertEqual((ty.kind, ty.size, ty.align), ("LONG", 8, 8))
         self.assert_program_returns("int main(void){long long x=4294967296;return x/65536/65536;}", 1)
         for spelling in ["long long long", "long long int int", "short long long"]:
@@ -3138,7 +3158,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         self.assertEqual((ty_void.size, ty_void.align), (1, 1))
-        self.assertEqual(parse_body("void *p;").locals[0].ty.base.kind, "VOID")
+        self.assertEqual(declared_locals(parse_body("void *p;"))[0].ty.base.kind, "VOID")
         for source, message in [("int main(void){void x;}", "variable declared void"),
                                 ("int main(void){void *p;return *p;}", "dereferencing a void pointer"),
                                 ("int main(void){void *p;sizeof(*p);}", "dereferencing a void pointer")]:
@@ -3155,7 +3175,7 @@ int main(void){return 42;}
         self.assertEqual([obj.is_definition for obj in program if obj.is_function], [True, False])
         prototype = next(obj for obj in program if obj.is_function and not obj.is_definition)
         self.assertIsNone(prototype.body)
-        self.assertEqual(prototype.locals, [])
+        self.assertEqual(declared_locals(prototype), [])
         assembly = compile_program("int f(int x);int f(int x){return x;}").stdout
         self.assertEqual(assembly.splitlines().count("f:"), 1)
         self.assertIn("  .byte 102\n  .byte 0\n", assembly)
@@ -3170,12 +3190,12 @@ int main(void){return 42;}
             ("int f(int (*p)[3]){return p[0][2];}int main(void){int a[3];a[2]=42;return f(a);}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        array = parse_body("char *x[3];").locals[0].ty
-        pointer = parse_body("char (*x)[3];").locals[0].ty
+        array = declared_locals(parse_body("char *x[3];"))[0].ty
+        pointer = declared_locals(parse_body("char (*x)[3];"))[0].ty
         self.assertEqual((array.kind, array.size, array.base.kind), ("ARRAY", 24, "PTR"))
         self.assertEqual((pointer.kind, pointer.size, pointer.base.kind, pointer.base.size),
                          ("PTR", 8, "ARRAY", 3))
-        ty = parse_body("char (x[3])[4];").locals[0].ty
+        ty = declared_locals(parse_body("char (x[3])[4];"))[0].ty
         self.assertEqual((ty.array_len, ty.base.array_len, ty.size), (3, 4, 12))
         self.assertEqual(ty.name.text, "x")
         result = compile_program("int main(void){int (*x;}")
@@ -3194,7 +3214,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("short f(short a){return a;}int main(void){short x=42;return f(x);}").stdout
-        self.assertIn("  mov %di, -2(%rbp)\n", assembly)
+        self.assertIn("  mov %di, -10(%rbp)\n", assembly)
         self.assertIn("  mov %ax, (%rdi)\n", assembly)
         self.assertIn("  movswl (%rax), %eax\n", assembly)
         self.assertEqual((ty_short.size, ty_short.align), (2, 2))
@@ -3211,7 +3231,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         assembly = compile_program("long f(long a){return a;}int main(void){long x=4294967296;return f(x)/65536/65536;}").stdout
         self.assertIn("  mov $4294967296, %rax\n", assembly)
-        self.assertIn("  mov %rdi, -8(%rbp)\n", assembly)
+        self.assertIn("  mov %rdi, -16(%rbp)\n", assembly)
         self.assertIn("  mov %rax, (%rdi)\n", assembly)
         self.assertEqual((ty_long.size, ty_long.align), (8, 8))
         self.assertIs(parse_body("return 1;").body.body[0].lhs.lhs.ty, ty_int)
@@ -3263,10 +3283,10 @@ int main(void){return 42;}
             ("int main(void){union {int a;char b[9];} x[2];char *p=x;char *q=x+1;return q-p;}", 12),
         ]:
             self.assert_program_returns(source, expected)
-        ty = parse_body("union {int a;char b[9];} x;").locals[0].ty
+        ty = declared_locals(parse_body("union {int a;char b[9];} x;"))[0].ty
         self.assertEqual((ty.kind, ty.size, ty.align), ("UNION", 12, 4))
         self.assertEqual([member.offset for member in ty.members], [0, 0])
-        ty = parse_body("struct {char a;union {int b;char c[9];} d;} x;").locals[0].ty
+        ty = declared_locals(parse_body("struct {char a;union {int b;char c[9];} d;} x;"))[0].ty
         self.assertEqual((ty.size, ty.members[1].offset), (16, 4))
 
     def test_member_arrow(self):
@@ -3306,13 +3326,13 @@ int main(void){return 42;}
         for source, offsets, stack_size in [
             ("int x;char y;", [-1, -8], 16),
             ("char x;int y;", [-4, -5], 16),
-            ("struct {char a;int b;} x;char y;", [-1, -12], 16),
+            ("struct {char a;int b;} x;char y;", [-1, -12], 32),
         ]:
             program = parse_body(source)
             CodeGenerator().generate([program])
-            self.assertEqual([var.offset for var in program.locals], offsets)
+            self.assertEqual([var.offset for var in declared_locals(program)], offsets)
             self.assertEqual(program.stack_size, stack_size)
-            for var in program.locals:
+            for var in declared_locals(program):
                 self.assertEqual(var.offset % var.ty.align, 0)
         self.assert_program_returns("int main(void){int x;int y;char z;char *a=&y;char *b=&z;return b-a;}", 7)
         self.assert_program_returns("int main(void){int x;char y;int z;char *a=&y;char *b=&z;return b-a;}", 1)
@@ -3324,12 +3344,12 @@ int main(void){return 42;}
             ("struct {} x;", 0, 1, []),
             ("struct {char a;struct {char b;int c;} d;} x;", 12, 4, [0, 4]),
         ]:
-            ty = parse_body(declaration).locals[0].ty
+            ty = declared_locals(parse_body(declaration))[0].ty
             self.assertEqual((ty.size, ty.align), (size, alignment))
             self.assertEqual([member.offset for member in ty.members], offsets)
         self.assert_program_returns("int main(void){struct {char a;int b;} x;char *p=&x;char *q=&x.b;return q-p;}", 4)
         self.assert_program_returns("int main(void){struct {char a;int b;} x[2];char *p=x;char *q=x+1;return q-p;}", 8)
-        ty = parse_body("struct {char a;int b;} x[2];").locals[0].ty
+        ty = declared_locals(parse_body("struct {char a;int b;} x[2];"))[0].ty
         self.assertEqual((ty.size, ty.align), (16, 4))
 
     def test_struct_members(self):
@@ -3341,7 +3361,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         program = parse_body("struct {char a;int b;} x;return sizeof(x);")
-        ty = program.locals[0].ty
+        ty = declared_locals(program)[0].ty
         self.assertEqual(ty.size, 8)
         self.assertEqual([member.offset for member in ty.members], [0, 4])
         assembly = compile_program("int main(void){struct {char a;int b;} x;x.b=42;return x.b;}")
@@ -3448,7 +3468,7 @@ int main(void){return 42;}
             self.assertIn("undefined variable", result.stderr)
         program = parse(tokenize("int main(void){int x;{int x;int y;}}"))
         main = next(obj for obj in program if obj.name == "main")
-        self.assertEqual([var.name for var in main.locals], ["y", "x", "x"])
+        self.assertEqual([var.name for var in declared_locals(main)], ["y", "x", "x"])
 
     def test_comments(self):
         for source in ["int main(void){/* return 1; */ return 2;}",
@@ -3645,7 +3665,7 @@ int main(void){return 42;}
         functions = [obj for obj in objects if obj.is_function]
         self.assertEqual([obj.name for obj in functions], ["main", "a"])
         self.assertTrue(all(not obj.is_local for obj in functions))
-        self.assertTrue(functions[1].locals[0].is_local)
+        self.assertTrue(declared_locals(functions[1])[0].is_local)
         self.assertEqual(functions[1].ty.kind, "FUNC")
         assembly = CodeGenerator().generate(objects)
         self.assertEqual(assembly.count("  .text\n"), 2)
@@ -3691,7 +3711,7 @@ int main(void){return 42;}
             self.assert_program_returns("int main(void){int x[2][3]; int *y=x;"
                                         f"*(y+{index})={index}; return {expression};}}", index)
         function = next(obj for obj in parse(tokenize("int main(void){int x[2][3]; return x+1;}")) if obj.is_function and obj.is_definition)
-        ty = function.locals[0].ty
+        ty = declared_locals(function)[0].ty
         self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,24,3,12))
         expression = grammar_tree(function.body.body[-1].lhs)
         self.assertEqual(expression.rhs.rhs.value, 12)
@@ -3705,9 +3725,9 @@ int main(void){return 42;}
         self.assert_program_returns("int main(void){int *x[2]; int a=7; *x=&a; return **x;}", 7)
         function = next(obj for obj in parse(tokenize("int main(void){int x[3]; return x;}")) if obj.is_function and obj.is_definition)
         assembly = CodeGenerator().generate([function])
-        self.assertEqual(function.locals[0].ty.size, 12)
-        self.assertEqual(function.locals[0].offset, -12)
-        self.assertEqual(function.stack_size, 16)
+        self.assertEqual(declared_locals(function)[0].ty.size, 12)
+        self.assertEqual(declared_locals(function)[0].offset, -12)
+        self.assertEqual(function.stack_size, 32)
         self.assertIn("  lea -12(%rbp), %rax\n  jmp .L.return.main", assembly)
         for source in ["int main(void){int x[2]; x=3;}", "int main(void){int x[a];}",
                        "int main(void){int x[2;}"]:
@@ -3724,9 +3744,9 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         function = next(obj for obj in parse(tokenize("int f(int x,int y){int z; return x-y;}")) if obj.is_function and obj.is_definition)
         self.assertEqual([var.name for var in function.params], ["x", "y"])
-        self.assertEqual([var.name for var in function.locals], ["z", "x", "y"])
+        self.assertEqual([var.name for var in declared_locals(function)], ["z", "x", "y"])
         assembly = CodeGenerator().generate([function])
-        self.assertIn("  mov %edi, -8(%rbp)\n  mov %esi, -12(%rbp)\n", assembly)
+        self.assertIn("  mov %edi, -20(%rbp)\n  mov %esi, -24(%rbp)\n", assembly)
         self.assertEqual(compile_program("int f(int a,int b,int c,int d,int e,int f,int g){} ").returncode, 0)
         result = compile_program("int f();int main(void){return f(*3);}")
         self.assertIn("invalid pointer dereference", result.stderr)
@@ -3817,10 +3837,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.rhs.tok.text, "*")
         result = compile_program('int main(void){int x; return &x;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -16(%rbp)\n"
                          "  lea -4(%rbp), %rax\n  jmp .L.return.main\n" + EPILOGUE)
         result = compile_program('int main(void){int x; return *&x;}')
-        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -16(%rbp)\n"
                          "  lea -4(%rbp), %rax\n  movsxd (%rax), %rax\n"
                          "  jmp .L.return.main\n" + EPILOGUE)
         for source, position in [('int main(void){return &1;}', 23),
@@ -3926,7 +3946,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(grammar_tree(node.init), Node("BLOCK"))
         self.assertIsNone(node.cond)
         self.assertIsNone(node.inc)
-        self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
+        self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -8(%rbp)\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
                          ".L..3:\n  jmp .L.begin.1\n.L..2:\n" + EPILOGUE)
         for source, position, message in [
@@ -3960,12 +3980,12 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             with self.subTest(source=source):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n"
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -8(%rbp)\n"
                                  "  mov $5, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         # A program containing only null statements does not set a return value.
         result = compile_program('int main(void){;;;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -8(%rbp)\n" + EPILOGUE)
 
     def test_nested_block_tree(self):
         program = next(obj for obj in parse(tokenize('int main(void){ {1;} return 2; }')) if obj.is_function and obj.is_definition)
@@ -3975,7 +3995,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]))
         result = compile_program('int main(void){ {1;} return 2; }')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -8(%rbp)\n"
                          "  mov $1, %rax\n  mov $2, %rax\n  jmp .L.return.main\n" + EPILOGUE)
 
     def test_function_definitions(self):
@@ -4000,8 +4020,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_local_objects_and_stack_layout(self):
         program = parse_body("int foo=3; int bar=5; return foo+bar;")
-        self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
-        bar, foo = program.locals
+        self.assertEqual([var.name for var in declared_locals(program)], ["bar", "foo"])
+        bar, foo = declared_locals(program)
         self.assertIs(grammar_tree(program.body.body[0].body[0].lhs).lhs.var, foo)
         expression = grammar_tree(program.body.body[2].lhs)
         self.assertIs(expression.lhs.var, foo)
@@ -4010,15 +4030,15 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         CodeGenerator().generate([program])
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-4, -8, 16))
         another = parse_body("int foo=1; return foo;")
-        self.assertIsNot(another.locals[0], foo)
+        self.assertIsNot(declared_locals(another)[0], foo)
         for source, offsets, size in [
-            ("1;", [], 0), ("int x;", [-4], 16),
-            ("int a,b,c;", [-4,-8,-12], 16),
-            ("int a,b,c,d;", [-4,-8,-12,-16], 16),
+            ("1;", [], 16), ("int x;", [-4], 16),
+            ("int a,b,c;", [-4,-8,-12], 32),
+            ("int a,b,c,d;", [-4,-8,-12,-16], 32),
         ]:
             program = parse_body(source)
             assembly = CodeGenerator().generate([program])
-            self.assertEqual([var.offset for var in program.locals], offsets)
+            self.assertEqual([var.offset for var in declared_locals(program)], offsets)
             self.assertEqual(program.stack_size, size)
             self.assertIn(f"  sub ${size}, %rsp\n", assembly)
 
@@ -4042,7 +4062,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 result = compile_program('int main(void){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $0, %rsp\n" + EPILOGUE)
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -8(%rbp)\n" + EPILOGUE)
 
     def test_tokenization(self):
         self.assertEqual(tokenize("if else ifx elsewhere"), [
@@ -4164,8 +4184,9 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 result = compile_program('int main(void){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stderr, "")
-                stack_size = 16 if source in ("int a; a=3; a;", "int z; z=5;") else 0
-                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + f"  sub ${stack_size}, %rsp\n" + instructions + EPILOGUE)
+                stack_size = 16
+                alloca_offset = -16 if source in ("int a; a=3; a;", "int z; z=5;") else -8
+                self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + f"  sub ${stack_size}, %rsp\n  mov %rsp, {alloca_offset}(%rbp)\n" + instructions + EPILOGUE)
 
     def test_executable_exit_status(self):
         # All current upstream examples and earlier arithmetic/control regressions.
@@ -4498,7 +4519,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
         program = parse_body("int x=3, *p=&x, **q=&p; return **q;")
-        q, p, x = program.locals
+        q, p, x = declared_locals(program)
         self.assertEqual([q.ty.kind, p.ty.kind, x.ty.kind], ["PTR", "PTR", "INT"])
         self.assertEqual(q.ty.base.kind, "PTR")
         self.assertEqual(q.ty.base.base.kind, "INT")
@@ -4516,7 +4537,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(assignment.rhs.kind, "ASSIGN")
         result = compile_program('int main(void){int x; return 7;}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n"
+        self.assertEqual(instruction_assembly(result.stdout), PROLOGUE + "  sub $16, %rsp\n  mov %rsp, -16(%rbp)\n"
                          "  mov $7, %rax\n  jmp .L.return.main\n" + EPILOGUE)
         self.assertEqual(tokenize("int integer")[0].kind, "KEYWORD")
         self.assertEqual(tokenize("int integer")[1].kind, "IDENT")

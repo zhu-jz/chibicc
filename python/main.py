@@ -1,6 +1,6 @@
-"""Lesson 270: Treat preprocessing inputs as C automatically.
+"""Lesson 271: Allocate dynamic stack storage with alloca.
 
-Based on chibicc commit 4064871212049d82af3632941d15e6a0757ebc3c.
+Based on chibicc commit 77275c546a5340f94ad011cd759ef162bc714ba6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

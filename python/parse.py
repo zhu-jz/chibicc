@@ -1553,6 +1553,7 @@ class Parser:
         function.params = self.locals.copy()
         if ty.is_variadic:
             function.va_area = self.new_lvar("__va_area__", array_of(ty_char, 136))
+        function.alloca_bottom = self.new_lvar("__alloca_size__", pointer_to(ty_char))
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
         name = function.name.encode("utf-8") + b"\0"
@@ -1635,6 +1636,11 @@ class Parser:
 
     # program = (typedef | function-definition | global-variable)*
     def parse(self):
+        builtin_ty = func_type(pointer_to(ty_void))
+        builtin_ty.params = [copy_type(ty_int)]
+        builtin = self.new_gvar("alloca", builtin_ty)
+        builtin.is_definition = False
+        self.globals = []  # Retain the builtin binding without emitting an object.
         position = 0
         while self.tokens[position].kind != "EOF":
             attr = VarAttr()

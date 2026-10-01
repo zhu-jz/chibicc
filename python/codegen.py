@@ -297,6 +297,18 @@ class CodeGenerator:
         if instruction is not None:
             self.assembly.extend("  " + part for part in instruction.split("; "))
 
+    def builtin_alloca(self):
+        offset = self.current_fn.alloca_bottom.offset
+        self.assembly.extend((
+            "  add $15, %rdi", "  and $0xfffffff0, %edi",
+            f"  mov {offset}(%rbp), %rcx", "  sub %rsp, %rcx",
+            "  mov %rsp, %rax", "  sub %rdi, %rsp", "  mov %rsp, %rdx",
+            "1:", "  cmp $0, %rcx", "  je 2f", "  mov (%rax), %r8b",
+            "  mov %r8b, (%rdx)", "  inc %rdx", "  inc %rax", "  dec %rcx",
+            "  jmp 1b", "2:", f"  mov {offset}(%rbp), %rax", "  sub %rdi, %rax",
+            f"  mov %rax, {offset}(%rbp)",
+        ))
+
     def gen_expr(self, node):
         if node.tok is not None:
             file_no = node.tok.file.file_no if node.tok.file else 1
@@ -369,6 +381,11 @@ class CodeGenerator:
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":
+            if node.lhs.kind == "VAR" and node.lhs.var.name == "alloca":
+                self.gen_expr(node.args[0])
+                self.assembly.append("  mov %rax, %rdi")
+                self.builtin_alloca()
+                return
             stack_args = self.push_args(node)
             self.gen_expr(node.lhs)
             gp, fp = 0, 0
@@ -694,6 +711,7 @@ class CodeGenerator:
             self.assembly.extend([f"  {directive} {function.name}", "  .text", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
+            self.assembly.append(f"  mov %rsp, {function.alloca_bottom.offset}(%rbp)")
             if function.va_area is not None:
                 offset = function.va_area.offset
                 fp_count = sum(var.ty.kind in ("FLOAT", "DOUBLE") for var in function.params)

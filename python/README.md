@@ -1,27 +1,35 @@
-# Lesson 270: Treat preprocessing inputs as C automatically
+# Lesson 271: Allocate dynamic stack storage with alloca
 
-Original chibicc commit: [`4064871212049d82af3632941d15e6a0757ebc3c`](https://github.com/rui314/chibicc/commit/4064871212049d82af3632941d15e6a0757ebc3c).
+Original chibicc commit: [`77275c546a5340f94ad011cd759ef162bc714ba6`](https://github.com/rui314/chibicc/commit/77275c546a5340f94ad011cd759ef162bc714ba6).
 Earlier explanations are available in Git history.
 
-After parsing options, -E now forces the language selection to C. This allows
-preprocessing stdin or a file with an arbitrary suffix without explicitly using
--xc. Because the implication happens after all options, it also overrides an
-explicit -x assembler or -x none when -E is present.
+The parser predeclares alloca(int) returning void*. Every function now keeps a
+bookkeeping pointer in a local named __alloca_size__. A direct
+alloca call generates stack-allocation code instead of a call to a library symbol.
+Requests round up to 16 bytes, preserving stack alignment for subsequent calls.
 
 ```sh
-printf '#define VALUE 42\nint main(void){return VALUE;}\n' > /tmp/lesson.data
-python3 python/main.py -E -o /tmp/lesson.c /tmp/lesson.data
+printf 'int main(void){char *p=alloca(3);p[0]=12;p[2]=30;return p[0]+p[2];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The first compiler invocation emits preprocessed C with VALUE replaced by 42;
-the second emits assembly that loads and returns that constant. Tests verify
-stdin, unknown suffixes and both explicit language overrides, alongside existing
-language-selection and original fixture tests. Python stores the forced C string
-where C stores its FILE_C enum. Object-file precedence remains unchanged.
+The prologue saves the bottom of the fixed frame. Allocation lowers rsp and moves
+any temporary expression bytes to their new stack position, then lowers the
+saved bottom and returns that address in rax. Stores into the allocated memory
+hold 12 and 30; their sum returns 42. The normal epilogue restores rsp from rbp,
+releasing all allocations at function return. Storage does not survive that return.
+Tests cover alignment, repeated allocations, a pending arithmetic temporary,
+alloca inside another call's arguments, single evaluation, separate functions,
+copy-loop assembly and the original alloca.c fixture.
+Python stores the bookkeeping Obj reference explicitly; C uses a pointer field.
+The original int parameter and 32-bit alignment mask are retained, so arbitrary
+64-bit or negative allocation sizes are not promised. Every function's fixed
+frame now includes the bookkeeping slot, even if it never calls alloca.
+Older declaration-focused tests exclude that slot when inspecting source locals;
+frame-size and assembly snapshots include its actual storage and initialization.
 
 ## Tests and attribution
 

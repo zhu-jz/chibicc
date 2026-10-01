@@ -138,6 +138,7 @@ class Obj:
     relocations: list[Relocation] = field(default_factory=list)
     align: int = field(default=0, compare=False)
     va_area: Optional["Obj"] = field(default=None, compare=False)
+    alloca_bottom: Optional["Obj"] = field(default=None, compare=False, repr=False)
     tok: Optional[Token] = field(default=None, compare=False)
 
 

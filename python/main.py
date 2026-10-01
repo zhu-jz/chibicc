@@ -1,6 +1,6 @@
-"""Lesson 289: Emit Make dependencies with -M.
+"""Lesson 290: Choose a dependency output file with -MF.
 
-Based on chibicc commit d0c4667b6bccf35ddf069c777689cd18c6a632b3.
+Based on chibicc commit 95d5a46234f98f3793c965bebe036361cbb1978e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -46,12 +46,13 @@ def parse_args(arguments):
     opt_c = False
     opt_E = False
     opt_M = False
+    opt_MF = None
     opt_fcommon = True
     opt_x = None
     ld_extra_args = []
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-MF", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -62,6 +63,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-MF":
+            opt_MF = arguments[position + 1]
+            position += 2
+            continue
         if argument == "-M":
             opt_M = True
             position += 1
@@ -170,7 +175,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF
 
 
 def parse_opt_x(language):
@@ -227,7 +232,7 @@ def print_dependencies(filename, files, output_path):
     write_output(output_path, text + "\n\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False, opt_MF=None):
     files = []
     try:
         tokens = []
@@ -241,7 +246,7 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
             macros = init_macros(filename)
         tokens = preprocess(tokens, files, include_paths, macros)
         if opt_M:
-            print_dependencies(filename, files, opt_o)
+            print_dependencies(filename, files, opt_MF if opt_MF is not None else opt_o)
             return 0
         if opt_E:
             print_tokens(tokens, opt_o)
@@ -320,12 +325,12 @@ def run_linker(inputs, output, trace, extra_args=()):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M, opt_MF)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

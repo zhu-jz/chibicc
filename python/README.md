@@ -1,28 +1,28 @@
-# Lesson 289: Emit Make dependencies with -M
+# Lesson 290: Choose a dependency output file with -MF
 
-Original chibicc commit: [`d0c4667b6bccf35ddf069c777689cd18c6a632b3`](https://github.com/rui314/chibicc/commit/d0c4667b6bccf35ddf069c777689cd18c6a632b3).
+Original chibicc commit: [`95d5a46234f98f3793c965bebe036361cbb1978e`](https://github.com/rui314/chibicc/commit/95d5a46234f98f3793c965bebe036361cbb1978e).
 Earlier explanations are available in Git history.
 
--M stops after preprocessing and prints a Make rule listing the source and every
-opened include file. The target is the source basename with an .o suffix. Each
-prerequisite appears on a continued line. -o redirects this dependency text; -M
-takes precedence over -E. Parsing and assembly generation are skipped in this mode.
+-MF FILE selects the destination for -M dependency text. It takes precedence over
+-o, otherwise the previous -o or stdout behavior remains. -MF by itself does not
+enable dependency generation. The original accepts a separate argument, and a
+missing argument is diagnosed before processing input files.
 
 ```sh
-printf '#include <stddef.h>\nint main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -M /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -M -MF /tmp/lesson.d /tmp/lesson.c
+cat /tmp/lesson.d
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The rule starts with lesson.o and lists /tmp/lesson.c and python/include/stddef.h.
-Normal compilation still emits main returning 42; dependency output itself is
-text for Make rather than machine instructions. Tests check nested includes,
-file order, output redirection, -M/-E precedence and preprocessing invalid C text.
-Python uses the existing File list instead of C's global input-file array. This
-initial step does not escape special Make characters or deduplicate opened files.
+The dependency file contains a lesson.o rule pointing at /tmp/lesson.c. Normal
+compilation still emits a main function returning 42. Tests check destination
+selection over -o, -MF - for stdout and a missing argument, plus existing -M tests.
+Python passes the selected option explicitly to cc1 instead of C's global pointer;
+an omitted option is None, while the literal '-' means stdout as before.
 
 ## Tests and attribution
 

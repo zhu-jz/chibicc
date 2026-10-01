@@ -87,6 +87,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependency_output_file_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)/'main.c'
+            source.write_text('int main(void){return 42;}')
+            deps, ignored = Path(directory)/'deps.mk', Path(directory)/'ignored'
+            result = subprocess.run([sys.executable, str(COMPILER), '-M', '-o', str(ignored), '-MF', str(deps), str(source)], capture_output=True, text=True)
+            self.assertEqual((result.returncode, result.stdout), (0, ''), result.stderr)
+            self.assertIn(str(source), deps.read_text())
+            self.assertFalse(ignored.exists())
+            result = subprocess.run([sys.executable, str(COMPILER), '-M', '-MF', '-', str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('main.o:', result.stdout)
+        result = subprocess.run([sys.executable, str(COMPILER), '-MF'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('chibicc (Python):', result.stderr)
+
     def test_dependency_output(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

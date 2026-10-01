@@ -97,7 +97,7 @@ class Parser:
         return var
 
     def new_gvar(self, name, ty):
-        var = Obj(name, ty=ty, is_definition=True, align=ty.align)
+        var = Obj(name, ty=ty, is_definition=True, is_static=True, align=ty.align)
         self.globals.insert(0, var)
         self.push_scope(name).var = var
         return var
@@ -1214,6 +1214,7 @@ class Parser:
             ty, position = self.declarator(position, basety)
             var = self.new_gvar(ty.name.text, ty)
             var.is_definition = not attr.is_extern
+            var.is_static = attr.is_static
             if attr.align:
                 var.align = attr.align
             if self.tokens[position].text == "=":

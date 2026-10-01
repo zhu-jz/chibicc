@@ -1,6 +1,6 @@
-"""Lesson 122: Return without a value.
+"""Lesson 123: Static global variable visibility.
 
-Based on chibicc commit 30b3e216cd4eca3b8a13cb0a0613f053ac1d4925.
+Based on chibicc commit eb85527656f77b9532f3a78cefde7a2eb739189e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

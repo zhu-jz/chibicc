@@ -60,6 +60,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_global_variables(self):
+        source = "static int g=42;int main(){return g;}"
+        self.assert_program_returns(source, 42, "int g=1;")
+        assembly = compile_program(source).stdout
+        self.assertIn("  .local g\n", assembly)
+        self.assertNotIn("  .globl g\n", assembly)
+        program = parse(tokenize('char *p="abc";static int g;int h;'))
+        self.assertEqual({var.name: var.is_static for var in program if not var.name.startswith(".L")}, {"p": False, "g": True, "h": False})
+        self.assertTrue(next(var for var in program if var.name.startswith(".L")).is_static)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "test.s").write_text(assembly)
+            subprocess.run(["gcc", "-c", str(path / "test.s"), "-o", str(path / "test.o")], check=True, capture_output=True)
+            symbols = subprocess.run(["nm", str(path / "test.o")], check=True, capture_output=True, text=True).stdout
+            self.assertRegex(symbols, r"(?m)^\w+ d g$")
+
     def test_return_without_value(self):
         self.assert_program_returns("int g;void f(void){g=42;return;g=1;}int main(){f();return g;}", 42)
         function = next(var for var in parse(tokenize("void f(void){return;}")) if var.is_function)

@@ -1,31 +1,35 @@
-# Lesson 122: Return without a value
+# Lesson 123: Static global variable visibility
 
-Original chibicc commit: [`30b3e216cd4eca3b8a13cb0a0613f053ac1d4925`](https://github.com/rui314/chibicc/commit/30b3e216cd4eca3b8a13cb0a0613f053ac1d4925).
+Original chibicc commit: [`eb85527656f77b9532f3a78cefde7a2eb739189e`](https://github.com/rui314/chibicc/commit/eb85527656f77b9532f3a78cefde7a2eb739189e).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`return;` now creates a RETURN node with no operand. Code generation skips the
-expression and jumps to the same shared epilogue used by value-returning paths.
-This supports an early exit from a void function without manufacturing a value.
+File-scope static variables now emit `.local name`, giving their symbols internal
+visibility. Ordinary global definitions retain `.globl name`. Anonymous globals,
+including string literals, compound literals and static-local storage, default
+to static too. Source-name lookup and byte initialization are unchanged.
 
-Python None replaces C's null operand pointer. This historical parser does not
-yet enforce return-value rules based on the function's declared return type.
-A return without a value does not promise any particular value in rax.
+Python stores the same is_static flag and chooses the assembler directive.
+Function parsing already explicitly set its visibility, so the new anonymous
+global default does not change ordinary function visibility. Tests use nm's
+lowercase d to confirm a local initialized data symbol.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int g;void f(void){g=42;return;g=1;}int main(){f();return g;}\n' > /tmp/lesson122.c
-python3 python/main.py /tmp/lesson122.c > /tmp/lesson122.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson122 /tmp/lesson122.s
-/tmp/lesson122
+printf 'static int g=42;int main(){return g;}\n' > /tmp/lesson123.c
+printf 'int g=1;\n' > /tmp/lesson123-helper.c
+python3 python/main.py /tmp/lesson123.c > /tmp/lesson123.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson123 /tmp/lesson123.s /tmp/lesson123-helper.c
+/tmp/lesson123
 echo $?
 ```
 
-After storing 42, f jumps to .L.return.f and skips the later store. Main reads g
-and returns exit status 42. Tests verify early exit, absent AST operand, emitted
-jump without a value instruction, real execution, and updated function examples.
+Our assembly's `.local g` permits the helper's separate global g without a symbol
+collision. Main reads its own private value and returns 42. Tests check that link,
+emitted visibility, parsed flags for public/private/anonymous objects, assembled
+symbol visibility, actual execution, and updated original variable examples.
 
 ## Tests and attribution
 

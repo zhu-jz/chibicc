@@ -320,7 +320,8 @@ class CodeGenerator:
         for var in program:
             if not var.is_function and var.is_definition:
                 section = ".data" if var.init_data is not None else ".bss"
-                self.assembly.extend([f"  .globl {var.name}", f"  .align {var.align}",
+                visibility = ".local" if var.is_static else ".globl"
+                self.assembly.extend([f"  {visibility} {var.name}", f"  .align {var.align}",
                                       f"  {section}", f"{var.name}:"])
                 if var.init_data is not None:
                     relocations = {rel.offset: rel for rel in var.relocations}

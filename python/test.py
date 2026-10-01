@@ -77,6 +77,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_wide_character_prefix(self):
+        self.assert_program_returns("int main(void){return L'a';}", 97)
+        self.assert_program_returns("int main(void){return sizeof(L'\\0');}", 4)
+        self.assert_program_returns("int main(void){return L'\\xff'<0;}", 1)
+        token = tokenize_raw("L'\\n'")[0]
+        self.assertEqual((token.kind, token.text, token.value, token.position),
+                         ('NUM', "L'\\n'", 10, 0))
+        self.assertEqual(token.ty.kind, 'INT')
+        result = compile_program("int main(void){return L'a;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unclosed char literal', result.stderr)
+
     def test_adjacent_string_literals(self):
         self.assert_program_returns('int main(void){return sizeof("abc" "def");}', 7)
         self.assert_program_returns('int main(void){return "ab" /*gap*/\n"cd"[2];}', 99)

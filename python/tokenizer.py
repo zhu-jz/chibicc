@@ -124,8 +124,8 @@ def read_string_literal(source, start):
     return token, end + 1
 
 
-def read_char_literal(source, start):
-    position = start + 1
+def read_char_literal(source, start, quote=None):
+    position = (start if quote is None else quote) + 1
     if position >= len(source) or source[position] == "\0":
         raise CompileError(start, "unclosed char literal")
     if source[position] == "\\":
@@ -313,6 +313,11 @@ def tokenize(source):
 
         if character == "'":
             token, position = read_char_literal(source, position)
+            append_token(token)
+            continue
+
+        if source.startswith("L'", position):
+            token, position = read_char_literal(source, position, position + 1)
             append_token(token)
             continue
 

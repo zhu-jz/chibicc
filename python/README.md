@@ -1,32 +1,30 @@
-# Lesson 193: Concatenate adjacent string literals
+# Lesson 194: Recognize wide character literal prefixes
 
-Original chibicc commit: [`ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28`](https://github.com/rui314/chibicc/commit/ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28).
+Original chibicc commit: [`7746e4ee0b254da6311202c7db3d2fddd4c6a52c`](https://github.com/rui314/chibicc/commit/7746e4ee0b254da6311202c7db3d2fddd4c6a52c).
 Earlier explanations are available in Git history.
 
-After macro expansion and keyword conversion, each consecutive run of string
-tokens becomes one character array. Their already-decoded bytes are joined,
-removing the intermediate terminating zeros and retaining one final zero.
-Embedded zeros remain part of the data. Whitespace and comments do not stop
-a run, and strings produced by macros participate too.
+The tokenizer now recognizes `L` immediately followed by a character literal
+quote. It passes both the token's starting position and the quote's position
+to the existing character reader, preserving the full source spelling.
 
-Python bytes concatenation replaces the C buffer allocation and memcpy loop.
-The first token retains its source spelling and location, matching this original
-commit. Consequently, its early `-E` printer displays only the first spelling
-of a joined run; compilation uses the complete decoded data and array type.
-This historical output limitation is tested rather than silently changed.
+At this historical step, L-prefixed literals have exactly the same behavior
+as ordinary character literals: int type, existing escape decoding, and the
+same signed-byte conversion. This adds recognition without introducing later
+wide-character types or Unicode decoding. Python uses an optional quote index
+instead of the C reader's second pointer.
 
 ```sh
-printf 'int main(void){return sizeof("abc" "def");}\n' > /tmp/lesson.c
+printf "int main(void){return L'a';}\n" > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 7, six characters plus the terminating zero
+echo $?  # 97, the ASCII value of a
 ```
 
-sizeof becomes an integer constant, so assembly loads 7 into `%rax` and returns.
-A string subscript instead computes an address and loads a character from static
-data. Tests check array size, indexing, embedded zeros, comments, macro-produced
-strings, separately decoded hexadecimal escapes and the original output behavior.
+Assembly loads the literal's integer value into %rax and returns. sizeof an
+L-prefixed literal yields four bytes at this step. Tests cover its type, token
+spelling/location, escapes, the preserved signed-byte behavior, diagnostics
+and executable results; the upstream literal fixture runs unchanged.
 
 ## Tests and attribution
 

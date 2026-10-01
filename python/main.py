@@ -1,6 +1,6 @@
-"""Lesson 193: Concatenate adjacent string literals.
+"""Lesson 194: Recognize wide character literal prefixes.
 
-Based on chibicc commit ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28.
+Based on chibicc commit 7746e4ee0b254da6311202c7db3d2fddd4c6a52c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

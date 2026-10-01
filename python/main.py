@@ -1,6 +1,6 @@
-"""Lesson 94: Shift operators.
+"""Lesson 95: Conditional expressions.
 
-Based on chibicc commit d0c0cb74b21f431c62f7eeb8dbc0d6e14c1eff14.
+Based on chibicc commit 447ee098c51f6f615ef560b35d429f32f0cb5a35.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

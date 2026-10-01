@@ -133,9 +133,9 @@ class Parser:
         update = Node("ASSIGN", target, operation, tok=token)
         return Node("COMMA", save_address, update, tok=token)
 
-    # assign = logor (assign-op assign)?
+    # assign = conditional (assign-op assign)?
     def assign(self, position):
-        node, position = self.logor(position)
+        node, position = self.conditional(position)
         if self.tokens[position].text == "=":
             token = self.tokens[position]
             rhs, position = self.assign(position + 1)
@@ -151,6 +151,18 @@ class Parser:
                 binary = Node(token.text[:-1], node, rhs, tok=token)
             node = self.to_assign(binary)
         return node, position
+
+    # conditional = logor ("?" expr ":" conditional)?
+    def conditional(self, position):
+        cond, position = self.logor(position)
+        if self.tokens[position].text != "?":
+            return cond, position
+        token = self.tokens[position]
+        then, position = self.expr(position + 1)
+        if self.tokens[position].text != ":":
+            raise CompileError(self.tokens[position], "expected ':'")
+        otherwise, position = self.conditional(position + 1)
+        return Node("COND", cond=cond, then=then, els=otherwise, tok=token), position
 
     # logor = logand ("||" logand)*
     def logor(self, position):

@@ -100,6 +100,12 @@ def add_type(node):
         node.ty = node.lhs.ty
     elif node.kind == "VAR":
         node.ty = node.var.ty
+    elif node.kind == "COND":
+        if node.then.ty.kind == "VOID" or node.els.ty.kind == "VOID":
+            node.ty = ty_void
+        else:
+            node.then, node.els = usual_arith_conv(node.then, node.els)
+            node.ty = node.then.ty
     elif node.kind == "COMMA":
         node.ty = node.rhs.ty
     elif node.kind == "MEMBER":

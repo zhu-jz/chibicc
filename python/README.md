@@ -1,37 +1,37 @@
-# Lesson 94: Shift operators
+# Lesson 95: Conditional expressions
 
-Original chibicc commit: [`d0c0cb74b21f431c62f7eeb8dbc0d6e14c1eff14`](https://github.com/rui314/chibicc/commit/d0c0cb74b21f431c62f7eeb8dbc0d6e14c1eff14).
+Original chibicc commit: [`447ee098c51f6f615ef560b35d429f32f0cb5a35`](https://github.com/rui314/chibicc/commit/447ee098c51f6f615ef560b35d429f32f0cb5a35).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-<< and >> parse between addition and relational comparisons. <<= and >>= reuse
-compound assignment. The tokenizer matches three-character operators before
-two-character ones. The emitter transfers the count from rdi to rcx, because
-x86 variable shifts read cl. Left shift uses shl; signed right shift uses sar.
-The left operand determines the result type and register width.
+`condition ? true_value : false_value` evaluates its condition once and executes
+only the selected branch. The parser places it below logical || and above
+assignment. Its middle operand accepts a full expression (including comma), and
+its last operand is another conditional expression, giving right associativity.
+Nonvoid branches receive usual arithmetic conversions; if either is void, the
+whole expression is void. Complete C pointer/aggregate conditional rules remain
+outside this historical implementation.
 
-The original keeps a char/short left operand's type instead of applying complete
-integer promotion. This snapshot preserves that behavior. Python returns the
-matched punctuator string rather than C's byte length; int/long shifts execute
-as 32/64-bit machine instructions, not as Python's unbounded shifts. Invalid
-counts and signed overflow are not diagnosed at this historical stage.
+Python stores the three operands in the existing cond/then/els Node fields.
+The emitter generates branches and merge labels; Python's own conditional
+expression does not evaluate the compiled program.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=21;x<<=1;return x;}\n' > /tmp/lesson94.c
-python3 python/main.py /tmp/lesson94.c > /tmp/lesson94.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson94 /tmp/lesson94.s
-/tmp/lesson94
+printf 'int main(){return 1?42:3;}\n' > /tmp/lesson95.c
+python3 python/main.py /tmp/lesson95.c > /tmp/lesson95.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson95 /tmp/lesson95.s
+/tmp/lesson95
 echo $?
 ```
 
-`mov %rdi, %rcx` selects the count, and `shl %cl, %eax` shifts 21 left by one to
-make 42. A long left operand uses rax. The shell displays 42. Tests cover signed
-right shifts, precedence and associativity, assignments with one address
-evaluation, long widths, longest-token matching, type metadata, and updated
-original arithmetic programs.
+The zero comparison jumps to `.L.else.N` for false. The true path loads 42 and
+jumps past the else path to `.L.end.N`; only one result reaches the return.
+The shell displays 42. Tests cover selected/skipped effects, guarded dereferences,
+right associativity, comma parsing, int/long conversion, void branches, assembly,
+malformed input, and the updated original arithmetic programs.
 
 ## Tests and attribution
 

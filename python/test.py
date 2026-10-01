@@ -58,6 +58,26 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_conditional_operator(self):
+        for source, expected in [
+            ("int main(){return 0?3:42;}", 42),
+            ("int main(){return 1?42:3;}", 42),
+            ("int main(){return 0?1:0?2:42;}", 42),
+            ("int main(){return 1?1,42:3;}", 42),
+            ("int main(){int x=0;int y=1?++x:++x;return y+x;}", 2),
+            ("int main(){int *p=0;return p?*p:42;}", 42),
+            ("int main(){return (1?-1:(long)0)<0;}", 1),
+            ("int main(){return sizeof(1?2:(long)3);}", 8),
+            ("int main(){int x=0;1?(void)(x=42):(void)(x=3);return x;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = without_implicit_casts(parse_body("return 0?1:0?2:3;").body.body[0].lhs)
+        self.assertEqual((node.kind, node.els.kind), ("COND", "COND"))
+        assembly = compile_program("int main(){return 1?42:0;}").stdout
+        self.assertIn("  je .L.else.1\n", assembly)
+        self.assertIn(".L.end.1:\n", assembly)
+        self.assertEqual(compile_program("int main(){return 1?2;}").returncode, 1)
+
     def test_shift_operators(self):
         for source, expected in [
             ("int main(){return 1<<2+1;}", 8),

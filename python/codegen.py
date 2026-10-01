@@ -154,6 +154,16 @@ class CodeGenerator:
             self.gen_expr(node.lhs)
             self.cast(node.lhs.ty, node.ty)
             return
+        if node.kind == "COND":
+            self.label_count += 1
+            label = self.label_count
+            self.gen_expr(node.cond)
+            self.assembly.extend(("  cmp $0, %rax", f"  je .L.else.{label}"))
+            self.gen_expr(node.then)
+            self.assembly.extend((f"  jmp .L.end.{label}", f".L.else.{label}:"))
+            self.gen_expr(node.els)
+            self.assembly.append(f".L.end.{label}:")
+            return
         if node.kind == "NOT":
             self.gen_expr(node.lhs)
             self.assembly.extend(("  cmp $0, %rax", "  sete %al", "  movzx %al, %rax"))

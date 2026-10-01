@@ -1,38 +1,39 @@
-# Lesson 97: Local array initializers
+# Lesson 98: Zero omitted initializer elements
 
-Original chibicc commit: [`22dd560ecf06e9ac4a4c1be33be74bac7924f06a`](https://github.com/rui314/chibicc/commit/22dd560ecf06e9ac4a4c1be33be74bac7924f06a).
+Original chibicc commit: [`ae0a37dc4b39018a95616836ae4aaf4c8bfd779b`](https://github.com/rui314/chibicc/commit/ae0a37dc4b39018a95616836ae4aaf4c8bfd779b).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Local initializers now have an intermediate tree: arrays contain child
-initializers, while each scalar leaf holds an expression. A designation path
-identifies a local variable and its nested element indices. The parser lowers
-this tree into assignments joined by comma expressions, in increasing element
-order. Thus `int a[2][2]={{1,2},{3,4}}` becomes assignments to each a[row][column].
-The new NULL_EXPR node starts an empty assignment chain and emits no instructions.
-Scalar initializers and struct-copy expressions use the same lowering path.
+Array initializer lists may end before filling every element, including an empty
+list. The parser first builds a MEMZERO expression for the whole local object,
+then emits assignments for the provided leaves. Missing leaves become NULL_EXPR
+and generate no assignment. Nested omitted arrays remain zero because the entire
+object was cleared. All explicit local initializers, even scalar ones, take this
+zero-then-assign path in the original commit.
 
-Python dataclasses and lists replace C's initializer nodes, child-pointer arrays,
-and linked designation paths. This commit requires exactly the declared number
-of array elements with braces at every array level. Partial lists, trailing
-commas, string initialization, and incomplete-length deduction remain unsupported.
+The emitter implements clearing with rep stosb: rcx is the byte count, rdi is the
+address, and al is zero. Python emits that instruction instead of clearing a
+Python data structure. Grammar-only test comparisons strip generated casts and
+initialization clearing; dedicated tests inspect the actual MEMZERO tree and
+instructions, and execute programs to check omitted elements. Excess supplied
+elements and trailing commas are still rejected at this stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[3]={1,2,42};return a[2];}\n' > /tmp/lesson97.c
-python3 python/main.py /tmp/lesson97.c > /tmp/lesson97.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson97 /tmp/lesson97.s
-/tmp/lesson97
+printf 'int main(){int a[3]={42};return a[0]+a[1]+a[2];}\n' > /tmp/lesson98.c
+python3 python/main.py /tmp/lesson98.c > /tmp/lesson98.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson98 /tmp/lesson98.s
+/tmp/lesson98
 echo $?
 ```
 
-Each element address is computed with scaled pointer arithmetic, then
-`mov %eax, (%rdi)` stores a four-byte int. The final load returns 42, which the
-shell displays. Tests cover nested arrays, left-to-right initializer effects,
-char conversion, pointer elements, lowered tree shape, assembly, this stage's
-list restrictions, and the new original initializer program.
+`mov $12, %rcx`, `lea ...(%rbp), %rdi`, `mov $0, %al`, and `rep stosb` clear all
+twelve bytes before a[0] receives 42. The omitted elements load zero, so the shell
+displays 42. Tests cover empty and nested partial lists, neighboring objects,
+clearing before user expressions, tree metadata, assembly, original initializer
+programs, and the complete existing regression suite.
 
 ## Tests and attribution
 

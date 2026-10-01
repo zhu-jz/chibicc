@@ -833,6 +833,8 @@ class Parser:
                 raise CompileError(self.tokens[position], "expected '{'")
             position += 1
             for index, child in enumerate(init.children):
+                if self.tokens[position].text == "}":
+                    break
                 if index:
                     if self.tokens[position].text != ",":
                         raise CompileError(self.tokens[position], "expected ','")
@@ -864,6 +866,8 @@ class Parser:
                 assignment = self.create_lvar_init(child, ty.base, child_designation, token)
                 expression = Node("COMMA", expression, assignment, tok=token)
             return expression
+        if init.expr is None:
+            return Node("NULL_EXPR", tok=token)
         target = self.init_desg_expr(designation, token)
         return Node("ASSIGN", target, init.expr, tok=token)
 
@@ -871,7 +875,8 @@ class Parser:
         token = self.tokens[position]
         init, position = self.initializer(position, var.ty)
         expression = self.create_lvar_init(init, var.ty, InitDesg(var=var), token)
-        return expression, position
+        zero = Node("MEMZERO", var=var, tok=token)
+        return Node("COMMA", zero, expression, tok=token), position
 
     # compound-stmt = (declaration | stmt)* "}"
     def compound_stmt(self, position):

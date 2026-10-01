@@ -1,6 +1,6 @@
-"""Lesson 97: Local array initializers.
+"""Lesson 98: Zero omitted initializer elements.
 
-Based on chibicc commit 22dd560ecf06e9ac4a4c1be33be74bac7924f06a.
+Based on chibicc commit ae0a37dc4b39018a95616836ae4aaf4c8bfd779b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

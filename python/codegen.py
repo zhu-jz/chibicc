@@ -109,6 +109,11 @@ class CodeGenerator:
             self.assembly.append(f"  .loc 1 {node.tok.line_no}")
         if node.kind == "NULL_EXPR":
             return
+        if node.kind == "MEMZERO":
+            self.assembly.extend((f"  mov ${node.var.ty.size}, %rcx",
+                                  f"  lea {node.var.offset}(%rbp), %rdi",
+                                  "  mov $0, %al", "  rep stosb"))
+            return
         if node.kind == "NUM":
             self.assembly.append(f"  mov ${node.value}, %rax")
             return

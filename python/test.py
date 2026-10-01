@@ -42,22 +42,41 @@ def instruction_assembly(assembly):
                    if not line.lstrip().startswith((".file ", ".loc ")))
 
 
-def without_implicit_casts(node):
-    """Compare grammar trees; separate tests check the inserted conversions."""
+def grammar_tree(node):
+    """Compare syntax trees without generated casts or initialization zeroing."""
     if isinstance(node, list):
-        return [without_implicit_casts(child) for child in node]
+        return [grammar_tree(child) for child in node]
     if isinstance(node, Obj):
-        return replace(node, body=without_implicit_casts(node.body))
+        return replace(node, body=grammar_tree(node.body))
     if not isinstance(node, Node):
         return node
     if node.kind == "CAST" and node.tok is node.lhs.tok:
-        return without_implicit_casts(node.lhs)
-    children = {name: without_implicit_casts(getattr(node, name))
+        return grammar_tree(node.lhs)
+    if node.kind == "COMMA" and node.lhs.kind == "MEMZERO":
+        return grammar_tree(node.rhs)
+    children = {name: grammar_tree(getattr(node, name))
                 for name in ("lhs", "rhs", "cond", "then", "els", "init", "inc", "body", "args")}
     return replace(node, **children)
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_partial_array_initializers(self):
+        for source, expected in [
+            ("int main(){int a[3]={42};return a[0]+a[1]+a[2];}", 42),
+            ("int main(){int a[3]={};return a[0]+a[1]+a[2];}", 0),
+            ("int main(){int a[2][3]={{1,2}};return a[0][1]+a[1][0]+a[1][2];}", 2),
+            ("int main(){int x=42;char a[7]={};return x+a[6];}", 42),
+            ("int main(){int a[2]={a[1]+42};return a[0];}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        expression = parse_body("int a[3]={42};").body.body[0].body[0].lhs
+        self.assertEqual((expression.kind, expression.lhs.kind), ("COMMA", "MEMZERO"))
+        self.assertEqual(expression.lhs.var.ty.size, 12)
+        assembly = compile_program("int main(){int a[3]={42};return a[2];}").stdout
+        self.assertIn("  mov $12, %rcx\n", assembly)
+        self.assertIn("  mov $0, %al\n  rep stosb\n", assembly)
+        self.assertLess(assembly.index("  rep stosb\n"), assembly.index("  mov $42, %rax\n"))
+
     def test_local_array_initializers(self):
         for source, expected in [
             ("int main(){int a[3]={1,2,42};return a[2];}", 42),
@@ -67,12 +86,12 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){int x=42;int *a[1]={&x};return *a[0];}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        node = without_implicit_casts(parse_body("int a[2]={3,4};").body.body[0].body[0].lhs)
+        node = grammar_tree(parse_body("int a[2]={3,4};").body.body[0].body[0].lhs)
         self.assertEqual((node.kind, node.lhs.kind, node.lhs.lhs.kind), ("COMMA", "COMMA", "NULL_EXPR"))
         self.assertEqual((node.lhs.rhs.kind, node.rhs.kind), ("ASSIGN", "ASSIGN"))
         assembly = compile_program("int main(){int a[2]={3,4};return a[1];}").stdout
         self.assertIn("  mov %eax, (%rdi)\n", assembly)
-        for source in ("int main(){int a[2]={1};}", "int main(){int a[1]={1,2};}",
+        for source in ("int main(){int a[1]={1,2};}",
                        "int main(){int a[1]={1,};}"):
             self.assertEqual(compile_program(source).returncode, 1)
 
@@ -116,7 +135,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){int x=0;1?(void)(x=42):(void)(x=3);return x;}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        node = without_implicit_casts(parse_body("return 0?1:0?2:3;").body.body[0].lhs)
+        node = grammar_tree(parse_body("return 0?1:0?2:3;").body.body[0].lhs)
         self.assertEqual((node.kind, node.els.kind), ("COND", "COND"))
         assembly = compile_program("int main(){return 1?42:0;}").stdout
         self.assertIn("  je .L.else.1\n", assembly)
@@ -296,7 +315,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){return (4294967296|42)/4294967296;}", 1),
         ]:
             self.assert_program_returns(source, expected)
-        node = without_implicit_casts(parse_body("return 1|2^3&4;").body.body[0].lhs)
+        node = grammar_tree(parse_body("return 1|2^3&4;").body.body[0].lhs)
         self.assertEqual((node.kind, node.rhs.kind, node.rhs.rhs.kind), ("|", "^", "&"))
         for spelling, instruction in (("&", "and"), ("|", "or"), ("^", "xor")):
             self.assertIn(f"  {instruction} %rdi, %rax\n",
@@ -388,7 +407,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         ]:
             self.assert_program_returns(source, expected)
         function = parse_body("int x=2;x+=5;")
-        node = without_implicit_casts(function.body.body[-1].lhs)
+        node = grammar_tree(function.body.body[-1].lhs)
         self.assertEqual((node.kind, node.lhs.kind, node.rhs.kind), ("COMMA", "ASSIGN", "ASSIGN"))
         self.assertEqual(function.locals[0].name, "")
         self.assertEqual(function.locals[0].ty.kind, "PTR")
@@ -404,7 +423,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assert_program_returns(source, expected)
         node = parse_body("for(int i=0;i<1;i=i+1);").body.body[0]
         self.assertEqual(node.init.kind, "BLOCK")
-        self.assertEqual(node.init.body[0].lhs.kind, "ASSIGN")
+        self.assertEqual(grammar_tree(node.init.body[0].lhs).kind, "ASSIGN")
         result = compile_program("int main(){for(int i=0;i<1;i=i+1);return i;}")
         self.assertIn("undefined variable", result.stderr)
         self.assertEqual(result.returncode, 1)
@@ -1227,7 +1246,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         function = parse(tokenize("int main(){int x[2][3]; return x+1;}"))[0]
         ty = function.locals[0].ty
         self.assertEqual((ty.array_len, ty.size, ty.base.array_len, ty.base.size), (2,24,3,12))
-        expression = without_implicit_casts(function.body.body[-1].lhs)
+        expression = grammar_tree(function.body.body[-1].lhs)
         self.assertEqual(expression.rhs.rhs.value, 12)
         self.assert_program_returns("int main(){int x[2][3][4]; *(*(*(x+1)+2)+3)=9; return *(*(*(x+1)+2)+3);}", 9)
 
@@ -1312,7 +1331,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]:
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
-        expression = without_implicit_casts(parse_body("int x; return &x+1;").body.body[-1].lhs.lhs)
+        expression = grammar_tree(parse_body("int x; return &x+1;").body.body[-1].lhs.lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.ty.base.kind, "INT")
         self.assertEqual(expression.rhs.kind, "*")
@@ -1325,7 +1344,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.rhs.lhs.value, 4)
         expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs.lhs
         self.assertEqual(expression.lhs.ty.kind, "PTR")
-        expression = without_implicit_casts(parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs.lhs)
+        expression = grammar_tree(parse_body("int x; int *p=&x; return p+1;").body.body[-1].lhs.lhs)
         self.assertEqual(expression.ty.kind, "PTR")
         self.assertEqual(expression.rhs.kind, "*")
 
@@ -1345,7 +1364,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             with self.subTest(source=source):
                 self.assert_program_returns(source, expected)
         program = parse_body("int *x; 1**x;")
-        expression = without_implicit_casts(program.body.body[1].lhs)
+        expression = grammar_tree(program.body.body[1].lhs)
         self.assertEqual(expression.kind, "*")
         self.assertEqual(expression.rhs.kind, "DEREF")
         self.assertEqual(expression.rhs.tok.text, "*")
@@ -1372,7 +1391,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         statement = program.body.body[0]
         self.assertIs(program.body.tok, tokens[5])
         self.assertIs(statement.tok, tokens[5])
-        comparison = without_implicit_casts(statement.lhs)
+        comparison = grammar_tree(statement.lhs)
         self.assertEqual(comparison.kind, "<")
         self.assertEqual(comparison.tok.text, ">")
         multiply = comparison.rhs
@@ -1457,7 +1476,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 self.assert_program_returns(source, expected)
         program = parse_body("for(;;) return 3;")
         node = program.body.body[0]
-        self.assertEqual(without_implicit_casts(node.init), Node("BLOCK"))
+        self.assertEqual(grammar_tree(node.init), Node("BLOCK"))
         self.assertIsNone(node.cond)
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
@@ -1477,16 +1496,16 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         program = parse_body("if(1) if(0) return 2; else return 3;")
         outer = program.body.body[0]
         self.assertEqual(outer.kind, "IF")
-        self.assertEqual(without_implicit_casts(outer.cond), Node("NUM", value=1))
+        self.assertEqual(grammar_tree(outer.cond), Node("NUM", value=1))
         self.assertIsNone(outer.els)
-        self.assertEqual(without_implicit_casts(outer.then.els), Node("RETURN", lhs=Node("NUM", value=3)))
+        self.assertEqual(grammar_tree(outer.then.els), Node("RETURN", lhs=Node("NUM", value=3)))
         assembly = CodeGenerator().generate([program])
         for label in (".L.else.1:", ".L.end.1:", ".L.else.2:", ".L.end.2:"):
             self.assertEqual(assembly.count(label), 1)
 
     def test_null_statements(self):
         program = parse(tokenize('int main(){ ;;; return 5; }'))[0]
-        self.assertEqual(without_implicit_casts(program.body), Node("BLOCK", body=[
+        self.assertEqual(grammar_tree(program.body), Node("BLOCK", body=[
             Node("BLOCK"), Node("BLOCK"), Node("BLOCK"),
             Node("RETURN", lhs=Node("NUM", value=5)),
         ]))
@@ -1503,7 +1522,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_nested_block_tree(self):
         program = parse(tokenize('int main(){ {1;} return 2; }'))[0]
-        self.assertEqual(without_implicit_casts(program.body), Node("BLOCK", body=[
+        self.assertEqual(grammar_tree(program.body), Node("BLOCK", body=[
             Node("BLOCK", body=[Node("EXPR_STMT", lhs=Node("NUM", value=1))]),
             Node("RETURN", lhs=Node("NUM", value=2)),
         ]))
@@ -1527,7 +1546,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_return_tree(self):
         program = parse_body("return 1+2; 3;")
-        self.assertEqual(without_implicit_casts(program.body.body), [
+        self.assertEqual(grammar_tree(program.body.body), [
             Node("RETURN", lhs=Node("+", Node("NUM", value=1), Node("NUM", value=2))),
             Node("EXPR_STMT", lhs=Node("NUM", value=3)),
         ])
@@ -1536,10 +1555,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         program = parse_body("int foo=3; int bar=5; return foo+bar;")
         self.assertEqual([var.name for var in program.locals], ["bar", "foo"])
         bar, foo = program.locals
-        self.assertIs(program.body.body[0].body[0].lhs.lhs.var, foo)
-        expression = without_implicit_casts(program.body.body[2].lhs)
+        self.assertIs(grammar_tree(program.body.body[0].body[0].lhs).lhs.var, foo)
+        expression = grammar_tree(program.body.body[2].lhs)
         self.assertIs(expression.lhs.var, foo)
-        self.assertIs(program.body.body[1].body[0].lhs.lhs.var, bar)
+        self.assertIs(grammar_tree(program.body.body[1].body[0].lhs).lhs.var, bar)
         self.assertIs(expression.rhs.var, bar)
         CodeGenerator().generate([program])
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-4, -8, 16))
@@ -1558,7 +1577,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_statement_list(self):
         statements = parse_body("1; 2+3;")
-        self.assertEqual(without_implicit_casts(statements.body.body), [
+        self.assertEqual(grammar_tree(statements.body.body), [
             Node("EXPR_STMT", lhs=Node("NUM", value=1)),
             Node("EXPR_STMT", lhs=Node("+", Node("NUM", value=2), Node("NUM", value=3))),
         ])
@@ -1571,7 +1590,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         # Check the assembly only: the executable's exit status is unspecified.
         for source in ["", " \t\n"]:
             with self.subTest(source=source):
-                self.assertEqual(without_implicit_casts(parse_body(source)), Obj("main", body=Node("BLOCK"), is_function=True,
+                self.assertEqual(grammar_tree(parse_body(source)), Obj("main", body=Node("BLOCK"), is_function=True,
                                                         is_definition=True))
                 result = compile_program('int main(){' + source + "}")
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -1645,7 +1664,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         for source, expected in cases:
             with self.subTest(source=source):
                 statements = parse_body(source)
-                self.assertEqual(without_implicit_casts(statements.body.body), [Node("EXPR_STMT", lhs=expected)])
+                self.assertEqual(grammar_tree(statements.body.body), [Node("EXPR_STMT", lhs=expected)])
                 generator = CodeGenerator()
                 generator.generate([statements])
                 self.assertEqual(generator.depth, 0)
@@ -2044,9 +2063,9 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(len(declaration.body), 3)
         for statement in declaration.body:
             self.assertEqual(statement.kind, "EXPR_STMT")
-            self.assertEqual(statement.lhs.kind, "ASSIGN")
+            self.assertEqual(grammar_tree(statement.lhs).kind, "ASSIGN")
         program = parse_body("int a,b; a=b=3;")
-        assignment = without_implicit_casts(program.body.body[1].lhs)
+        assignment = grammar_tree(program.body.body[1].lhs)
         self.assertEqual(assignment.kind, "ASSIGN")
         self.assertEqual(assignment.rhs.kind, "ASSIGN")
         result = compile_program('int main(){int x; return 7;}')

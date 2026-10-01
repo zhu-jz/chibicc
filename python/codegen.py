@@ -15,6 +15,8 @@ ARGREG = ("%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9")
 ARGREG8 = ("%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b")
 ARGREG16 = ("%di", "%si", "%dx", "%cx", "%r8w", "%r9w")
 ARGREG32 = ("%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d")
+GP_MAX = 6
+FP_MAX = 8
 
 
 I8 = "movsbl %al, %eax"
@@ -136,6 +138,32 @@ class CodeGenerator:
         self.assembly.extend((f"  movsd (%rsp), %xmm{index}", "  add $8, %rsp"))
         self.depth -= 1
 
+    def push_args(self, args):
+        stack, gp, fp = 0, 0, 0
+        for arg in args:
+            if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                arg.pass_by_stack = fp >= FP_MAX
+                fp += 1
+            else:
+                arg.pass_by_stack = gp >= GP_MAX
+                gp += 1
+            if arg.pass_by_stack:
+                stack += 1
+        if (self.depth + stack) % 2:
+            self.assembly.append("  sub $8, %rsp")
+            self.depth += 1
+            stack += 1
+        for pass_by_stack in (True, False):
+            for arg in reversed(args):
+                if arg.pass_by_stack != pass_by_stack:
+                    continue
+                self.gen_expr(arg)
+                if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                    self.pushf()
+                else:
+                    self.push()
+        return stack
+
     def cmp_zero(self, ty):
         if ty.kind in ("FLOAT", "DOUBLE"):
             suffix = "ss" if ty.kind == "FLOAT" else "sd"
@@ -217,31 +245,21 @@ class CodeGenerator:
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":
-            fp_count = sum(arg.ty.kind in ("FLOAT", "DOUBLE") for arg in node.args)
-            if len(node.args) - fp_count > len(ARGREG):
-                raise CompileError(node.tok, "at most 6 arguments are supported")
-            if fp_count > 8:
-                raise CompileError(node.tok, "at most 8 floating arguments are supported")
-            for arg in reversed(node.args):
-                self.gen_expr(arg)
-                if arg.ty.kind in ("FLOAT", "DOUBLE"):
-                    self.pushf()
-                else:
-                    self.push()
+            stack_args = self.push_args(node.args)
             self.gen_expr(node.lhs)
             gp, fp = 0, 0
             for arg in node.args:
                 if arg.ty.kind in ("FLOAT", "DOUBLE"):
-                    self.popf(fp)
-                    fp += 1
+                    if fp < FP_MAX:
+                        self.popf(fp)
+                        fp += 1
                 else:
-                    self.pop(ARGREG[gp])
-                    gp += 1
-            if self.depth % 2:
-                self.assembly.extend(("  sub $8, %rsp", "  call *%rax",
-                                      "  add $8, %rsp"))
-            else:
-                self.assembly.append("  call *%rax")
+                    if gp < GP_MAX:
+                        self.pop(ARGREG[gp])
+                        gp += 1
+            self.assembly.extend(("  mov %rax, %r10", f"  mov ${fp}, %rax",
+                                  "  call *%r10", f"  add ${stack_args * 8}, %rsp"))
+            self.depth -= stack_args
             if node.ty.kind == "BOOL":
                 self.assembly.append("  movzx %al, %eax")
             elif node.ty.kind == "CHAR":

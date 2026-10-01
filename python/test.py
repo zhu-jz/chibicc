@@ -77,6 +77,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_stack_argument_calls(self):
+        for spelling in ('int', 'float', 'double'):
+            parameters = ','.join(f'{spelling} x{i}' for i in range(1, 11))
+            expression = '+'.join(f'x{i}' for i in range(1, 11))
+            helper = f'{spelling} sum10({parameters}){{return {expression};}}'
+            source = f'{spelling} sum10({parameters});int main(void){{return sum10(1,2,3,4,5,6,7,8,9,10);}}'
+            self.assert_program_returns(source, 55, helper)
+            self.assert_program_returns(source.replace('return sum10', 'return 1+sum10'), 56, helper)
+        helper = '#include <stdarg.h>\nint sum(int n,...){va_list ap;va_start(ap,n);double result=0;for(int i=0;i<n;i++)result+=va_arg(ap,double);return result;}'
+        self.assert_program_returns('int sum(int,...);int main(void){return sum(10,1.,2.,3.,4.,5.,6.,7.,8.,9.,10.);}', 55, helper)
+        self.assert_program_returns('int sum(int,...);int main(void){return 1+sum(10,1.,2.,3.,4.,5.,6.,7.,8.,9.,10.);}', 56, helper)
+        source = 'int sum(int,...);int main(void){return sum(10,1.,2.,3.,4.,5.,6.,7.,8.,9.,10.);}'
+        assembly = compile_program(source).stdout
+        self.assertIn('  mov $8, %rax\n  call *%r10\n  add $16, %rsp\n', assembly)
+        helper = 'int mixed(int a,int b,int c,int d,int e,int f,int g,double x){return a+b+c+d+e+f+g+x;}'
+        self.assert_program_returns('int mixed(int,int,int,int,int,int,int,double);int main(void){int x=0;mixed(0,0,0,0,0,0,x=1,x=2);return x;}', 2, helper)
+
     def test_complete_packaged_compiler_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -98,7 +115,7 @@ int x=va_arg(ap,int);int y=va_arg(ap,int);return x+y;}
             assembled = subprocess.run([sys.executable, str(archive), '-S', '-o', '-', str(first)],
                                        cwd=root, capture_output=True, text=True)
             self.assertEqual(assembled.returncode, 0, assembled.stderr)
-            self.assertIn('  call *%rax\n', assembled.stdout)
+            self.assertIn('  call *%r10\n', assembled.stdout)
 
     def test_va_arg_and_register_class(self):
         for typename, expected in (('int', 0), ('unsigned long', 0), ('char *', 0),
@@ -869,7 +886,7 @@ int main(void){return 42;}
         conditional = main.body.body[0].lhs.lhs.lhs
         self.assertEqual((conditional.kind, conditional.ty.kind, conditional.ty.base.kind),
                          ("COND", "PTR", "FUNC"))
-        self.assertIn("  call *%rax\n", compile_program("int f(void);int main(void){return (1?f:(void*)0)();}").stdout)
+        self.assertIn("  call *%r10\n", compile_program("int f(void);int main(void){return (1?f:(void*)0)();}").stdout)
 
     def test_function_parameter_decay(self):
         self.assert_program_returns("int f(int x){return x+1;}int apply(int fn(int),int x){return fn(x);}int main(void){return apply(f,41);}", 42)
@@ -899,7 +916,7 @@ int main(void){return 42;}
                                     "int f(int x){return x+1;}")
         assembly = compile_program("int f(int);int main(void){return f(41);}").stdout
         self.assertIn("  mov f@GOTPCREL(%rip), %rax\n", assembly)
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         self.assertIn("  lea f(%rip), %rax\n", compile_program("int f(int x){return x;}int main(void){return f(42);}").stdout)
         self.assertIn("  .quad f+0\n", compile_program("int f(int);int(*p)(int)=f;").stdout)
         self.assertIn("not a function", compile_program("int main(void){int x=1;return x();}").stderr)
@@ -997,7 +1014,7 @@ int main(void){return 42;}
         assembly = compile_program("double d(double,double);int main(void){return d(20.5,21.5);}").stdout
         self.assertIn("  movsd (%rsp), %xmm0\n", assembly)
         self.assertIn("  movsd (%rsp), %xmm1\n", assembly)
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         self.assert_program_returns("int f(int,int);int main(void){int x=0;return f(++x,++x);}", 21, "int f(int a,int b){return 10*a+b;}")
 
     def test_floating_conditions(self):
@@ -1093,7 +1110,7 @@ int main(void){return 42;}
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertIn(message, result.stderr)
-        self.assertIn("  call *%rax\n", compile_program("int f(int);int main(void){return f(42);}").stdout)
+        self.assertIn("  call *%r10\n", compile_program("int f(int);int main(void){return f(42);}").stdout)
 
     def test_array_dimension_keywords(self):
         self.assert_program_returns("int f(int a[restrict static 3]){return a[2];}int main(void){int a[3]={1,2,42};return f(a);}", 42)
@@ -1240,7 +1257,7 @@ int main(void){return 42;}
         self.assertEqual(len(ty.params), 1)
         self.assertEqual(tokenize("...")[0].text, "...")
         assembly = compile_program("int sum(int n,...);int main(void){return sum(1,42);}").stdout
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         self.assertEqual(compile_program("int sum(int n,...,int x);").returncode, 1)
 
     def test_small_function_return_values(self):
@@ -1256,7 +1273,7 @@ int main(void){return 42;}
                                       ("char", "movsbl %al, %eax"),
                                       ("short", "movswl %ax, %eax")):
             assembly = compile_program(f"{spelling} f(void);int main(void){{return f();}}").stdout
-            self.assertIn(f"  call *%rax\n  {instruction}\n", assembly)
+            self.assertIn(f"  call *%r10\n  add $0, %rsp\n  {instruction}\n", assembly)
 
     def test_call_stack_alignment(self):
         helper = '__attribute__((naked)) int alignment(void){__asm__("mov %rsp, %rax\\nand $15, %eax\\nret");}'
@@ -1268,9 +1285,9 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected, helper)
         assembly = compile_program("int alignment(void);int main(void){return alignment()+1;}").stdout
-        self.assertIn("  sub $8, %rsp\n  call *%rax\n  add $8, %rsp\n", assembly)
+        self.assertIn("  mov %rax, %r10\n  mov $0, %rax\n  call *%r10\n  add $8, %rsp\n", assembly)
         assembly = compile_program("int alignment(void);int main(void){return alignment();}").stdout
-        self.assertNotIn("  sub $8, %rsp\n  call *%rax", assembly)
+        self.assertNotIn("  sub $8, %rsp\n", assembly)
 
     def test_do_while_loops(self):
         for source, expected in [
@@ -1353,7 +1370,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("int f(void);int main(void){return _Alignof f();}").stdout
-        self.assertNotIn("  call *%rax\n", assembly)
+        self.assertNotIn("  call *%r10\n", assembly)
         self.assertIn("  mov $4, %rax\n", assembly)
 
     def test_alignof_and_alignas(self):
@@ -1381,7 +1398,7 @@ int main(void){return 42;}
         self.assertEqual(function.locals, [])
         assembly = compile_program(source).stdout
         self.assertNotIn("g:\n", assembly)
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         result = compile_program("int main(void){{int f(int x);}return f(42);}")
         self.assertEqual(result.returncode, 1)
         self.assertIn("implicit declaration", result.stderr)
@@ -1413,7 +1430,7 @@ int main(void){return 42;}
         self.assertEqual(function.ty.params, [])
         self.assertEqual(function.params, [])
         assembly = compile_program("int f(void){return 42;}int main(void){return f();}").stdout
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         self.assertEqual(compile_program("int f(void int x);int main(void){return 0;}").returncode, 1)
 
     def test_flexible_array_member_initializers(self):
@@ -1632,7 +1649,7 @@ int main(void){return 42;}
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("int f();int main(void){int a[1]={42,f()};return a[0];}").stdout
-        self.assertNotIn("  call *%rax\n", assembly)
+        self.assertNotIn("  call *%r10\n", assembly)
         for source in ("int main(void){int a[1]={42,missing};}",
                        "int main(void){int a[1]={42,{3,4}};}"):
             self.assertEqual(compile_program(source).returncode, 1)
@@ -2871,8 +2888,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIn("  pop %rdi\n  pop %rsi\n  pop %rdx\n  pop %rcx\n"
                       "  pop %r8\n  pop %r9\n", assembly)
         result = compile_program('int f();int main(void){return f(1,2,3,4,5,6,7);}')
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("at most 6 arguments", result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("  add $16, %rsp\n", result.stdout)
         for source in ['int f();int main(void){return f(1 2);}', 'int f();int main(void){return f(1,);}']:
             self.assertEqual(compile_program(source).returncode, 1)
 
@@ -2886,7 +2903,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(call.lhs.var.name, "ret3")
         self.assertEqual(call.ty.kind, "INT")
         assembly = compile_program(declarations + 'int main(void){return ret3();}').stdout
-        self.assertIn("  call *%rax\n", assembly)
+        self.assertIn("  call *%r10\n", assembly)
         self.assertEqual(compile_program(declarations + 'int main(void){return ret3(,);}').returncode, 1)
 
     def test_pointer_arithmetic(self):

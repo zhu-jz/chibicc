@@ -1,6 +1,6 @@
-"""Lesson 197: Build through the complete preprocessing pipeline.
+"""Lesson 198: Pass overflow arguments on the stack.
 
-Based on chibicc commit 12a9e7506c092fcbab8852db85c3aebefc8a8c81.
+Based on chibicc commit b29f0521025c95ff331ddb58258b1083f8efd9ff.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

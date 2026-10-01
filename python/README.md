@@ -1,35 +1,40 @@
-# Lesson 197: Build through the complete preprocessing pipeline
+# Lesson 198: Pass overflow arguments on the stack
 
-Original chibicc commit: [`12a9e7506c092fcbab8852db85c3aebefc8a8c81`](https://github.com/rui314/chibicc/commit/12a9e7506c092fcbab8852db85c3aebefc8a8c81).
+Original chibicc commit: [`b29f0521025c95ff331ddb58258b1083f8efd9ff`](https://github.com/rui314/chibicc/commit/b29f0521025c95ff331ddb58258b1083f8efd9ff).
 Earlier explanations are available in Git history.
 
-The original C build now compiles its compiler sources directly with chibicc,
-including its own preprocessor, and deletes the source-rewriting self.py script.
-Its ordinary tests also explicitly search the bundled include directory.
-There is no compiler algorithm change in this commit.
+Calls now use up to six general-purpose registers and eight floating registers,
+then pass additional scalar arguments in eight-byte stack slots. Register
+counts are independent. Stack arguments are evaluated right to left first;
+register arguments follow in a second right-to-left pass. C leaves argument
+evaluation order unspecified; this preserves the original two-pass choice.
 
-The Python port never needed a C source-rewriting bootstrap script. Python
-executes its implementation, while the implementation compiles C into native
-assembly. Its build milestone is a packaged compiler with sibling headers and
-the same complete C preprocessing/parsing/generation pipeline. This is an
-intentional build adaptation, not a claim that this C compiler compiles its own
-Python source or that packaging is native self-hosting. The original C files
-remain intact. Both upstream test runs explicitly use their bundled headers.
+Padding is reserved before argument evaluation so the final argument area ends
+on a sixteen-byte boundary, including when an outer expression already has a
+saved temporary. After the call the compiler removes stack arguments and
+padding. It holds the function address in r10 and sets rax to the number of
+floating registers used, supplying the required variadic AL value.
+
+This commit changes callers only. Python-generated definitions still reject
+parameters exceeding the register limits until their receiving logic advances.
+Aggregate arguments and the bundled va_arg stack reader remain unsupported.
+Tests call GCC-compiled helpers to exercise the new ABI without adding later
+callee features. Python lists replace the recursive C argument-list traversal.
 
 ```sh
-python3 python/build.py
-printf '#include <stdbool.h>\nint main(void){bool ready=true;return ready+41;}\n' > /tmp/lesson.c
-python3 python/build/chibicc.pyz -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+printf 'int sum7(int,int,int,int,int,int,int);int main(void){return sum7(1,2,3,4,5,6,21);}\n' > /tmp/lesson.c
+printf 'int sum7(int a,int b,int c,int d,int e,int f,int g){return a+b+c+d+e+f+g;}\n' > /tmp/helper.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+gcc -o /tmp/lesson /tmp/lesson.s /tmp/helper.c
 /tmp/lesson
 echo $?  # 42
 ```
 
-The archive expands the header, stores a boolean byte, adds 41 to its loaded
-value and returns 42 in %rax. A new integration test builds the archive outside
-the repository, compiles and links two C inputs using stdbool.h and stdarg.h,
-and runs the result. It also checks emitted call assembly. The complete source
-and packaged suites are run for this build milestone.
+The seventh integer is pushed, six others are restored into argument registers,
+and the indirect call uses r10. Its result is returned in rax. Tests cover ten
+integer/float/double arguments, nested-expression alignment, an external
+variadic function with ten doubles, floating register count, two-pass evaluation,
+existing calls and the original mixed variadic sprintf fixture.
 
 ## Tests and attribution
 

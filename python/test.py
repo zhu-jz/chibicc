@@ -87,6 +87,30 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_archive_and_shared_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            helper = root / 'helper.c'
+            helper.write_text('int answer(void){return 42;}')
+            obj = root / 'helper.o'
+            subprocess.run(['gcc', '-fPIC', '-c', str(helper), '-o', str(obj)], check=True, capture_output=True)
+            archive = root / 'helper.a'
+            shared = root / 'helper.so'
+            subprocess.run(['ar', 'rcs', str(archive), str(obj)], check=True)
+            subprocess.run(['gcc', '-shared', '-o', str(shared), str(obj)], check=True, capture_output=True)
+            main = root / 'main.c'
+            main.write_text('int answer(void);int main(void){return answer();}')
+            executable = root / 'main'
+            for library in (archive, shared):
+                result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(main), str(library)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            disguised = root / 'source.o'
+            disguised.write_text('int main(void){return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-xc', '-S', '-o', '-', str(disguised)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('main:', result.stdout)
+
     def test_symbol_type_and_size(self):
         assembly = compile_program('int x=42;int main(void){return x;}').stdout
         self.assertIn('  .data\n  .type x, @object\n  .size x, 4\n  .align 4\nx:', assembly)
@@ -198,7 +222,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(COMPILER), '-c', '-xassembler', '-o', str(obj), '-'], input='.globl main\nmain:\nmov $42,%eax\nret\n', capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(obj.read_bytes().startswith(b'\x7fELF'))
-            result = subprocess.run([sys.executable, str(COMPILER), '-xc', '-o', str(executable), str(obj)], capture_output=True, text=True)
+            result = subprocess.run([sys.executable, str(COMPILER), '-xnone', '-o', str(executable), str(obj)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
             source = Path(directory) / 'source.c'

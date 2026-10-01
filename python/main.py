@@ -1,6 +1,6 @@
-"""Lesson 278: Emit ELF symbol types and object sizes.
+"""Lesson 279: Link archive and shared-library files.
 
-Based on chibicc commit 8d130ab93f65f7ef79839aba87459e4f9507ba39.
+Based on chibicc commit d56dd2f46e4049f017eae0dc99b2d16e78b88bee.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -171,10 +171,14 @@ def parse_opt_x(language):
 
 
 def get_file_type(filename, opt_x):
-    if filename.endswith(".o"):
-        return "OBJ"
     if opt_x is not None:
         return opt_x
+    if filename.endswith(".a"):
+        return "AR"
+    if filename.endswith(".so"):
+        return "DSO"
+    if filename.endswith(".o"):
+        return "OBJ"
     if filename.endswith(".c"):
         return "C"
     if filename.endswith(".s"):
@@ -313,7 +317,7 @@ def main():
                     continue
                 output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
                 file_type = get_file_type(filename, opt_x)
-                if file_type == "OBJ":
+                if file_type in ("OBJ", "AR", "DSO"):
                     linker_inputs.append(filename)
                     continue
                 if file_type == "ASM":

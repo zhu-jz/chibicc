@@ -1,27 +1,30 @@
-# Lesson 278: Emit ELF symbol types and object sizes
+# Lesson 279: Link archive and shared-library files
 
-Original chibicc commit: [`8d130ab93f65f7ef79839aba87459e4f9507ba39`](https://github.com/rui314/chibicc/commit/8d130ab93f65f7ef79839aba87459e4f9507ba39).
+Original chibicc commit: [`d56dd2f46e4049f017eae0dc99b2d16e78b88bee`](https://github.com/rui314/chibicc/commit/d56dd2f46e4049f017eae0dc99b2d16e78b88bee).
 Earlier explanations are available in Git history.
 
-Initialized data now receives .type name,@object and .size name,bytes directives;
-functions receive .type name,@function. Alignment moves after selecting the data
-or BSS section, so it applies to the section containing the object. Common symbols
-keep their alignment in .comm itself. Function sizes and BSS metadata are not added
-by this original step.
+The driver recognizes .a archives and .so shared libraries and forwards them to ld
+along with object files. Explicit -x language selection now takes precedence over
+all suffixes, including .o; -xnone restores suffix detection. Library order remains
+the input order, which matters when extracting members from static archives.
 
 ```sh
-printf 'int answer=42;int main(void){return answer;}\n' > /tmp/lesson.c
+printf 'int answer(void){return 42;}\n' > /tmp/lesson-helper.c
+printf 'int answer(void);int main(void){return answer();}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+gcc -c -o /tmp/lesson-helper.o /tmp/lesson-helper.c
+ar rcs /tmp/lesson-helper.a /tmp/lesson-helper.o
+gcc -o /tmp/lesson /tmp/lesson.s /tmp/lesson-helper.a
 /tmp/lesson
 echo $?  # 42
+python3 python/main.py -o /tmp/lesson /tmp/lesson.c /tmp/lesson-helper.a
 ```
 
-Assembly labels answer as a four-byte object and main as a function, then loads
-answer through its RIP-relative address and returns 42. These directives describe
-symbols to the assembler and linker; they do not execute. Tests inspect the emitted
-directives and readelf's object symbol table, and retain alignment/runtime checks.
-Python assembles string lists where C prints directives, with the same ELF metadata.
+Assembly calls the external answer function; the linker supplies its definition
+from the archive. Tests link and run both archive and shared-library inputs and
+check that -xc can interpret a text source named .o. GCC builds the separate helper
+fixture, while our Python compiler translates main. Python uses string file kinds
+instead of C's enum, preserving this commit's classification order.
 
 ## Tests and attribution
 

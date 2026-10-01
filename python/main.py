@@ -1,6 +1,6 @@
-"""Lesson 261: Emit only reachable static inline functions.
+"""Lesson 262: Describe diagnostic and output formatting contracts.
 
-Based on chibicc commit e5f4ca90fd2bf950189c98ed7f1873c9f35131f3.
+Based on chibicc commit 6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

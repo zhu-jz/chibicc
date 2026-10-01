@@ -100,7 +100,7 @@ def tokenize_file(path, files):
     return tokens
 
 
-def warn_tok(token, message):
+def warn_tok(token: Token, message: str) -> None:
     if token.file is None:
         print(message, file=sys.stderr)
     else:

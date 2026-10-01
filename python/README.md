@@ -1,31 +1,29 @@
-# Lesson 261: Emit only reachable static inline functions
+# Lesson 262: Describe diagnostic and output formatting contracts
 
-Original chibicc commit: [`e5f4ca90fd2bf950189c98ed7f1873c9f35131f3`](https://github.com/rui314/chibicc/commit/e5f4ca90fd2bf950189c98ed7f1873c9f35131f3).
+Original chibicc commit: [`6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442`](https://github.com/rui314/chibicc/commit/6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442).
 Earlier explanations are available in Git history.
 
-Functions now record referenced function names. Ordinary functions are roots;
-static inline functions become live only through references from live functions.
-A recursive walk marks each function before following its references, which
-handles recursive cycles without repeatedly traversing them. Code generation
-skips function bodies that remain unmarked.
+This original commit adds GCC printf-format attributes to the C compiler's own
+formatting helpers. GCC can then report mismatched printf arguments while
+building the compiler. It adds no new syntax to programs compiled by chibicc;
+in particular, parsing __attribute__ is not introduced here.
 
 ```sh
-printf 'static inline int unused(void){return 0;}static inline int f(void){return 42;}int main(void){return f();}\n' > /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly contains main and f but no unused label or body. Main still calls f;
-this is removal of unused bodies, not call-site inlining. Tests check direct and
-transitive references, unused and referenced cycles, ordinary static roots and
-extern inline roots, and run original fixtures and translated driver scenarios.
-Python stores reference names in a list instead of C's growable StringArray.
-The original current-function state persists after a definition, so later
-file-scope references can be attached to that last function. This historical
-state behavior is retained. Literal data created while parsing dead bodies may
-also remain in the assembly; the original step only skips function text.
+The assembly still loads and returns 42. The Python port already constructs
+assembly and diagnostics with strings and f-strings rather than a variadic
+printf helper. This step adds explicit message/return annotations to diagnostic
+interfaces and checks syntax with `make -C python check`; existing diagnostic,
+Unicode-caret and emitted-assembly tests verify the formatting behavior.
+Python annotations document the contract but py_compile does not perform static
+type checking. They do not claim GCC's format-attribute enforcement. The C
+conditional attribute macro and its fallback have no Python runtime equivalent.
 
 ## Tests and attribution
 

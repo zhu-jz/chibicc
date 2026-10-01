@@ -31,7 +31,8 @@ class File:
             self.display_name = self.name
 
 
-def format_diagnostic(file, position, message, line_no=None):
+def format_diagnostic(file: File, position: int, message: str,
+                      line_no: Optional[int] = None) -> str:
     source = file.contents
     line_start = source.rfind("\n", 0, position) + 1
     line_end = source.find("\n", position)
@@ -64,7 +65,7 @@ class Token:
 
 
 class CompileError(Exception):
-    def __init__(self, position, message):
+    def __init__(self, position, message: str):
         super().__init__(message)
         if isinstance(position, Token):
             self.position = position.position

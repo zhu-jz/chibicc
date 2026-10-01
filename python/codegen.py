@@ -319,7 +319,7 @@ class CodeGenerator:
         for var in program:
             if not var.is_function and var.is_definition:
                 section = ".data" if var.init_data is not None else ".bss"
-                self.assembly.extend([f"  .globl {var.name}", f"  .align {var.ty.align}",
+                self.assembly.extend([f"  .globl {var.name}", f"  .align {var.align}",
                                       f"  {section}", f"{var.name}:"])
                 if var.init_data is not None:
                     relocations = {rel.offset: rel for rel in var.relocations}
@@ -340,7 +340,7 @@ class CodeGenerator:
             offset = 0
             for var in function.locals:
                 offset += var.ty.size
-                offset = align_to(offset, var.ty.align)
+                offset = align_to(offset, var.align)
                 var.offset = -offset
             function.stack_size = align_to(offset, 16)
             self.current_fn = function

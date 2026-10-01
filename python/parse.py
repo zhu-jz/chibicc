@@ -91,13 +91,13 @@ class Parser:
         return binding
 
     def new_lvar(self, name, ty):
-        var = Obj(name, ty=ty, is_local=True)
+        var = Obj(name, ty=ty, is_local=True, align=ty.align)
         self.locals.insert(0, var)
         self.push_scope(name).var = var
         return var
 
     def new_gvar(self, name, ty):
-        var = Obj(name, ty=ty, is_definition=True)
+        var = Obj(name, ty=ty, is_definition=True, align=ty.align)
         self.globals.insert(0, var)
         self.push_scope(name).var = var
         return var
@@ -424,6 +424,14 @@ class Parser:
             add_type(operand)
             return Node("NUM", value=operand.ty.size, tok=token), position
 
+        if token.text == "_Alignof":
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            ty, position = self.typename(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            return Node("NUM", value=ty.align, tok=token), position + 1
+
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":
                 return self.funcall(position)
@@ -581,7 +589,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static", "extern") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -609,6 +617,22 @@ class Parser:
                     attr.is_extern = True
                 if attr.is_typedef and attr.is_static + attr.is_extern > 1:
                     raise CompileError(token, "typedef may not be used together with static or extern")
+                position += 1
+                continue
+            if token.text == "_Alignas":
+                if attr is None:
+                    raise CompileError(token, "_Alignas is not allowed in this context")
+                if self.tokens[position + 1].text != "(":
+                    raise CompileError(self.tokens[position + 1], "expected '('")
+                position += 2
+                if self.is_typename(position):
+                    alignment_ty, position = self.typename(position)
+                    attr.align = alignment_ty.align
+                else:
+                    attr.align, position = self.const_expr(position)
+                    attr.align = to_int32(attr.align)
+                if self.tokens[position].text != ")":
+                    raise CompileError(self.tokens[position], "expected ')'")
                 position += 1
                 continue
             type_def = self.find_typedef(position)
@@ -651,7 +675,8 @@ class Parser:
         position += 1
         members = []
         while self.tokens[position].text != "}":
-            basety, position = self.declspec(position)
+            attr = VarAttr()
+            basety, position = self.declspec(position, attr)
             first = True
             while self.tokens[position].text != ";":
                 if not first:
@@ -660,7 +685,7 @@ class Parser:
                     position += 1
                 first = False
                 ty, position = self.declarator(position, basety)
-                members.append(Member(ty, ty.name, idx=len(members)))
+                members.append(Member(ty, ty.name, idx=len(members), align=attr.align or ty.align))
             position += 1
         ty = struct_type()
         if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
@@ -683,10 +708,10 @@ class Parser:
             return ty, position
         offset = 0
         for member in ty.members:
-            offset = align_to(offset, member.ty.align)
+            offset = align_to(offset, member.align)
             member.offset = offset
             offset += member.ty.size
-            ty.align = max(ty.align, member.ty.align)
+            ty.align = max(ty.align, member.align)
         ty.size = align_to(offset, ty.align)
         return ty, position
 
@@ -696,7 +721,7 @@ class Parser:
         if ty.size < 0:
             return ty, position
         for member in ty.members:
-            ty.align = max(ty.align, member.ty.align)
+            ty.align = max(ty.align, member.align)
             ty.size = max(ty.size, member.ty.size)
         ty.size = align_to(ty.size, ty.align)
         return ty, position
@@ -834,7 +859,7 @@ class Parser:
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
-    def declaration(self, position, basety):
+    def declaration(self, position, basety, attr=None):
         statements = []
         first = True
         while self.tokens[position].text != ";":
@@ -847,6 +872,8 @@ class Parser:
             if ty.kind == "VOID":
                 raise CompileError(self.tokens[position], "variable declared void")
             var = self.new_lvar(ty.name.text, ty)
+            if attr is not None and attr.align:
+                var.align = attr.align
             if self.tokens[position].text == "=":
                 expression, position = self.lvar_initializer(position + 1, var)
                 token = self.tokens[position]
@@ -1095,7 +1122,7 @@ class Parser:
                 if attr.is_extern:
                     position = self.global_variable(position, basety, attr)
                     continue
-                node, position = self.declaration(position, basety)
+                node, position = self.declaration(position, basety, attr)
             else:
                 node, position = self.stmt(position)
             add_type(node)
@@ -1158,6 +1185,8 @@ class Parser:
             ty, position = self.declarator(position, basety)
             var = self.new_gvar(ty.name.text, ty)
             var.is_definition = not attr.is_extern
+            if attr.align:
+                var.align = attr.align
             if self.tokens[position].text == "=":
                 position = self.gvar_initializer(position + 1, var)
         return position + 1

@@ -60,6 +60,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_alignof_and_alignas(self):
+        for source, expected in [
+            ("int main(){return _Alignof(int);}", 4),
+            ("int main(){_Alignas(32) char x,y;return &y-&x;}", 32),
+            ("int main(){_Alignas(long) char x,y;return &y-&x;}", 8),
+            ("int main(){struct T{_Alignas(16) char x,y;} v;return &v.y-&v.x;}", 16),
+            ("int main(){return _Alignof(union T{_Alignas(16) char x;int y;});}", 16),
+            ("int main(){_Alignas(32) int x;return _Alignof(int);}", 4),
+        ]:
+            self.assert_program_returns(source, expected)
+        var = parse(tokenize("_Alignas(32) int g;"))[0]
+        self.assertEqual((var.align, var.ty.align), (32, 4))
+        self.assertIn("  .align 32\n", compile_program("_Alignas(32) int g;int main(){return 0;}").stdout)
+        result = compile_program("int f(_Alignas(32) int x);")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("_Alignas is not allowed", result.stderr)
+
     def test_block_extern_declarations(self):
         source = "int main(){extern int g;int f(int x);extern int h(int x);return f(g)+h(21);}"
         self.assert_program_returns(source, 42, "int g=21;int f(int x){return x;}int h(int x){return x;}")
@@ -912,7 +929,6 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, message in [
             ("int main(){{typedef int T;}T x;}", "undefined variable"),
             ("int main(){typedef int T;return T;}", "undefined variable"),
-            ("struct s{typedef int T;};", "storage class specifier is not allowed in this context"),
             ("int f(typedef int x);", "storage class specifier is not allowed in this context"),
         ]:
             result = compile_program(source)

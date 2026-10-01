@@ -60,6 +60,7 @@ class Member:
     offset: int = 0
     tok: Optional[Token] = field(default=None, compare=False)
     idx: int = 0
+    align: int = field(default=0, compare=False)
 
 
 @dataclass
@@ -84,6 +85,7 @@ class Obj:
     stack_size: int = 0
     init_data: Optional[bytes] = None
     relocations: list[Relocation] = field(default_factory=list)
+    align: int = field(default=0, compare=False)
 
 
 @dataclass
@@ -100,6 +102,7 @@ class VarAttr:
     is_typedef: bool = False
     is_static: bool = False
     is_extern: bool = False
+    align: int = 0
 
 
 @dataclass

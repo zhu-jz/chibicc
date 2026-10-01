@@ -1,35 +1,38 @@
-# Lesson 117: Extern declarations inside blocks
+# Lesson 118: Alignment queries and overrides
 
-Original chibicc commit: [`27647455e4cb7db1545a7b69c3a324aa025a471a`](https://github.com/rui314/chibicc/commit/27647455e4cb7db1545a7b69c3a324aa025a471a).
+Original chibicc commit: [`9df51789e7fd36fc1580bcd80676f9bcc4e24be1`](https://github.com/rui314/chibicc/commit/9df51789e7fd36fc1580bcd80676f9bcc4e24be1).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Compound statements now route function declarations and extern variable
-declarations through the global-object parser. Their names are bound in the
-current block scope, but they allocate no local stack slots or data definitions.
-Leaving the block removes those name bindings. Ordinary declarations still
-allocate locals and create initializer statements.
+_Alignof(type) becomes a constant number describing type alignment. _Alignas(type)
+or _Alignas(constant) overrides alignment for declared variables and members.
+Objects and members now store alignment separately from their Type, so aligning
+one int to 32 does not change _Alignof(int), which remains 4. Stack offsets,
+global directives, and struct/union layout use these separate alignments.
 
-Python reuses the existing parsers and Scope objects, as upstream reuses its
-global-object routines and linked scope records. This commit does not add broader
-redeclaration checking. Block function prototypes work with or without extern.
+Python stores the new values on dataclasses and parses the two argument forms
+with existing type-name and constant-expression routines. As upstream, this step
+does not fully validate requested alignments or realign the stack base for large
+local alignment; tests check local spacing rather than a stronger guarantee.
+For-loop and parameter contexts still reject _Alignas. The member parser now
+accepts storage attributes like upstream, without applying complete validation.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){extern int g;int f(int x);return f(g);}\n' > /tmp/lesson117.c
-printf 'int g=42;int f(int x){return x;}\n' > /tmp/lesson117-helper.c
-python3 python/main.py /tmp/lesson117.c > /tmp/lesson117.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson117 /tmp/lesson117.s /tmp/lesson117-helper.c
-/tmp/lesson117
+printf 'int main(){_Alignas(32) char x,y;return &y-&x;}\n' > /tmp/lesson118.c
+python3 python/main.py /tmp/lesson118.c > /tmp/lesson118.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson118 /tmp/lesson118.s
+/tmp/lesson118
 echo $?
 ```
 
-Main loads external g and passes it in edi to f, with no local g slot or emitted
-g storage. Exit status is 42. Tests check variable and function declarations,
-external linking, block shadowing, restored outer names, zero local slots,
-assembly calls, escaped-scope rejection, and original extern examples.
+Stack offsets are rounded separately to multiples of 32, putting these chars
+32 bytes apart. Address subtraction returns exit status 32. Tests cover type
+queries, type/numeric overrides, separate object and type alignment, struct
+member gaps, union alignment, emitted global directives, rejected contexts,
+real execution, and the new original alignof program.
 
 ## Tests and attribution
 

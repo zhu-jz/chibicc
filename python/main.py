@@ -1,6 +1,6 @@
-"""Lesson 117: Extern declarations inside blocks.
+"""Lesson 118: Alignment queries and overrides.
 
-Based on chibicc commit 27647455e4cb7db1545a7b69c3a324aa025a471a.
+Based on chibicc commit 9df51789e7fd36fc1580bcd80676f9bcc4e24be1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

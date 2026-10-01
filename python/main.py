@@ -1,6 +1,6 @@
-"""Lesson 113: Initializing flexible array members.
+"""Lesson 114: Void parameter lists.
 
-Based on chibicc commit cd688a89b8a57e9614f278e29a9267709494d236.
+Based on chibicc commit 7a1f816783064a12156807fe0a4d760c2e212d4e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

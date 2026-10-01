@@ -60,6 +60,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_void_parameter_lists(self):
+        self.assert_program_returns("int f(void);int f(void){return 42;}int main(void){return f();}", 42)
+        function = next(var for var in parse(tokenize("int f(void){return 42;}")) if var.is_function)
+        self.assertEqual(function.ty.params, [])
+        self.assertEqual(function.params, [])
+        assembly = compile_program("int f(void){return 42;}int main(void){return f();}").stdout
+        self.assertIn("  call f\n", assembly)
+        self.assertEqual(compile_program("int f(void,int x);int main(){return 0;}").returncode, 1)
+
     def test_flexible_array_member_initializers(self):
         for source, expected in [
             ("int main(){struct T{int a;int b[];} x={1,{2,42}};return x.b[1];}", 42),

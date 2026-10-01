@@ -701,6 +701,8 @@ class Parser:
 
     # func-params = (declspec declarator ("," declspec declarator)*)? ")"
     def func_params(self, position, ty):
+        if self.tokens[position].text == "void" and self.tokens[position + 1].text == ")":
+            return func_type(ty), position + 2
         params = []
         while self.tokens[position].text != ")":
             if params:

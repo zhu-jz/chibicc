@@ -1,36 +1,33 @@
-# Lesson 113: Initializing flexible array members
+# Lesson 114: Void parameter lists
 
-Original chibicc commit: [`cd688a89b8a57e9614f278e29a9267709494d236`](https://github.com/rui314/chibicc/commit/cd688a89b8a57e9614f278e29a9267709494d236).
+Original chibicc commit: [`7a1f816783064a12156807fe0a4d760c2e212d4e`](https://github.com/rui314/chibicc/commit/7a1f816783064a12156807fe0a4d760c2e212d4e).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Types now remember that their final member was a flexible array. When a whole
-object is initialized, that member's initializer can infer an element count.
-The parser copies the object's type and member records, completes the last member,
-and adds its storage size. Other objects and the shared struct tag retain their
-original zero-length tail.
+A literal `void` immediately followed by the closing parenthesis now represents
+an empty function parameter list. `int f(void)` therefore declares a function
+with no parameter objects. Normal named parameter parsing handles other lists.
 
-Python dataclasses.replace copies member records; the completed type is returned
-through the initializer rather than a C Type output pointer. This matches the
-original size rule: append the tail size without introducing a new layout or
-alignment policy. Flexible-tail initialization is an extension to standard C.
-Only top-level object initialization enables the flexible child at this step.
+Python returns the function type and next token index, following upstream's
+special case. This commit does not add full argument-count checking or equate
+an arbitrary typedef of void with this syntactic special case. Existing empty
+`()` lists retain their earlier behavior.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){struct T{int a;int b[];} x={1,2,42};return x.b[1];}\n' > /tmp/lesson113.c
-python3 python/main.py /tmp/lesson113.c > /tmp/lesson113.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson113 /tmp/lesson113.s
-/tmp/lesson113
+printf 'int f(void){return 42;}int main(void){return f();}\n' > /tmp/lesson114.c
+python3 python/main.py /tmp/lesson114.c > /tmp/lesson114.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson114 /tmp/lesson114.s
+/tmp/lesson114
 echo $?
 ```
 
-This object's completed size is 12 bytes. Assembly clears that storage and writes
-its fixed int plus two tail ints. The final value returns 42. Tests check locals,
-global byte data, string tails, independent completed object sizes, unchanged
-shared tags, member-record copying, actual executables, and upstream examples.
+Main calls f without setting argument registers. f moves 42 into rax and returns;
+main returns the same value, giving exit status 42. Tests check declarations and
+definitions, empty parameter types and objects, emitted call, mixed-list rejection,
+actual execution, and updated original function examples.
 
 ## Tests and attribution
 

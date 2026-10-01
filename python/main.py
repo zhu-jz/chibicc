@@ -1,6 +1,6 @@
-"""Lesson 130: Signed integer type spellings.
+"""Lesson 131: Unsigned integer types and operations.
 
-Based on chibicc commit 3f59ce79554fcbccd15d42ff4b4ddb91812c7045.
+Based on chibicc commit 34ab83bdf49a23a47bc90354a5a4d22686d8d92a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -12,6 +12,7 @@ from dataclasses import replace
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer
+from type import ty_uchar, ty_ushort, ty_uint, ty_ulong
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
@@ -633,7 +634,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -649,6 +650,8 @@ class Parser:
         ty = ty_int
         specifiers = []
         has_signed = False
+        has_unsigned = False
+        unsigned_types = {"CHAR": ty_uchar, "SHORT": ty_ushort, "INT": ty_uint, "LONG": ty_ulong}
         while self.is_typename(position):
             token = self.tokens[position]
             if token.text in ("typedef", "static", "extern"):
@@ -680,15 +683,22 @@ class Parser:
                     raise CompileError(self.tokens[position], "expected ')'")
                 position += 1
                 continue
-            if token.text == "signed":
-                has_signed = True
+            if token.text in ("signed", "unsigned"):
+                if token.text == "signed":
+                    has_signed = True
+                else:
+                    has_unsigned = True
+                if has_signed and has_unsigned:
+                    raise CompileError(token, "invalid type")
                 if "other" in specifiers or ty.kind not in ("CHAR", "SHORT", "INT", "LONG"):
                     raise CompileError(token, "invalid type")
+                if has_unsigned:
+                    ty = unsigned_types[ty.kind]
                 position += 1
                 continue
             type_def = self.find_typedef(position)
             if token.text in ("struct", "union", "enum") or type_def is not None:
-                if specifiers or has_signed:
+                if specifiers or has_signed or has_unsigned:
                     break
                 if token.text == "struct":
                     ty, position = self.struct_decl(position + 1)
@@ -705,8 +715,10 @@ class Parser:
             ty = combinations.get(tuple(sorted(specifiers)))
             if ty is None:
                 raise CompileError(token, "invalid type")
-            if has_signed and ty.kind not in ("CHAR", "SHORT", "INT", "LONG"):
+            if (has_signed or has_unsigned) and ty.kind not in ("CHAR", "SHORT", "INT", "LONG"):
                 raise CompileError(token, "invalid type")
+            if has_unsigned:
+                ty = unsigned_types[ty.kind]
             position += 1
         return ty, position
 

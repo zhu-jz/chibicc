@@ -1,32 +1,40 @@
-# Lesson 130: Signed integer type spellings
+# Lesson 131: Unsigned integer types and operations
 
-Original chibicc commit: [`3f59ce79554fcbccd15d42ff4b4ddb91812c7045`](https://github.com/rui314/chibicc/commit/3f59ce79554fcbccd15d42ff4b4ddb91812c7045).
+Original chibicc commit: [`34ab83bdf49a23a47bc90354a5a4d22686d8d92a`](https://github.com/rui314/chibicc/commit/34ab83bdf49a23a47bc90354a5a4d22686d8d92a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`signed` now qualifies char, short, int, long, or long long. Used alone it means
-int. These types already had signed arithmetic and loads, so the change adds
-spellings rather than new code-generation behavior. Keyword order remains
-flexible; repeated signed is accepted because upstream tracks it as a flag.
+Unsigned char, short, int and long now have Type objects with an is_unsigned flag.
+Small unsigned loads and function returns use zero extension. The cast table
+handles all eight signed/unsigned widths, including zero-extending unsigned int
+to long. Common arithmetic types promote small operands to int, select the wider
+type, and prefer unsigned when widths match.
 
-Python keeps a boolean alongside the readable type-specifier combination table,
-rather than C's bitmask counter. Invalid combinations such as signed void and
-signed _Bool still fail. Long long remains the same eight-byte type as long.
+Division/remainder use div with a cleared high dividend for unsigned values.
+Comparisons use setb/setbe and right shift uses shr instead of signed sar.
+Python keeps a readable specifier table with signedness flags instead of C's
+bitmask counter. Repeated unsigned is accepted; signed plus unsigned is invalid.
+
+This original commit changes runtime arithmetic but does not yet update the
+constant evaluator for unsigned division, comparison or shift. Its existing
+historical cast behavior remains. Numeric literal suffixes are still unsupported,
+and the port's signed-64-bit literal range diagnostic remains intentional.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){signed char x=255;return x<0;}\n' > /tmp/lesson130.c
-python3 python/main.py /tmp/lesson130.c > /tmp/lesson130.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson130 /tmp/lesson130.s
-/tmp/lesson130
+printf 'int main(void){return ((unsigned)-1>>1)==2147483647;}\n' > /tmp/lesson131.c
+python3 python/main.py /tmp/lesson131.c > /tmp/lesson131.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson131 /tmp/lesson131.s
+/tmp/lesson131
 echo $?
 ```
 
-The store keeps low byte ff; `movsbl` loads it as -1. The comparison returns true,
-giving exit status 1. Tests cover aliases, keyword order, repeated signed, sizes,
-signed-char execution and assembly, rejected types, and original sizeof examples.
+Unsigned -1 has 32 one bits. `shr %cl,%eax` shifts in a zero, producing 2147483647;
+the equality returns exit status 1. Tests cover unsigned widths, promotions,
+mixed signedness, large division, remainder, casts, return values, exact div/shr/
+setb assembly, invalid combinations, execution, and updated original C programs.
 
 ## Tests and attribution
 

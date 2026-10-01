@@ -15,11 +15,22 @@ ARGREG16 = ("%di", "%si", "%dx", "%cx", "%r8w", "%r9w")
 ARGREG32 = ("%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d")
 
 
+I8 = "movsbl %al, %eax"
+U8 = "movzbl %al, %eax"
+I16 = "movswl %ax, %eax"
+U16 = "movzwl %ax, %eax"
+I64 = "movsxd %eax, %rax"
+U64 = "mov %eax, %eax"
+# Columns and rows: signed 8/16/32/64, unsigned 8/16/32/64.
 CAST_TABLE = (
-    (None, None, None, "movsxd %eax, %rax"),
-    ("movsbl %al, %eax", None, None, "movsxd %eax, %rax"),
-    ("movsbl %al, %eax", "movswl %ax, %eax", None, "movsxd %eax, %rax"),
-    ("movsbl %al, %eax", "movswl %ax, %eax", None, None),
+    (None, None, None, I64, U8, U16, None, I64),
+    (I8, None, None, I64, U8, U16, None, I64),
+    (I8, I16, None, I64, U8, U16, None, I64),
+    (I8, I16, None, None, U8, U16, None, None),
+    (I8, None, None, I64, None, None, None, I64),
+    (I8, I16, None, I64, U8, None, None, I64),
+    (I8, I16, None, U64, U8, U16, None, U64),
+    (I8, I16, None, None, U8, U16, None, None),
 )
 
 
@@ -62,9 +73,11 @@ class CodeGenerator:
         if ty.kind in ("ARRAY", "STRUCT", "UNION"):
             return
         if ty.size == 1:
-            self.assembly.append("  movsbl (%rax), %eax")
+            instruction = "movzbl" if ty.is_unsigned else "movsbl"
+            self.assembly.append(f"  {instruction} (%rax), %eax")
         elif ty.size == 2:
-            self.assembly.append("  movswl (%rax), %eax")
+            instruction = "movzwl" if ty.is_unsigned else "movswl"
+            self.assembly.append(f"  {instruction} (%rax), %eax")
         elif ty.size == 4:
             self.assembly.append("  movsxd (%rax), %rax")
         else:
@@ -97,9 +110,9 @@ class CodeGenerator:
             self.cmp_zero(from_ty)
             self.assembly.extend(("  setne %al", "  movzx %al, %eax"))
             return
-        type_ids = {"CHAR": 0, "SHORT": 1, "INT": 2}
-        source = type_ids.get(from_ty.kind, 3)
-        target = type_ids.get(to_ty.kind, 3)
+        type_ids = {"CHAR": 0, "SHORT": 1, "INT": 2, "LONG": 3}
+        source = type_ids[from_ty.kind] + (4 if from_ty.is_unsigned else 0) if from_ty.kind in type_ids else 7
+        target = type_ids[to_ty.kind] + (4 if to_ty.is_unsigned else 0) if to_ty.kind in type_ids else 7
         instruction = CAST_TABLE[source][target]
         if instruction is not None:
             self.assembly.append("  " + instruction)
@@ -155,9 +168,11 @@ class CodeGenerator:
             if node.ty.kind == "BOOL":
                 self.assembly.append("  movzx %al, %eax")
             elif node.ty.kind == "CHAR":
-                self.assembly.append("  movsbl %al, %eax")
+                instruction = "movzbl" if node.ty.is_unsigned else "movsbl"
+                self.assembly.append(f"  {instruction} %al, %eax")
             elif node.ty.kind == "SHORT":
-                self.assembly.append("  movswl %ax, %eax")
+                instruction = "movzwl" if node.ty.is_unsigned else "movswl"
+                self.assembly.append(f"  {instruction} %ax, %eax")
             return
         if node.kind == "STMT_EXPR":
             for statement in node.body:
@@ -226,17 +241,23 @@ class CodeGenerator:
             self.assembly.append(f"  {instruction} %rdi, %rax")
         elif node.kind in ("<<", ">>"):
             self.assembly.append("  mov %rdi, %rcx")
-            instruction = "shl" if node.kind == "<<" else "sar"
+            instruction = "shl" if node.kind == "<<" else "shr" if node.lhs.ty.is_unsigned else "sar"
             self.assembly.append(f"  {instruction} %cl, {ax}")
         elif node.kind in ("/", "%"):
-            self.assembly.append("  cqo" if node.lhs.ty.size == 8 else "  cdq")
-            self.assembly.append(f"  idiv {di}")
+            if node.ty.is_unsigned:
+                dx = "%rdx" if ax == "%rax" else "%edx"
+                self.assembly.extend((f"  mov $0, {dx}", f"  div {di}"))
+            else:
+                self.assembly.append("  cqo" if node.lhs.ty.size == 8 else "  cdq")
+                self.assembly.append(f"  idiv {di}")
             if node.kind == "%":
                 self.assembly.append("  mov %rdx, %rax")
         elif node.kind in ("==", "!=", "<", "<="):
             instructions = {
                 "==": "sete", "!=": "setne", "<": "setl", "<=": "setle",
             }
+            if node.lhs.ty.is_unsigned:
+                instructions.update({"<": "setb", "<=": "setbe"})
             self.assembly.append(f"  cmp {di}, {ax}")
             self.assembly.append(f"  {instructions[node.kind]} %al")
             self.assembly.append("  movzb %al, %rax")

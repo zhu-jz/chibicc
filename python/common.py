@@ -52,6 +52,7 @@ class Type:
     align: int = 0
     is_flexible: bool = False
     is_variadic: bool = False
+    is_unsigned: bool = False
 
 
 @dataclass

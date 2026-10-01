@@ -15,6 +15,10 @@ ty_char = Type("CHAR", size=1, align=1)
 ty_short = Type("SHORT", size=2, align=2)
 ty_int = Type("INT", size=4, align=4)
 ty_long = Type("LONG", size=8, align=8)
+ty_uchar = Type("CHAR", size=1, align=1, is_unsigned=True)
+ty_ushort = Type("SHORT", size=2, align=2, is_unsigned=True)
+ty_uint = Type("INT", size=4, align=4, is_unsigned=True)
+ty_ulong = Type("LONG", size=8, align=8, is_unsigned=True)
 
 
 def is_integer(ty):
@@ -53,9 +57,13 @@ def new_cast(expression, ty):
 def get_common_type(left, right):
     if left.base is not None:
         return pointer_to(left.base)
-    if left.size == 8 or right.size == 8:
-        return ty_long
-    return ty_int
+    if left.size < 4:
+        left = ty_int
+    if right.size < 4:
+        right = ty_int
+    if left.size != right.size:
+        return right if left.size < right.size else left
+    return right if right.is_unsigned else left
 
 
 def usual_arith_conv(left, right):

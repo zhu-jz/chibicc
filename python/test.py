@@ -60,6 +60,27 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unsigned_integer_operations(self):
+        for source, expected in [
+            ("int main(void){unsigned char x=255;return x<0;}", 0),
+            ("int main(void){unsigned short x=65535;return (long)x==65535;}", 1),
+            ("int main(void){return -1<(unsigned)1;}", 0),
+            ("int main(void){return ((unsigned)-1>>1)==2147483647;}", 1),
+            ("int main(void){return ((unsigned)-100)/2==2147483598;}", 1),
+            ("int main(void){return ((unsigned long)-100)/2==9223372036854775758;}", 1),
+            ("int main(void){return ((unsigned)-100)%7;}", 2),
+            ("int main(void){return ((long)-1)/(unsigned)100;}", 0),
+            ("int main(void){return (long)(unsigned)-1==4294967295;}", 1),
+            ("int main(void){return sizeof((unsigned char)1+(unsigned char)1);}", 4),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assert_program_returns("unsigned char f(void);int main(void){return f();}", 255, "int f(void){return 0x2ff;}")
+        assembly = compile_program("int main(void){unsigned x=42;return x/2+(x>>1)+(x<1);}").stdout
+        for instruction in ("  div %edi\n", "  shr %cl, %eax\n", "  setb %al\n"):
+            self.assertIn(instruction, assembly)
+        for spelling in ("signed unsigned", "unsigned void", "unsigned _Bool"):
+            self.assertEqual(compile_program(f"int main(void){{{spelling} x;}}").returncode, 1)
+
     def test_signed_type_specifiers(self):
         for spelling, size in (("signed", 4), ("signed signed", 4), ("signed char signed", 1),
                                ("int short signed", 2), ("signed long long int", 8)):

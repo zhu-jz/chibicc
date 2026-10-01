@@ -1,6 +1,6 @@
-"""Lesson 262: Describe diagnostic and output formatting contracts.
+"""Lesson 263: Accept the historical idirafter driver option.
 
-Based on chibicc commit 6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442.
+Based on chibicc commit 11fc259b01c4a855e53ffdb2b86c1030f9c18586.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -35,6 +35,7 @@ def add_default_include_paths(argv0, include_paths):
 def parse_args(arguments):
     input_paths = []
     include_paths = []
+    idirafter = []
     output_path = None
     base_file = None
     cc1_output = None
@@ -45,7 +46,7 @@ def parse_args(arguments):
     opt_E = False
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -56,6 +57,11 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-idirafter":
+            # This original patch stores the option itself, not its argument.
+            idirafter.append(argument)
+            position += 2
+            continue
         if argument.startswith("-U"):
             name = argument[2:]
             if argument == "-U":
@@ -122,6 +128,7 @@ def parse_args(arguments):
         else:
             input_paths.append(argument)
         position += 1
+    include_paths.extend(idirafter)
     if not input_paths:
         raise CompileError(None, "no input files")
     return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros

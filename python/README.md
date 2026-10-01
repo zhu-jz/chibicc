@@ -1,29 +1,29 @@
-# Lesson 262: Describe diagnostic and output formatting contracts
+# Lesson 263: Accept the historical idirafter driver option
 
-Original chibicc commit: [`6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442`](https://github.com/rui314/chibicc/commit/6a2dc5a48a75b65aa2e3f606d195ef0fef3c4442).
+Original chibicc commit: [`11fc259b01c4a855e53ffdb2b86c1030f9c18586`](https://github.com/rui314/chibicc/commit/11fc259b01c4a855e53ffdb2b86c1030f9c18586).
 Earlier explanations are available in Git history.
 
-This original commit adds GCC printf-format attributes to the C compiler's own
-formatting helpers. GCC can then report mismatched printf arguments while
-building the compiler. It adds no new syntax to programs compiled by chibicc;
-in particular, parsing __attribute__ is not introduced here.
+The driver recognizes `-idirafter DIR`, consumes its argument and appends entries
+after explicitly requested -I directories. This original patch mistakenly stores
+the literal option text `-idirafter`, not DIR. We retain the actual historical
+behavior, including searching a directory literally named -idirafter if present.
+Default system include paths are appended later by the internal compiler stage.
 
 ```sh
 printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+python3 python/main.py -idirafter /tmp -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The assembly still loads and returns 42. The Python port already constructs
-assembly and diagnostics with strings and f-strings rather than a variadic
-printf helper. This step adds explicit message/return annotations to diagnostic
-interfaces and checks syntax with `make -C python check`; existing diagnostic,
-Unicode-caret and emitted-assembly tests verify the formatting behavior.
-Python annotations document the contract but py_compile does not perform static
-type checking. They do not claim GCC's format-attribute enforcement. The C
-conditional attribute macro and its fallback have no Python runtime equivalent.
+This input needs no include, so assembly loads and returns 42 normally. Tests
+reproduce the original driver priority checks, then additionally show that DIR
+alone is not searched and the literal option directory is. A missing argument
+reports usage rather than indexing past the argument list.
+Python separates a deferred list from its ordinary include-path list as C does
+with StringArray. This step records the original implementation's bug honestly;
+it does not claim working standard idirafter semantics that the commit lacks.
 
 ## Tests and attribution
 

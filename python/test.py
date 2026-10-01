@@ -81,6 +81,28 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_idirafter_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first'
+            second = Path(directory) / 'second'
+            first.mkdir()
+            second.mkdir()
+            (first / 'after.h').write_text('foo\n')
+            (second / 'after.h').write_text('bar\n')
+            for options, expected in [(['-I' + str(first), '-I' + str(second)], 'foo\n'), (['-idirafter', str(first), '-I' + str(second)], 'bar\n')]:
+                result = subprocess.run([sys.executable, str(COMPILER), *options, '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+                self.assertEqual((result.returncode, result.stdout), (0, expected), result.stderr)
+            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+            self.assertEqual(result.returncode, 1)
+            literal = Path(directory) / '-idirafter'
+            literal.mkdir()
+            (literal / 'after.h').write_text('literal\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-idirafter', str(first), '-E', '-'], input='#include "after.h"\n', capture_output=True, text=True, cwd=directory)
+            self.assertEqual((result.returncode, result.stdout), (0, 'literal\n'), result.stderr)
+        result = subprocess.run([sys.executable, str(COMPILER), '-idirafter'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('chibicc (Python)', result.stderr)
+
     def test_static_inline_liveness(self):
         chain = 'static inline int f1(void){return 42;}static inline int f2(void){return f1();}'
         for call, emitted in [('', set()), ('f1()', {'f1'}), ('f2()', {'f1', 'f2'})]:

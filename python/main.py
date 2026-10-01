@@ -1,6 +1,6 @@
-"""Lesson 241: Allow GNU designators without an equals sign.
+"""Lesson 242: Select struct fields in initializers.
 
-Based on chibicc commit 691c4fac1529eaf1d825ca6093800912a4df3c91.
+Based on chibicc commit 67f5834378660abf271722a16294a634106d047e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

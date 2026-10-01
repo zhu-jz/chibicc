@@ -80,6 +80,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_designated_initializers(self):
+        for source,expected in [
+            ('int main(void){struct T{int a,b,c;}x={.c=30,.a=12};return x.a+x.b+x.c;}',42),
+            ('struct T{int a,b;}g={1,2,.b=30,.a=12};int main(void){return g.a+g.b;}',42),
+            ('int main(void){struct T{struct{int a,b;}t;int x[2];}v={.t.b=12,.x[1]=30};return v.t.a+v.t.b+v.x[0]+v.x[1];}',42),
+            ('int main(void){struct T{int a,b;}x[]={[1].b=12,30};return x[1].b+x[2].a;}',42),
+            ('int main(void){struct T{int a,b;}x={12,30};struct T y[]={x,[0].b=42};return y[0].a+y[0].b;}',42),
+            ('int main(void){struct T{unsigned int a:6,b:4;}x={.a=42};return x.a+x.b;}',42),
+            ('int main(void){return ((struct T{int a,b;}){.b 42}).b;}',42),
+        ]:
+            self.assert_program_returns(source,expected)
+        for source,message in [
+            ('struct T{int a;}x={.missing=1};','struct has no such member'),
+            ('struct T{int a;}x={. 1=1};','expected a field designator'),
+            ('int x[1]={[0].a=1};','field name not in struct or union initializer'),
+        ]:
+            result=compile_program('int main(void){'+source+'return 0;}')
+            self.assertEqual(result.returncode,1)
+            self.assertIn(message,result.stderr)
+
     def test_designators_without_equals(self):
         for source in ('int main(void){return ((int[10]){[3]42})[3];}',
                        'int x[]={[3]42};int main(void){return x[3]+x[0];}',

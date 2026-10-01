@@ -1090,6 +1090,15 @@ class Parser:
             raise CompileError(self.tokens[position], "expected ']'")
         return index, position + 1
 
+    def struct_designator(self, position, ty):
+        token = self.tokens[position + 1]
+        if token.kind != "IDENT":
+            raise CompileError(token, "expected a field designator")
+        for member in ty.members:
+            if member.name is not None and member.name.text == token.text:
+                return member, position + 2
+        raise CompileError(token, "struct has no such member")
+
     def designation(self, position, init):
         if self.tokens[position].text == "[":
             if init.ty.kind != "ARRAY":
@@ -1097,6 +1106,13 @@ class Parser:
             index, position = self.array_designator(position, init.ty)
             position = self.designation(position, init.children[index])
             return self.array_initializer_without_braces(position, init, index + 1)
+        if self.tokens[position].text == "." and init.ty.kind == "STRUCT":
+            member, position = self.struct_designator(position, init.ty)
+            position = self.designation(position, init.children[member.idx])
+            init.expr = None
+            return self.struct_initializer_without_braces(position, init, member.idx + 1)
+        if self.tokens[position].text == ".":
+            raise CompileError(self.tokens[position], "field name not in struct or union initializer")
         if self.tokens[position].text == "=":
             position += 1
         return self.initializer2(position, init)
@@ -1155,12 +1171,18 @@ class Parser:
             raise CompileError(self.tokens[position], "expected '{'")
         position += 1
         index = 0
+        first = True
         while not self.is_end(position):
-            if index:
+            if not first:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
-            if index < len(init.ty.members):
+            first = False
+            if self.tokens[position].text == ".":
+                member, position = self.struct_designator(position, init.ty)
+                index = member.idx
+                position = self.designation(position, init.children[index])
+            elif index < len(init.ty.members):
                 member = init.ty.members[index]
                 position = self.initializer2(position, init.children[member.idx])
             else:
@@ -1180,19 +1202,24 @@ class Parser:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
-            if self.tokens[position].text == "[":
+            if self.tokens[position].text in ("[", "."):
                 return start
             position = self.initializer2(position, init.children[index])
         return position
 
-    def struct_initializer_without_braces(self, position, init):
-        for index, member in enumerate(init.ty.members):
+    def struct_initializer_without_braces(self, position, init, start_index=0):
+        first = True
+        for member in init.ty.members[start_index:]:
             if self.is_end(position):
                 break
-            if index:
+            start = position
+            if not first:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
+            first = False
+            if self.tokens[position].text in ("[", "."):
+                return start
             position = self.initializer2(position, init.children[member.idx])
         return position
 

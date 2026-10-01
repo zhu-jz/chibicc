@@ -171,7 +171,7 @@ def evaluate_float(node):
             value &= (1 << 64) - 1
         return float(value)
     if node.kind == "NUM":
-        return node.fvalue
+        return float(node.fvalue)
     if node.kind == "NEG":
         return -evaluate_float(node.lhs)
     if node.kind == "COND":

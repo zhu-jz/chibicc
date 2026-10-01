@@ -21,6 +21,7 @@ ty_uint = Type("INT", size=4, align=4, is_unsigned=True)
 ty_ulong = Type("LONG", size=8, align=8, is_unsigned=True)
 ty_float = Type("FLOAT", size=4, align=4)
 ty_double = Type("DOUBLE", size=8, align=8)
+ty_ldouble = Type("LDOUBLE", size=16, align=16)
 
 
 def is_integer(ty):
@@ -28,7 +29,7 @@ def is_integer(ty):
 
 
 def is_flonum(ty):
-    return ty.kind in ("FLOAT", "DOUBLE")
+    return ty.kind in ("FLOAT", "DOUBLE", "LDOUBLE")
 
 
 def is_numeric(ty):
@@ -50,7 +51,7 @@ def is_compatible(first, second):
         return False
     if first.kind in ("CHAR", "SHORT", "INT", "LONG"):
         return first.is_unsigned == second.is_unsigned
-    if first.kind in ("FLOAT", "DOUBLE"):
+    if first.kind in ("FLOAT", "DOUBLE", "LDOUBLE"):
         return True
     if first.kind == "PTR":
         return is_compatible(first.base, second.base)
@@ -102,6 +103,8 @@ def get_common_type(left, right):
         return pointer_to(left)
     if right.kind == "FUNC":
         return pointer_to(right)
+    if left.kind == "LDOUBLE" or right.kind == "LDOUBLE":
+        return ty_ldouble
     if left.kind == "DOUBLE" or right.kind == "DOUBLE":
         return ty_double
     if left.kind == "FLOAT" or right.kind == "FLOAT":

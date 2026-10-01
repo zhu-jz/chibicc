@@ -14,7 +14,7 @@ from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer, evaluate_float, is_const_expr
 import math
 import struct
-from type import vla_of, is_compatible, ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
+from type import vla_of, is_compatible, ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double, ty_ldouble
 from type import is_numeric, is_flonum
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
@@ -791,7 +791,7 @@ class Parser:
     def declspec(self, position, attr=None):
         combinations = {
             ("float",): ty_float, ("double",): ty_double,
-            ("double", "long"): ty_double,
+            ("double", "long"): ty_ldouble,
             ("void",): ty_void,
             ("_Bool",): ty_bool, ("char",): ty_char,
             ("short",): ty_short, ("int", "short"): ty_short,

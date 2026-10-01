@@ -54,6 +54,62 @@ CAST_TABLE = (
      F64_I32+"; "+U8, F64_I32+"; "+U16, F64_I64, F64_I64, "cvtsd2ss %xmm0, %xmm0", None),
 )
 
+# Extend the existing conversions with the x87 80-bit floating register format.
+FROM_F80 = ("fnstcw -10(%rsp); movzwl -10(%rsp), %eax; or $12, %ah; "
+            "mov %ax, -12(%rsp); fldcw -12(%rsp); ")
+RESTORE_F80 = " -24(%rsp); fldcw -10(%rsp); "
+TO_F80 = (
+    "mov %eax, -4(%rsp); fildl -4(%rsp)",
+    "mov %eax, -4(%rsp); fildl -4(%rsp)",
+    "mov %eax, -4(%rsp); fildl -4(%rsp)",
+    "movq %rax, -8(%rsp); fildll -8(%rsp)",
+    "mov %eax, -4(%rsp); fildl -4(%rsp)",
+    "mov %eax, -4(%rsp); fildl -4(%rsp)",
+    "mov %eax, %eax; mov %rax, -8(%rsp); fildll -8(%rsp)",
+    "mov %rax, -8(%rsp); fildq -8(%rsp); test %rax, %rax; jns 1f; "
+    "mov $1602224128, %eax; mov %eax, -4(%rsp); fadds -4(%rsp); 1:",
+    "movss %xmm0, -4(%rsp); flds -4(%rsp)",
+    "movsd %xmm0, -8(%rsp); fldl -8(%rsp)",
+)
+CAST_TABLE = tuple(row + (conversion,) for row, conversion in zip(CAST_TABLE, TO_F80)) + (
+    (FROM_F80 + "fistps" + RESTORE_F80 + "movsbl -24(%rsp), %eax",
+     FROM_F80 + "fistps" + RESTORE_F80 + "movzbl -24(%rsp), %eax",
+     FROM_F80 + "fistpl" + RESTORE_F80 + "mov -24(%rsp), %eax",
+     FROM_F80 + "fistpq" + RESTORE_F80 + "mov -24(%rsp), %rax",
+     FROM_F80 + "fistps" + RESTORE_F80 + "movzbl -24(%rsp), %eax",
+     FROM_F80 + "fistpl" + RESTORE_F80 + "movswl -24(%rsp), %eax",
+     FROM_F80 + "fistpl" + RESTORE_F80 + "mov -24(%rsp), %eax",
+     FROM_F80 + "fistpq" + RESTORE_F80 + "mov -24(%rsp), %rax",
+     "fstps -8(%rsp); movss -8(%rsp), %xmm0",
+     "fstpl -8(%rsp); movsd -8(%rsp), %xmm0", None),
+)
+
+
+def long_double_bytes(value):
+    """Round an exact ratio to x86 extended precision, with six padding bytes."""
+    numerator, denominator = value.as_integer_ratio()
+    sign = int(numerator < 0)
+    numerator = abs(numerator)
+    if numerator == 0:
+        return bytes(16)
+    exponent = numerator.bit_length() - denominator.bit_length()
+    if (numerator < denominator << exponent if exponent >= 0
+            else numerator << -exponent < denominator):
+        exponent -= 1
+    shift = 63 - max(exponent, -16382)
+    scaled_num = numerator << shift if shift >= 0 else numerator
+    scaled_den = denominator if shift >= 0 else denominator << -shift
+    significand, remainder = divmod(scaled_num, scaled_den)
+    if remainder * 2 > scaled_den or (remainder * 2 == scaled_den and significand % 2):
+        significand += 1
+    if significand == 1 << 64:
+        significand >>= 1
+        exponent += 1
+    biased = max(exponent + 16383, 1) if significand >= 1 << 63 else 0
+    if exponent > 16383:
+        biased, significand = 0x7fff, 1 << 63
+    return significand.to_bytes(8, "little") + (biased | sign << 15).to_bytes(2, "little") + bytes(6)
+
 
 def has_flonum(ty, lo, hi, offset=0):
     """Whether every member starting in this byte range is floating point."""
@@ -122,6 +178,9 @@ class CodeGenerator:
             instruction = "movss" if ty.kind == "FLOAT" else "movsd"
             self.assembly.append(f"  {instruction} (%rax), %xmm0")
             return
+        if ty.kind == "LDOUBLE":
+            self.assembly.append("  fldt (%rax)")
+            return
         if ty.size == 1:
             instruction = "movzbl" if ty.is_unsigned else "movsbl"
             self.assembly.append(f"  {instruction} (%rax), %eax")
@@ -135,6 +194,9 @@ class CodeGenerator:
 
     def store(self, ty):
         self.pop("%rdi")
+        if ty.kind == "LDOUBLE":
+            self.assembly.append("  fstpt (%rdi)")
+            return
         if ty.kind in ("FLOAT", "DOUBLE"):
             instruction = "movss" if ty.kind == "FLOAT" else "movsd"
             self.assembly.append(f"  {instruction} %xmm0, (%rdi)")
@@ -195,6 +257,9 @@ class CodeGenerator:
                 arg.pass_by_stack = fp >= FP_MAX
                 fp += 1
                 stack += arg.pass_by_stack
+            elif ty.kind == "LDOUBLE":
+                arg.pass_by_stack = True
+                stack += 2
             else:
                 arg.pass_by_stack = gp >= GP_MAX
                 gp += 1
@@ -217,6 +282,9 @@ class CodeGenerator:
                                               f"  mov %r10b, {offset}(%rsp)"))
                 elif arg.ty.kind in ("FLOAT", "DOUBLE"):
                     self.pushf()
+                elif arg.ty.kind == "LDOUBLE":
+                    self.assembly.extend(("  sub $16, %rsp", "  fstpt (%rsp)"))
+                    self.depth += 2
                 else:
                     self.push()
         if node.ret_buffer is not None and node.ty.size > 16:
@@ -275,6 +343,9 @@ class CodeGenerator:
             self.assembly.extend((f"  mov {i}(%rax), %dl", f"  mov %dl, {i}(%rdi)"))
 
     def cmp_zero(self, ty):
+        if ty.kind == "LDOUBLE":
+            self.assembly.extend(("  fldz", "  fucomip", "  fstp %st(0)"))
+            return
         if ty.kind in ("FLOAT", "DOUBLE"):
             suffix = "ss" if ty.kind == "FLOAT" else "sd"
             clear = "xorps" if ty.kind == "FLOAT" else "xorpd"
@@ -298,6 +369,10 @@ class CodeGenerator:
             source = 8 if from_ty.kind == "FLOAT" else 9
         if to_ty.kind in ("FLOAT", "DOUBLE"):
             target = 8 if to_ty.kind == "FLOAT" else 9
+        if from_ty.kind == "LDOUBLE":
+            source = 10
+        if to_ty.kind == "LDOUBLE":
+            target = 10
         instruction = CAST_TABLE[source][target]
         if instruction is not None:
             self.assembly.extend("  " + part for part in instruction.split("; "))
@@ -326,6 +401,13 @@ class CodeGenerator:
                                   "  mov $0, %al", "  rep stosb"))
             return
         if node.kind == "NUM":
+            if node.ty.kind == "LDOUBLE":
+                data = long_double_bytes(node.fvalue)
+                lo, hi = int.from_bytes(data[:8], "little"), int.from_bytes(data[8:], "little")
+                self.assembly.extend((f"  mov ${lo}, %rax  # long double",
+                                      "  mov %rax, -16(%rsp)", f"  mov ${hi}, %rax",
+                                      "  mov %rax, -8(%rsp)", "  fldt -16(%rsp)"))
+                return
             if node.ty.kind in ("FLOAT", "DOUBLE"):
                 format_code = "f" if node.ty.kind == "FLOAT" else "d"
                 try:
@@ -341,6 +423,9 @@ class CodeGenerator:
             return
         if node.kind == "NEG":
             self.gen_expr(node.lhs)
+            if node.ty.kind == "LDOUBLE":
+                self.assembly.append("  fchs")
+                return
             if node.ty.kind in ("FLOAT", "DOUBLE"):
                 bit = 31 if node.ty.kind == "FLOAT" else 63
                 instruction = "xorps" if node.ty.kind == "FLOAT" else "xorpd"
@@ -421,6 +506,8 @@ class CodeGenerator:
                     if fp < FP_MAX:
                         self.popf(fp)
                         fp += 1
+                elif ty.kind == "LDOUBLE":
+                    continue
                 else:
                     if gp < GP_MAX:
                         self.pop(ARGREG[gp])
@@ -488,6 +575,19 @@ class CodeGenerator:
                                   f"{destination}:", f"  mov ${0 if is_and else 1}, %rax",
                                   f".L.end.{label}:"))
             return
+
+        if node.lhs.ty.kind == "LDOUBLE":
+            self.gen_expr(node.lhs)
+            self.gen_expr(node.rhs)
+            if node.kind in ("+", "-", "*", "/"):
+                instruction = {"+": "faddp", "-": "fsubrp", "*": "fmulp", "/": "fdivrp"}[node.kind]
+                self.assembly.append("  " + instruction)
+                return
+            if node.kind in ("==", "!=", "<", "<="):
+                instruction = {"==": "sete", "!=": "setne", "<": "seta", "<=": "setae"}[node.kind]
+                self.assembly.extend(("  fcomip", "  fstp %st(0)", f"  {instruction} %al", "  movzb %al, %rax"))
+                return
+            raise CompileError(node.tok, "invalid expression")
 
         # Save the right result, compute the left, then restore the right.
         if node.lhs.ty.kind in ("FLOAT", "DOUBLE"):
@@ -698,6 +798,8 @@ class CodeGenerator:
                 elif ty.kind in ("FLOAT", "DOUBLE"):
                     on_stack = fp >= FP_MAX
                     fp += 1
+                elif ty.kind == "LDOUBLE":
+                    on_stack = True
                 else:
                     on_stack = gp >= GP_MAX
                     gp += 1

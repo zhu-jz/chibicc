@@ -1,30 +1,35 @@
-# Lesson 279: Link archive and shared-library files
+# Lesson 280: Add long double with x87 arithmetic
 
-Original chibicc commit: [`d56dd2f46e4049f017eae0dc99b2d16e78b88bee`](https://github.com/rui314/chibicc/commit/d56dd2f46e4049f017eae0dc99b2d16e78b88bee).
+Original chibicc commit: [`e0bf168041ef60687b5d4454a93fc78c4f3acc48`](https://github.com/rui314/chibicc/commit/e0bf168041ef60687b5d4454a93fc78c4f3acc48).
 Earlier explanations are available in Git history.
 
-The driver recognizes .a archives and .so shared libraries and forwards them to ld
-along with object files. Explicit -x language selection now takes precedence over
-all suffixes, including .o; -xnone restores suffix detection. Library order remains
-the input order, which matters when extracting members from static archives.
+long double is now a distinct 16-byte, 16-byte-aligned type. Its value uses the x87
+80-bit floating format in st(0), rather than the SSE xmm0 register used for float
+and double. Arithmetic, comparisons, negation and casts use x87 instructions.
+Arguments occupy 16 bytes on the stack; functions return their value in st(0).
 
 ```sh
-printf 'int answer(void){return 42;}\n' > /tmp/lesson-helper.c
-printf 'int answer(void);int main(void){return answer();}\n' > /tmp/lesson.c
+printf 'long double f(long double x){return x+2.0L;}int main(void){return f(40.0L);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -c -o /tmp/lesson-helper.o /tmp/lesson-helper.c
-ar rcs /tmp/lesson-helper.a /tmp/lesson-helper.o
-gcc -o /tmp/lesson /tmp/lesson.s /tmp/lesson-helper.a
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -o /tmp/lesson /tmp/lesson.c /tmp/lesson-helper.a
 ```
 
-Assembly calls the external answer function; the linker supplies its definition
-from the archive. Tests link and run both archive and shared-library inputs and
-check that -xc can interpret a text source named .o. GCC builds the separate helper
-fixture, while our Python compiler translates main. Python uses string file kinds
-instead of C's enum, preserving this commit's classification order.
+Assembly loads constants with fldt, places the argument on the stack with fstpt,
+adds using faddp, and converts the returned value using fistpl. The integer cast
+temporarily selects truncation in the x87 control word, then restores it. Tests
+cover arithmetic, conditions, literals beyond double precision and calls in both
+directions with GCC-compiled helpers, plus the original C fixtures.
+
+Python uses Fraction for exact decimal/hexadecimal L literals and rounds their
+ratios to an 80-bit significand/exponent with ties to even. The six padding bytes
+are zero. Ordinary floating literals and constant evaluation still use Python's
+double precision. C's initializer evaluator also returns double; this commit does
+not add long-double global initialization, so Python reports unsupported size.
+The original predefined __SIZEOF_LONG_DOUBLE__ still says 8 despite sizeof being
+16. Historical narrow-integer cast instructions and x87 expression-stack limits
+are preserved; this step does not introduce later corrections.
 
 ## Tests and attribution
 

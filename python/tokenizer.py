@@ -11,7 +11,8 @@ from unicode import is_ident1, is_ident2
 
 from common import CompileError, Token, File, format_diagnostic, to_int32
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong, ty_ushort
-from type import ty_float, ty_double
+from type import ty_float, ty_double, ty_ldouble
+from fractions import Fraction
 
 
 def read_file(path):
@@ -309,6 +310,15 @@ def read_number(source, start):
         ty = ty_float
         position += 1
     elif position < len(source) and source[position] in "lL":
+        ty = ty_ldouble
+        if hexadecimal:
+            mantissa, _, exponent = spelling[2:].lower().partition("p")
+            whole, _, fraction = mantissa.partition(".")
+            value = Fraction(int(whole + fraction, 16), 16 ** len(fraction))
+            power = int(exponent or "0")
+            value *= Fraction(2 ** power) if power >= 0 else Fraction(1, 2 ** -power)
+        else:
+            value = Fraction(spelling)
         position += 1
     if position != len(source):
         raise CompileError(start, "invalid numeric constant")

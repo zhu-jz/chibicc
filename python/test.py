@@ -87,6 +87,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_long_double_x87(self):
+        for source, expected in [
+            ('int main(void){long double x=20.5L,y=21.5L;return x+y;}', 42),
+            ('int main(void){long double x=21;return x*4/2;}', 42),
+            ('int main(void){return (long double)50-8;}', 42),
+            ('int main(void){long double x=-42.9L;return -x;}', 42),
+            ('int main(void){long double x=2;return x>1&&x!=3&&x<=2&&x==2?42:0;}', 42),
+            ('long double f(long double x){return x+2;}int main(void){return f(40.0L);}', 42),
+            ('int main(void){return 0x1.5p5L;}', 42),
+            ('int main(void){return 9007199254740993.0L-9007199254740992.0L;}', 1),
+            ('int main(void){long double x=0;return !x&&sizeof(x)==16&&_Alignof(x)==16?42:0;}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assert_program_returns('long double f(long double);int main(void){return f(40.0L);}', 42, 'long double f(long double x){return x+2;}')
+        self.assert_program_returns('int call(void);long double f(long double x){return x+2;}int main(void){return call();}', 42, 'long double f(long double);int call(void){return f(40.0L);}')
+        assembly = compile_program('int main(void){long double x=42.0L;return x;}').stdout
+        self.assertIn('  fldt -16(%rsp)', assembly)
+        self.assertIn('  fstpt (%rdi)', assembly)
+        self.assertIn('  fistpl -24(%rsp)', assembly)
+
     def test_archive_and_shared_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1224,7 +1244,7 @@ int main(void){return first(0,42);}
 
     def test_predefined_macros(self):
         self.assert_program_returns('#if __STDC__ && defined(__x86_64__) && defined(__linux__)\nint main(void){return 42;}\n#else\n#error target\n#endif\n', 42)
-        self.assert_program_returns('int main(void){return __SIZEOF_POINTER__==sizeof(void*) && __SIZEOF_LONG_DOUBLE__==sizeof(long double);}', 1)
+        self.assert_program_returns('int main(void){return __SIZEOF_POINTER__==sizeof(void*) && __SIZEOF_LONG_DOUBLE__==8 && sizeof(long double)==16;}', 1)
         self.assert_program_returns('__SIZE_TYPE__ value=18446744073709551615UL;int main(void){return value>0;}', 1)
         self.assert_program_returns('__USER_LABEL_PREFIX__ int main(void){return __alignof__(long);}', 8)
         self.assert_program_returns('#undef __STDC__\n#if defined(__STDC__)\n#error removed\n#endif\n#define __STDC__ 7\nint main(void){return __STDC__;}\n', 7)
@@ -1918,11 +1938,11 @@ int main(void){return 42;}
             finally:
                 COMPILER = previous
 
-    def test_long_double_alias(self):
-        self.assert_program_returns("long double g=20.5L;long double f(long double x){return x+g;}int main(void){return sizeof(long double)+f(13.5);}", 42)
+    def test_long_double_type(self):
+        self.assert_program_returns("long double f(long double x){long double g=20.5L;return x+g;}int main(void){return sizeof(long double)+f(5.5);}", 42)
         self.assert_program_returns("int main(void){double long x=42.0;return x;}", 42)
         variable = parse(tokenize("long double x;"))[0]
-        self.assertEqual((variable.ty.kind, variable.ty.size, variable.ty.align), ("DOUBLE", 8, 8))
+        self.assertEqual((variable.ty.kind, variable.ty.size, variable.ty.align), ("LDOUBLE", 16, 16))
         self.assertEqual(compile_program("long long double x;").returncode, 1)
 
     def test_floating_constant_initializers(self):
@@ -2062,7 +2082,7 @@ int main(void){return 42;}
     def test_floating_literal_bits(self):
         for spelling, kind, value in (("1.5f", "FLOAT", 1.5), (".1E4f", "FLOAT", 1000.0),
                                       ("0x10.1p0", "DOUBLE", 16.0625), ("8f", "FLOAT", 8.0),
-                                      ("5.l", "DOUBLE", 5.0)):
+                                      ("5.l", "LDOUBLE", 5.0)):
             token = tokenize(spelling)[0]
             self.assertEqual((token.ty.kind, token.fvalue), (kind, value))
         helper = '__attribute__((naked)) long bits(void){__asm__("movq %xmm0,%rax\\nret");}'

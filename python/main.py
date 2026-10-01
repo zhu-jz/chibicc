@@ -1,6 +1,6 @@
-"""Lesson 279: Link archive and shared-library files.
+"""Lesson 280: Add long double with x87 arithmetic.
 
-Based on chibicc commit d56dd2f46e4049f017eae0dc99b2d16e78b88bee.
+Based on chibicc commit e0bf168041ef60687b5d4454a93fc78c4f3acc48.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

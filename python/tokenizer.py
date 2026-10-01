@@ -222,6 +222,13 @@ def read_punct(source, position):
 def tokenize(source):
     tokens = []
     position = 0
+    at_bol = True
+
+    def append_token(token):
+        nonlocal at_bol
+        token.at_bol = at_bol
+        at_bol = False
+        tokens.append(token)
 
     while position < len(source):
         character = source[position]
@@ -238,23 +245,28 @@ def tokenize(source):
             position = end + 2
             continue
 
+        if character == "\n":
+            position += 1
+            at_bol = True
+            continue
+
         if character.isspace():
             position += 1
             continue
 
         if "0" <= character <= "9" or (character == "." and position + 1 < len(source) and "0" <= source[position + 1] <= "9"):
             token, position = read_number(source, position)
-            tokens.append(token)
+            append_token(token)
             continue
 
         if character == '"':
             token, position = read_string_literal(source, position)
-            tokens.append(token)
+            append_token(token)
             continue
 
         if character == "'":
             token, position = read_char_literal(source, position)
-            tokens.append(token)
+            append_token(token)
             continue
 
         if is_ident1(character):
@@ -262,18 +274,18 @@ def tokenize(source):
             position += 1
             while position < len(source) and is_ident2(source[position]):
                 position += 1
-            tokens.append(Token("IDENT", source[start:position], start))
+            append_token(Token("IDENT", source[start:position], start))
             continue
 
         operator = read_punct(source, position)
         if operator is not None:
-            tokens.append(Token("PUNCT", operator, position))
+            append_token(Token("PUNCT", operator, position))
             position += len(operator)
             continue
 
         raise CompileError(position, "invalid token")
 
-    tokens.append(Token("EOF", "", position))
+    append_token(Token("EOF", "", position))
     add_line_numbers(source, tokens)
     return tokens
 

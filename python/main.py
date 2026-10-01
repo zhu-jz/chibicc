@@ -1,6 +1,6 @@
-"""Lesson 158: Introduce the preprocessing stage.
+"""Lesson 159: Null preprocessing directives.
 
-Based on chibicc commit 1e1ea39dadd0035443f1d15c651deaf979341879.
+Based on chibicc commit 146c7b3dd47bb65da2da86cce7f4d75d8efa157d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

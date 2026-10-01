@@ -72,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_null_preprocessor_directives(self):
+        self.assert_program_returns("#\n /* comment */ #\nint main(void){return 42;}\n#\n", 42)
+        tokens = tokenize_raw(" /*comment*/ #\n int x; #\n")
+        self.assertEqual([token.at_bol for token in tokens], [True, True, False, False, False, True])
+        processed = preprocess(tokens)
+        self.assertEqual([token.text for token in processed], ["int", "x", ";", "#", ""])
+        self.assertFalse(processed[3].at_bol)
+        self.assertFalse(tokenize_raw("int x; /*\n*/ #\n")[3].at_bol)
+        result = compile_program("# junk\nint main(void){return 0;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid preprocessor directive", result.stderr)
+        self.assertIn("  mov $42, %rax\n", compile_program("#\nint main(void){return 42;}").stdout)
+
     def test_initial_preprocessing_stage(self):
         tokens = tokenize_raw("int ifx=42;return ifx;")
         self.assertEqual([token.kind for token in tokens[:2]], ["IDENT", "IDENT"])
@@ -1869,10 +1882,13 @@ class ExpressionCompilerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             for source in sorted(fixtures.glob("*.c")):
                 with self.subTest(source=source.name):
-                    preprocessed = subprocess.run(
-                        ["gcc", "-E", "-P", "-C", str(source)],
-                        capture_output=True, text=True, check=True)
-                    compiled = compile_program(preprocessed.stdout)
+                    if source.name == "macro.c":
+                        compiled = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+                    else:
+                        preprocessed = subprocess.run(
+                            ["gcc", "-E", "-P", "-C", str(source)],
+                            capture_output=True, text=True, check=True)
+                        compiled = compile_program(preprocessed.stdout)
                     self.assertEqual(compiled.returncode, 0, compiled.stderr)
                     assembly = Path(directory) / (source.stem + ".s")
                     executable = Path(directory) / source.stem

@@ -1,34 +1,39 @@
-# Lesson 158: Introduce the preprocessing stage
+# Lesson 159: Null preprocessing directives
 
-Original chibicc commit: [`1e1ea39dadd0035443f1d15c651deaf979341879`](https://github.com/rui314/chibicc/commit/1e1ea39dadd0035443f1d15c651deaf979341879).
+Original chibicc commit: [`146c7b3dd47bb65da2da86cce7f4d75d8efa157d`](https://github.com/rui314/chibicc/commit/146c7b3dd47bb65da2da86cce7f4d75d8efa157d).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Raw tokenization now leaves keyword spellings as IDENT tokens. The new preprocess
-entry point converts those spellings to KEYWORD and returns the same token list.
-cc1 runs this stage between tokenization and parsing. No directives or macros
-are added in this commit; the compiler's accepted programs and assembly stay the same.
+Tokens now record at_bol, meaning they are the first non-whitespace token seen on
+a line. Preprocessing recognizes # only with that flag. A # followed by the next
+line's token is the legal null directive and is removed; other directive text
+gets an invalid-preprocessor-directive error at the next token.
 
-Python moves the existing keyword loop into a named tokenizer helper and adds a
-small preprocess.py module. The packaging source list includes that new module.
-Tests that inspect parser-ready tokens use the complete pipeline, while the new
-stage test checks raw identifiers, conversion, preserved token identities and
-numeric values. This corresponds to the original linked-list pass.
+Python keeps the original token objects and rewrites their containing list.
+Metadata is excluded from token equality, like the existing diagnostic line
+number. The scanner matches the original handling of comments: a whole block
+comment is skipped without processing its internal newlines for this new flag.
+File input is already normalized to end with a newline.
+
+The new original macro.c fixture is compiled directly by our compiler. Other
+fixtures still use GCC preprocessing as the original build requires at this step.
+This ensures null directives are actually tested by our preprocessing stage.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson158.c
-python3 python/main.py -S -o /tmp/lesson158.s /tmp/lesson158.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson158 /tmp/lesson158.s
-/tmp/lesson158
+printf '#\n/* comment */ #\nint main(void){return 42;}\n' > /tmp/lesson159.c
+python3 python/main.py -S -o /tmp/lesson159.s /tmp/lesson159.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson159 /tmp/lesson159.s
+/tmp/lesson159
 echo $?
 ```
 
-int and return become keywords before parsing. The generated mov $42, %rax and
-main epilogue give shell exit status 42. Tests cover the stage boundary, existing
-token snapshots, emitted assembly, packaged execution, and the original C fixtures.
+The two null directives disappear before parsing. Assembly still moves 42 into
+rax and returns through main's epilogue, giving shell exit status 42. Tests cover
+line metadata, whitespace/comments, non-directive # tokens, invalid directives,
+emitted assembly, execution, and the directly compiled original macro fixture.
 
 ## Tests and attribution
 

@@ -27,6 +27,7 @@ class Token:
     str: bytes = b""  # String bytes, including the terminating zero.
     line_no: int = field(default=0, compare=False)
     fvalue: float = 0.0
+    at_bol: bool = field(default=False, compare=False)
 
 
 class CompileError(Exception):

@@ -1,16 +1,16 @@
-# Lesson 226: Add u-prefixed character literals
+# Lesson 227: Add U-prefixed character literals
 
-Original chibicc commit: [`454618cd15c2c87d9f5a6a6727e1b09a8e22a799`](https://github.com/rui314/chibicc/commit/454618cd15c2c87d9f5a6a6727e1b09a8e22a799).
+Original chibicc commit: [`2dac3afece31c27bf773efbc1f30c6a67088d3b6`](https://github.com/rui314/chibicc/commit/2dac3afece31c27bf773efbc1f30c6a67088d3b6).
 Earlier explanations are available in Git history.
 
-u-prefixed character literals now carry an unsigned-short type and the low
-sixteen bits of the decoded code point. sizeof(u'a') is 2. The full source
-spelling remains one token, so macro stringizing keeps the prefix. Ordinary
-and L-prefixed literals retain their respective signed-byte and int behavior.
+U-prefixed character literals now use unsigned int, preserving the decoded
+32-bit code-point bits. Unlike the preceding u prefix, supplementary characters
+keep their full value. sizeof(U'a') is 4, and shifts use unsigned semantics.
+The source prefix remains part of the token for macro stringizing.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return u'β'-904;}
+int main(void){return U'🍣'-127801;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,12 +18,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The unsigned-short value 946 is promoted for subtraction, leaving 42 in rax.
-Tests check ASCII, Greek, Japanese, hexadecimal limits, type size, unsigned
-shift, source stringizing and original fixtures. This historical commit calls
-the syntax UTF-16, but truncates a supplementary code point rather than emitting
-a surrogate pair: u'🍣' is 62307. Python applies the same explicit 0xffff mask;
-it does not silently advance to later wide-string or surrogate handling.
+The assembly loads code point 127843 and subtracts 127801. Tests verify ASCII,
+Greek, Japanese, emoji, unsigned high-bit shifts, size, token type, stringizing
+and original fixtures. Python reuses its code-point reader with ty_uint;
+wide L literals remain signed int and u literals remain unsigned short.
+This is character-literal support only; prefixed string literals await their
+own original commits.
 
 ## Tests and attribution
 

@@ -374,6 +374,11 @@ def tokenize(source):
             append_token(token)
             continue
 
+        if source.startswith("U'", position):
+            token, position = read_char_literal(source, position, position + 1, ty_uint)
+            append_token(token)
+            continue
+
         if is_ident1(character):
             start = position
             position += 1

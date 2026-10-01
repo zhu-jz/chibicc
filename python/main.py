@@ -1,6 +1,6 @@
-"""Lesson 226: Add u-prefixed character literals.
+"""Lesson 227: Add U-prefixed character literals.
 
-Based on chibicc commit 454618cd15c2c87d9f5a6a6727e1b09a8e22a799.
+Based on chibicc commit 2dac3afece31c27bf773efbc1f30c6a67088d3b6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

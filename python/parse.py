@@ -767,7 +767,7 @@ class Parser:
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
                                               "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
-                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof", "inline") or self.find_typedef(position) is not None
+                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "_Thread_local", "__thread") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -793,7 +793,7 @@ class Parser:
                               "__restrict", "__restrict__", "_Noreturn"):
                 position += 1
                 continue
-            if token.text in ("typedef", "static", "extern", "inline"):
+            if token.text in ("typedef", "static", "extern", "inline", "_Thread_local", "__thread"):
                 if attr is None:
                     raise CompileError(token, "storage class specifier is not allowed in this context")
                 if token.text == "typedef":
@@ -802,10 +802,12 @@ class Parser:
                     attr.is_static = True
                 elif token.text == "extern":
                     attr.is_extern = True
-                else:
+                elif token.text == "inline":
                     attr.is_inline = True
-                if attr.is_typedef and attr.is_static + attr.is_extern + attr.is_inline > 1:
-                    raise CompileError(token, "typedef may not be used together with static, extern or inline")
+                else:
+                    attr.is_tls = True
+                if attr.is_typedef and attr.is_static + attr.is_extern + attr.is_inline + attr.is_tls > 1:
+                    raise CompileError(token, "typedef may not be used together with static, extern, inline, __thread or _Thread_local")
                 position += 1
                 continue
             if token.text == "_Alignas":
@@ -1578,11 +1580,12 @@ class Parser:
             var = self.new_gvar(ty.name.text, ty)
             var.is_definition = not attr.is_extern
             var.is_static = attr.is_static
+            var.is_tls = attr.is_tls
             if attr.align:
                 var.align = attr.align
             if self.tokens[position].text == "=":
                 position = self.gvar_initializer(position + 1, var)
-            elif not attr.is_extern:
+            elif not attr.is_extern and not attr.is_tls:
                 var.is_tentative = True
         return position + 1
 

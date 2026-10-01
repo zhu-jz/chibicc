@@ -1,6 +1,6 @@
-"""Lesson 266: Choose common or BSS global definitions.
+"""Lesson 267: Address variables relative to the current thread.
 
-Based on chibicc commit 6d344ed9459bd0328de53a58505a397d92cb0c8a.
+Based on chibicc commit b3772845bd07fb695ca6b6e67ad7640776ae0f6c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

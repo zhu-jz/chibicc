@@ -125,6 +125,7 @@ class Obj:
     is_definition: bool = False
     is_static: bool = False
     is_tentative: bool = False
+    is_tls: bool = False
     params: list["Obj"] = field(default_factory=list)
     is_inline: bool = False
     is_live: bool = field(default=False, compare=False)
@@ -155,6 +156,7 @@ class VarAttr:
     is_static: bool = False
     is_extern: bool = False
     is_inline: bool = False
+    is_tls: bool = False
     align: int = 0
 
 

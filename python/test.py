@@ -81,6 +81,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_thread_local_storage(self):
+        for keyword in ('_Thread_local', '__thread'):
+            source = keyword + ' int x=42;' + keyword + ' int y;int main(void){return x+y;}'
+            self.assert_program_returns(source, 42)
+            assembly = compile_program(source).stdout
+            self.assertIn('  mov %fs:0, %rax\n  add $x@tpoff, %rax\n', assembly)
+            self.assertIn('.section .tdata,"awT",@progbits', assembly)
+            self.assertIn('.section .tbss,"awT",@nobits', assembly)
+            self.assertNotIn('  .comm x,', assembly)
+            self.assertNotIn('  .comm y,', assembly)
+        source = '#include <pthread.h>\n__thread int x=42;void *worker(void *unused){x=99;return 0;}int main(void){pthread_t thread;if(pthread_create(&thread,0,worker,0))return 1;if(pthread_join(thread,0))return 2;return x;}'
+        self.assert_program_returns(source, 42)
+        self.assertEqual(tokenize('__STDC_NO_THREADS__')[0].kind, 'IDENT')
+
     def test_common_symbol_flags(self):
         for flags, common in [([], True), (['-fcommon'], True), (['-fno-common'], False), (['-fno-common','-fcommon'], True), (['-fcommon','-fno-common'], False)]:
             result = subprocess.run(compiler_command(*flags, '-'), input='int x;int main(void){return x;}', capture_output=True, text=True)
@@ -2814,7 +2828,7 @@ int main(void){return 42;}
         self.assertTrue(prototype.is_static)
         self.assertFalse(prototype.is_definition)
         for source, message in [
-            ("typedef static extern int T;", "typedef may not be used together with static, extern or inline"),
+            ("typedef static extern int T;", "typedef may not be used together with static, extern, inline, __thread or _Thread_local"),
             ("int f(static int x);", "storage class specifier is not allowed"),
         ]:
             result = compile_program(source)
@@ -3311,7 +3325,7 @@ int main(void){return 42;}
             result = subprocess.run(compiler_command("-o", str(assembly), str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            subprocess.run(["gcc", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
+            subprocess.run(["gcc", "-pthread", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)],
                            capture_output=True, text=True, check=True)
             lines = subprocess.run(["readelf", "--debug-dump=decodedline", str(executable)],
                                    capture_output=True, text=True, check=True)
@@ -3344,7 +3358,7 @@ int main(void){return 42;}
                     executable = Path(directory) / source.stem
                     assembly.write_text(compiled.stdout)
                     linked = subprocess.run(
-                        ["gcc", "-Wl,-z,noexecstack", "-o", str(executable),
+                        ["gcc", "-pthread", "-Wl,-z,noexecstack", "-o", str(executable),
                          str(assembly), "-xc", str(fixtures / "common")],
                         capture_output=True, text=True)
                     self.assertEqual(linked.returncode, 0, linked.stderr)
@@ -3823,7 +3837,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
                 helper.write_text(helper_c)
                 inputs.append(str(helper))
             linked = subprocess.run(
-                ["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), *inputs],
+                ["gcc", "-pthread", "-static", "-Wl,-z,noexecstack", "-o", str(executable), *inputs],
                 capture_output=True, text=True,
             )
             self.assertEqual(linked.returncode, 0, linked.stderr)

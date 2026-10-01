@@ -1,28 +1,31 @@
-# Lesson 266: Choose common or BSS global definitions
+# Lesson 267: Address variables relative to the current thread
 
-Original chibicc commit: [`6d344ed9459bd0328de53a58505a397d92cb0c8a`](https://github.com/rui314/chibicc/commit/6d344ed9459bd0328de53a58505a397d92cb0c8a).
+Original chibicc commit: [`b3772845bd07fb695ca6b6e67ad7640776ae0f6c`](https://github.com/rui314/chibicc/commit/b3772845bd07fb695ca6b6e67ad7640776ae0f6c).
 Earlier explanations are available in Git history.
 
-The driver now accepts -fcommon and -fno-common, with the last option winning.
-The default remains common-symbol emission. With -fno-common, a tentative global
-instead gets an ordinary label and zero-filled .bss storage, so duplicate global
-definitions across translation units produce a linker error.
+File-scope _Thread_local and GNU __thread declarations now mark TLS objects.
+Their addresses use the Linux thread pointer in fs:0 plus a linker-resolved
+tpoff offset. Initialized objects go in .tdata and zero-filled objects in .tbss;
+TLS definitions bypass tentative/common-symbol treatment. __STDC_NO_THREADS__
+is removed from predefined macros, matching the original commit.
 
 ```sh
-printf 'int x;int main(void){x=42;return x;}\n' > /tmp/lesson.c
-python3 python/main.py -fno-common -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s
+printf '_Thread_local int x=42;int main(void){return x;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+gcc -pthread -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly emits x in .bss, stores 42 through its RIP-relative address, then loads
-and returns it. Tests inspect both assembly forms and option ordering, link
-repeated globals successfully with -fcommon, and verify the real linker rejects
-them with -fno-common. Original fixtures continue to use the common default.
-Python passes the option explicitly into CodeGenerator rather than exposing
-C's global opt_fcommon. Tentative-object scanning is unchanged by the flags,
-including its previously explained historical duplicate-removal limitation.
+Assembly reads fs:0 into rax, adds x@tpoff and loads x from that address. Each
+thread has its own storage initialized from the TLS image. Tests inspect both
+sections and address instructions, run both keywords, and create/join a real
+pthread that changes its copy while main's copy remains 42. The original tls.c
+also checks a shared ordinary global. Runtime test linking now uses -pthread.
+Python carries an is_tls flag on objects and declaration attributes instead of C
+struct fields. This step implements the original local-exec TLS model for Linux
+executables. Block-scope static TLS handling and dynamic-library TLS models are
+not extended beyond this original patch.
 
 ## Tests and attribution
 

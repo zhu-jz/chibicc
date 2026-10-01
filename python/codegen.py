@@ -86,6 +86,9 @@ class CodeGenerator:
         if node.kind == "VAR":
             if node.var.is_local:
                 self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            elif node.var.is_tls:
+                self.assembly.extend(("  mov %fs:0, %rax",
+                                      f"  add ${node.var.name}@tpoff, %rax"))
             elif node.ty.kind == "FUNC" and not node.var.is_definition:
                 self.assembly.append(f"  mov {node.var.name}@GOTPCREL(%rip), %rax")
             else:
@@ -627,7 +630,10 @@ class CodeGenerator:
         for var in program:
             if not var.is_function and var.is_definition:
                 alignment = max(16, var.align) if var.ty.kind == "ARRAY" and var.ty.size >= 16 else var.align
-                section = ".data" if var.init_data is not None else ".bss"
+                if var.is_tls:
+                    section = '.section .tdata,"awT",@progbits' if var.init_data is not None else '.section .tbss,"awT",@nobits'
+                else:
+                    section = ".data" if var.init_data is not None else ".bss"
                 visibility = ".local" if var.is_static else ".globl"
                 self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}"])
                 if self.fcommon and var.is_tentative:

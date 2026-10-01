@@ -1,28 +1,30 @@
-# Lesson 245: Align diagnostic carets with displayed Unicode text
+# Lesson 246: Track logical source lines and filenames
 
-Original chibicc commit: [`37998be0c183508e54f10f57d63d87e6e7eb0607`](https://github.com/rui314/chibicc/commit/37998be0c183508e54f10f57d63d87e6e7eb0607).
+Original chibicc commit: [`c61c0d00252a8704ff2731f6a57bad3657b84170`](https://github.com/rui314/chibicc/commit/c61c0d00252a8704ff2731f6a57bad3657b84170).
 Earlier explanations are available in Git history.
 
-Diagnostics now measure the displayed columns before an error. The original
-Unicode tables assign zero columns to combining and control characters, two
-to selected East Asian and emoji ranges, and one to other characters. Counting
-UTF-8 bytes or Python characters alone can put a caret under the wrong column.
+`#line` now adjusts subsequent token line numbers and optionally changes the name
+used by `__FILE__`. Its arguments undergo macro expansion first. Tokens snapshot
+the current file delta while preprocessing so later markers cannot change the
+line numbers of earlier tokens. Physical file paths still control include lookup.
 
 ```sh
-printf 'int main(void){int 漢字=42;return 漢字;}\n' > /tmp/lesson.c
+printf '#line 41 "virtual.c"\nint main(void){return __LINE__;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly stores and reloads 42 exactly as for an ASCII local name; local names
-do not affect machine instructions. The new tests also provoke an undefined
-identifier after wide and combining characters and check the caret column.
-Python sums widths over Unicode characters; C decodes UTF-8 bytes while scanning.
-We preserve the original fixed range tables rather than using the host Python
-Unicode database. Their control-character width, including tabs, is zero;
-terminal tab expansion is not modeled by this original commit.
+The macro becomes the integer 42; assembly loads that constant and returns it.
+Debug `.loc` line numbers use the recorded delta. This original version applies
+the marker number to the directive's line, so the following line is one larger;
+we intentionally retain that historical off-by-one behavior. Diagnostics still
+show the physical filename at this step, even when `__FILE__` uses a logical one.
+Tests cover markers with and without filenames, macro arguments, token snapshots,
+diagnostics, invalid marker types and the original new line.c fixture.
+Python gives raw source tokens a File object too, enabling the same tracking in
+parser tests; C always tokenizes through a File. Filename bytes decode as UTF-8.
 
 ## Tests and attribution
 

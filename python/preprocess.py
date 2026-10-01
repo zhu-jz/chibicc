@@ -455,9 +455,15 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
                 continue
             if tokens[position].text == "error":
                 raise CompileError(tokens[position], "error")
+            if tokens[position].text == "line":
+                position = read_line_marker(tokens, position + 1, files, macros, include_paths)
+                continue
             if tokens[position].at_bol:
                 continue
             raise CompileError(tokens[position], "invalid preprocessor directive")
+        if token.file is not None:
+            token.line_delta = token.file.line_delta
+            token.filename = token.file.display_name
         result.append(token)
         position += 1
     result.append(tokens[position])
@@ -465,16 +471,31 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
     return tokens
 
 
+def read_line_marker(tokens, position, files, macros, include_paths):
+    start = tokens[position]
+    line, rest = copy_line(tokens, position)
+    preprocess(line, files, include_paths, macros)
+    if line[0].kind != "NUM" or line[0].ty.kind != "INT":
+        raise CompileError(line[0], "invalid line marker")
+    start.file.line_delta = line[0].value - start.line_no
+    if line[1].kind == "EOF":
+        return rest
+    if line[1].kind != "STR":
+        raise CompileError(line[1], "filename expected")
+    start.file.display_name = line[1].str.split(b"\0", 1)[0].decode('utf-8', errors='replace')
+    return rest
+
+
 def file_macro(template):
     while template.origin is not None:
         template = template.origin
-    return new_str_token(template.file.name if template.file else "-", template)
+    return new_str_token(template.file.display_name if template.file else "-", template)
 
 
 def line_macro(template):
     while template.origin is not None:
         template = template.origin
-    return new_num_token(template.line_no, template)
+    return new_num_token(template.line_no + (template.file.line_delta if template.file else 0), template)
 
 
 def undef_macro(macros, name):
@@ -605,4 +626,6 @@ def preprocess(tokens, files=None, include_paths=(), macros=None):
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     convert_pp_tokens(tokens)
     join_adjacent_string_literals(tokens)
+    for token in tokens:
+        token.line_no += token.line_delta
     return tokens

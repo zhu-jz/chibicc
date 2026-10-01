@@ -23,6 +23,12 @@ class File:
     name: str
     file_no: int
     contents: str
+    display_name: Optional[str] = None
+    line_delta: int = 0
+
+    def __post_init__(self):
+        if self.display_name is None:
+            self.display_name = self.name
 
 
 def format_diagnostic(file, position, message, line_no=None):
@@ -52,6 +58,8 @@ class Token:
     file: Optional[File] = field(default=None, compare=False)
     hideset: frozenset[str] = field(default_factory=frozenset, compare=False)
     origin: Optional["Token"] = field(default=None, compare=False, repr=False)
+    filename: Optional["str"] = field(default=None, compare=False)
+    line_delta: int = field(default=0, compare=False)
 
 
 class CompileError(Exception):

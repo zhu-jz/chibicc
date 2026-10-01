@@ -80,6 +80,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_line_directives(self):
+        self.assert_program_returns('#line 41 "virtual.c"\nint main(void){return __LINE__;}', 42)
+        tokens = tokenize('#line 40 "first.c"\na\n#line 10\nb\n')
+        self.assertEqual([(t.text, t.line_no, t.filename) for t in tokens[:-1]], [('a', 41, 'first.c'), ('b', 11, 'first.c')])
+        source = '#define MARK 41\n#define NAME "virtual.c"\n#line MARK NAME\nint main(void){return __LINE__+(__FILE__[0]!=118);}'
+        self.assert_program_returns(source, 42)
+        for marker, message in [('1L', 'invalid line marker'), ('1.0', 'invalid line marker'), ('abc', 'invalid line marker'), ('10 abc', 'filename expected')]:
+            result = compile_program('#line ' + marker + '\nint main(void){return 0;}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+        result = compile_program('#line 40 "virtual.c"\nint main(void){return missing;}')
+        self.assertIn('-:41:', result.stderr)
+
     def test_unicode_diagnostic_columns(self):
         for character, width in [('a', 1), ('漢', 2), ('🍣', 2), ('\u0300', 0), ('\t', 0), ('\u303f', 1)]:
             self.assertEqual(char_width(character), width)

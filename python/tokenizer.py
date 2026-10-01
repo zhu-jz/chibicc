@@ -96,6 +96,7 @@ def tokenize_file(path, files):
         raise
     for token in tokens:
         token.file = file
+        token.filename = file.display_name
     return tokens
 
 
@@ -336,6 +337,7 @@ def read_punct(source, position):
 
 def tokenize(source):
     tokens = []
+    file = File("-", 1, source)
     position = 0
     at_bol = True
     has_space = False
@@ -343,6 +345,8 @@ def tokenize(source):
     def append_token(token):
         nonlocal at_bol, has_space
         token.at_bol = at_bol
+        token.file = file
+        token.filename = file.display_name
         token.has_space = has_space
         at_bol = has_space = False
         tokens.append(token)

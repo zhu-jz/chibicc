@@ -1,6 +1,6 @@
-"""Lesson 245: Align diagnostic carets with displayed Unicode text.
+"""Lesson 246: Track logical source lines and filenames.
 
-Based on chibicc commit 37998be0c183508e54f10f57d63d87e6e7eb0607.
+Based on chibicc commit c61c0d00252a8704ff2731f6a57bad3657b84170.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

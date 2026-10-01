@@ -1,6 +1,6 @@
-"""Lesson 238: Skip a leading UTF-8 byte-order marker.
+"""Lesson 239: Select array elements in initializers.
 
-Based on chibicc commit 2b2fa25507cdc491d2b5dafb2c4b5e33158b996a.
+Based on chibicc commit c618c3b582de1d0b10b334a4f2ba6b85d5128940.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

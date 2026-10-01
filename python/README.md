@@ -1,27 +1,29 @@
-# Lesson 238: Skip a leading UTF-8 byte-order marker
+# Lesson 239: Select array elements in initializers
 
-Original chibicc commit: [`2b2fa25507cdc491d2b5dafb2c4b5e33158b996a`](https://github.com/rui314/chibicc/commit/2b2fa25507cdc491d2b5dafb2c4b5e33158b996a).
+Original chibicc commit: [`c618c3b582de1d0b10b334a4f2ba6b85d5128940`](https://github.com/rui314/chibicc/commit/c618c3b582de1d0b10b334a4f2ba6b85d5128940).
 Earlier explanations are available in Git history.
 
-File and stdin normalization now removes one leading UTF-8 BOM before newline
-canonicalization, continuation removal and universal-escape conversion. This
-also applies to included headers. UTF-8 byte order needs no marker, so the
-leading bytes contribute no token or diagnostic column.
+An array initializer can now move its cursor with [index]=value. Subsequent
+ordinary values continue after that element. Nested designators reach nested
+arrays; the brace-free continuation logic stops before an outer designator so
+its enclosing initializer can resume. Repeated writes replace the stored
+initializer expression, while untouched elements retain zero or an earlier value.
 
 ```sh
-printf '\357\273\277int main(void){return 42;}\r\n' > /tmp/lesson.c
+printf 'int main(void){int x[6]={[4]=42};return x[4]+x[0];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The generated assembly is identical to ordinary source: main loads 42 and
-returns. Tests check -E stdin output, a real executable, a BOM-marked header,
-normalized File contents, first-token position and original fixtures. Python
-recognizes the decoded U+FEFF character where C skips three UTF-8 bytes.
-Only the leading marker is removed; interior characters and raw tokenize
-calls retain their supplied text.
+The initializer tree stores 42 at element four. Local zeroing plus the ordinary
+indexed assignment produces the assembly; globals use the same tree serializer.
+Tests cover cursor movement, repeated writes, nested arrays, compound literals,
+zero filling, bounds/type errors and original fixtures. Python returns the
+index and next token as a tuple. It explicitly rejects negative indices instead
+of allowing C's out-of-bounds pointer access or Python's wraparound indexing.
+Inferred array bounds do not yet understand designators in this original step.
 
 ## Tests and attribution
 

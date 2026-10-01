@@ -80,6 +80,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_array_designated_initializers(self):
+        for source,expected in [
+            ('int main(void){int x[5]={1,[3]=20,21,[0]=2};return x[0]+x[3]+x[4];}',43),
+            ('int x[6]={[4]=42};int main(void){return x[0]+x[3]+x[4]+x[5];}',42),
+            ('int main(void){int x[2][3]={1,2,3,4,5,6,[0][1]=7,8,[1][0]=12};return x[0][0]+x[0][1]+x[0][2]+x[1][0]+x[1][1]+x[1][2];}',39),
+            ('int main(void){return ((int[10]){[3]=42})[3];}',42),
+        ]:
+            self.assert_program_returns(source,expected)
+        for initializer,message in [('[3]=1','array designator index exceeds array bounds'),('[-1]=1','array designator index exceeds array bounds'),('[0][0]=1','array index in non-array initializer')]:
+            result=compile_program('int main(void){int x[3]={' + initializer + '};return 0;}')
+            self.assertEqual(result.returncode,1)
+            self.assertIn(message,result.stderr)
+
     def test_utf8_bom(self):
         result = subprocess.run([sys.executable,str(COMPILER),'-E','-o-','-'],input='\ufeffxyz\n',capture_output=True,text=True)
         self.assertEqual((result.returncode,result.stdout),(0,'xyz\n'))

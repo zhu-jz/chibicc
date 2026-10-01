@@ -1081,6 +1081,26 @@ class Parser:
             init.children[index].expr = Node("NUM", value=value, tok=token)
         return position + 1
 
+    def array_designator(self, position, ty):
+        start = self.tokens[position]
+        index, position = self.const_expr(position + 1)
+        if index < 0 or index >= ty.array_len:
+            raise CompileError(start, "array designator index exceeds array bounds")
+        if self.tokens[position].text != "]":
+            raise CompileError(self.tokens[position], "expected ']'")
+        return index, position + 1
+
+    def designation(self, position, init):
+        if self.tokens[position].text == "[":
+            if init.ty.kind != "ARRAY":
+                raise CompileError(self.tokens[position], "array index in non-array initializer")
+            index, position = self.array_designator(position, init.ty)
+            position = self.designation(position, init.children[index])
+            return self.array_initializer_without_braces(position, init, index + 1)
+        if self.tokens[position].text != "=":
+            raise CompileError(self.tokens[position], "expected '='")
+        return self.initializer2(position + 1, init)
+
     def count_array_init_elements(self, position, ty):
         dummy = new_initializer(ty.base)
         count = 0
@@ -1102,12 +1122,17 @@ class Parser:
             complete = new_initializer(array_of(init.ty.base, count))
             init.__dict__.update(complete.__dict__)
         index = 0
+        first = True
         while not self.is_end(position):
-            if index:
+            if not first:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
-            if index < len(init.children):
+            first = False
+            if self.tokens[position].text == "[":
+                index, position = self.array_designator(position, init.ty)
+                position = self.designation(position, init.children[index])
+            elif index < len(init.children):
                 position = self.initializer2(position, init.children[index])
             else:
                 position = self.skip_excess_element(position)
@@ -1132,17 +1157,20 @@ class Parser:
             index += 1
         return self.consume_end(position)
 
-    def array_initializer_without_braces(self, position, init):
+    def array_initializer_without_braces(self, position, init, start_index=0):
         if init.is_flexible:
             count = self.count_array_init_elements(position, init.ty)
             init.__dict__.update(new_initializer(array_of(init.ty.base, count)).__dict__)
-        for index in range(init.ty.array_len):
+        for index in range(start_index, init.ty.array_len):
             if self.is_end(position):
                 break
+            start = position
             if index:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
                 position += 1
+            if self.tokens[position].text == "[":
+                return start
             position = self.initializer2(position, init.children[index])
         return position
 

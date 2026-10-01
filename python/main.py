@@ -1,6 +1,6 @@
-"""Lesson 195: Add bundled standard headers.
+"""Lesson 196: Add va_arg and register classification.
 
-Based on chibicc commit 7cbfd111d38b70110c9adcdfdae86d07995ae534.
+Based on chibicc commit 5322ea8495d70be81a6b80f7a88850b85bfba240.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

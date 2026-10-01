@@ -15,7 +15,7 @@ from constexpr import evaluate_constant, evaluate_initializer, evaluate_float
 import math
 import struct
 from type import ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
-from type import is_numeric
+from type import is_numeric, is_flonum
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
@@ -463,6 +463,20 @@ class Parser:
             operand, position = self.unary(position + 1)
             add_type(operand)
             return Node("NUM", value=operand.ty.align, tok=token, ty=ty_ulong), position
+
+        if token.text == "__builtin_reg_class":
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            ty, position = self.typename(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            if is_integer(ty) or ty.kind == "PTR":
+                value = 0
+            elif is_flonum(ty):
+                value = 1
+            else:
+                value = 2
+            return Node("NUM", value=value, tok=token), position + 1
 
         if token.kind == "IDENT":
             binding = self.find_var(token.text)

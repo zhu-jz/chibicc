@@ -1,36 +1,38 @@
-# Lesson 195: Add bundled standard headers
+# Lesson 196: Add va_arg and register classification
 
-Original chibicc commit: [`7cbfd111d38b70110c9adcdfdae86d07995ae534`](https://github.com/rui314/chibicc/commit/7cbfd111d38b70110c9adcdfdae86d07995ae534).
+Original chibicc commit: [`5322ea8495d70be81a6b80f7a88850b85bfba240`](https://github.com/rui314/chibicc/commit/5322ea8495d70be81a6b80f7a88850b85bfba240).
 Earlier explanations are available in Git history.
 
-The historical headers are copied unchanged into include/: float.h, stdalign.h,
-stdarg.h, stdbool.h, stddef.h and stdnoreturn.h. They provide floating-point
-limits, alignment aliases, the variadic-list layout, boolean aliases, basic
-typedefs and NULL, and the noreturn alias. Header guards avoid repeated definitions.
+stdarg.h now defines va_arg using a statement expression and the parser's
+`__builtin_reg_class(type)` operation. The builtin becomes a constant: 0 for
+integer or pointer types, 1 for floating types, and 2 for other types. It parses
+a type name and emits no runtime function call.
 
-The source compiler already searches python/include beside main.py. The Python
-packaging script installs identical header files in include/ beside its .pyz
-output, adapting the original stage-two include path to this distribution.
-Makefile dependencies rebuild the package when a header changes. The archive
-and its sibling include directory are distributed together.
-
-These are the early historical definitions: va_start copies the compiler's
-register-save descriptor, va_end expands to nothing, and va_arg is not supplied.
-Long-double limits follow this compiler's eight-byte representation. Hexadecimal
-floating literals without a decimal point retain the earlier tokenizer limitation.
+The header's general-purpose and floating readers return the next saved
+register slot and advance the corresponding offset by eight bytes. The macro
+casts that address to a pointer to the requested type and dereferences it.
+These definitions are copied unchanged. They preserve the historical compact
+floating save layout, perform no exhaustion checks, and leave the memory
+reader unimplemented with a division-by-zero placeholder. Stack or aggregate
+variadic arguments are therefore not supported at this step.
 
 ```sh
-printf '#include <stdbool.h>\nint main(void){bool ready=true;return ready+41;}\n' > /tmp/lesson.c
+cat > /tmp/lesson.c <<'C'
+#include <stdarg.h>
+int sum(int fixed,...){va_list ap;va_start(ap,fixed);
+int x=va_arg(ap,int);int y=va_arg(ap,int);return x+y;}
+int main(void){return sum(0,7,35);}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The bool alias becomes _Bool and true becomes 1. Assembly stores the boolean
-byte, loads it and adds 41 before returning in %rax. Tests exercise the aliases,
-typedefs, size/alignment definitions, floating maxima, va_start with a real
-variadic call, repeated inclusion, and packaged header contents and lookup.
+The callee saves argument registers, reads the slots for 7 and 35, adds them
+and returns the result in %rax. Tests check type classification, two integer
+arguments, interleaved floating/integer/pointer arguments, malformed syntax,
+existing header behavior and the original new variadic test program.
 
 ## Tests and attribution
 

@@ -77,6 +77,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_va_arg_and_register_class(self):
+        for typename, expected in (('int', 0), ('unsigned long', 0), ('char *', 0),
+                                   ('int (*)(int)', 0), ('float', 1), ('double', 1),
+                                   ('struct {int x;}', 2), ('void', 2)):
+            self.assert_program_returns('int main(void){return __builtin_reg_class(' + typename + ');}', expected)
+        self.assert_program_returns('''#include <stdarg.h>
+int sum(int fixed,...){va_list ap;va_start(ap,fixed);
+int first=va_arg(ap,int);int second=va_arg(ap,int);va_end(ap);return first+second;}
+int main(void){return sum(0,7,35);}
+''', 42)
+        self.assert_program_returns('''#include <stdarg.h>
+int mixed(int fixed,...){va_list ap;va_start(ap,fixed);
+double value=va_arg(ap,double);int number=va_arg(ap,int);char *text=va_arg(ap,char *);
+return value+number+text[0];}
+int main(void){return mixed(0,1.5,37,"\\4");}
+''', 42)
+        result = compile_program('int main(void){return __builtin_reg_class(int;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected ')'", result.stderr)
+
     def test_bundled_standard_headers(self):
         self.assert_program_returns('''#include <stdbool.h>
 #include <stddef.h>

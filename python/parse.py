@@ -13,13 +13,14 @@ from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarSco
 from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer
 from type import ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
+from type import is_numeric
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
 def new_add(lhs, rhs, token):
     add_type(lhs)
     add_type(rhs)
-    if is_integer(lhs.ty) and is_integer(rhs.ty):
+    if is_numeric(lhs.ty) and is_numeric(rhs.ty):
         return Node("+", lhs, rhs, tok=token)
     if lhs.ty.base is not None and rhs.ty.base is not None:
         raise CompileError(token, "invalid operands")
@@ -33,7 +34,7 @@ def new_add(lhs, rhs, token):
 def new_sub(lhs, rhs, token):
     add_type(lhs)
     add_type(rhs)
-    if is_integer(lhs.ty) and is_integer(rhs.ty):
+    if is_numeric(lhs.ty) and is_numeric(rhs.ty):
         return Node("-", lhs, rhs, tok=token)
     if lhs.ty.base is not None and is_integer(rhs.ty):
         rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token, ty=ty_long), tok=token)

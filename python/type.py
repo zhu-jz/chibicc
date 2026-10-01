@@ -31,6 +31,10 @@ def is_flonum(ty):
     return ty.kind in ("FLOAT", "DOUBLE")
 
 
+def is_numeric(ty):
+    return is_integer(ty) or is_flonum(ty)
+
+
 def copy_type(ty):
     return replace(ty)
 

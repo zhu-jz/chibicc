@@ -182,6 +182,12 @@ class CodeGenerator:
             return
         if node.kind == "NEG":
             self.gen_expr(node.lhs)
+            if node.ty.kind in ("FLOAT", "DOUBLE"):
+                bit = 31 if node.ty.kind == "FLOAT" else 63
+                instruction = "xorps" if node.ty.kind == "FLOAT" else "xorpd"
+                self.assembly.extend(("  mov $1, %rax", f"  shl ${bit}, %rax",
+                                      "  movq %rax, %xmm1", f"  {instruction} %xmm1, %xmm0"))
+                return
             self.assembly.append("  neg %rax")
             return
         if node.kind in ("VAR", "MEMBER"):
@@ -275,9 +281,13 @@ class CodeGenerator:
             self.pushf()
             self.gen_expr(node.lhs)
             self.popf("%xmm1")
+            suffix = "ss" if node.lhs.ty.kind == "FLOAT" else "sd"
+            if node.kind in ("+", "-", "*", "/"):
+                instruction = {"+": "add", "-": "sub", "*": "mul", "/": "div"}[node.kind]
+                self.assembly.append(f"  {instruction}{suffix} %xmm1, %xmm0")
+                return
             if node.kind not in ("==", "!=", "<", "<="):
                 raise CompileError(node.tok, "invalid expression")
-            suffix = "ss" if node.lhs.ty.kind == "FLOAT" else "sd"
             self.assembly.append(f"  ucomi{suffix} %xmm0, %xmm1")
             if node.kind == "==":
                 self.assembly.extend(("  sete %al", "  setnp %dl", "  and %dl, %al"))
@@ -305,7 +315,7 @@ class CodeGenerator:
             self.assembly.append(f"  imul {di}, {ax}")
         elif node.kind in ("&", "|", "^"):
             instruction = {"&": "and", "|": "or", "^": "xor"}[node.kind]
-            self.assembly.append(f"  {instruction} %rdi, %rax")
+            self.assembly.append(f"  {instruction} {di}, {ax}")
         elif node.kind in ("<<", ">>"):
             self.assembly.append("  mov %rdi, %rcx")
             instruction = "shl" if node.kind == "<<" else "shr" if node.lhs.ty.is_unsigned else "sar"

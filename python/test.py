@@ -60,6 +60,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_arithmetic(self):
+        for source, expected in [
+            ("int main(void){double x=21.5;return x*2-1;}", 42),
+            ("int main(void){float x=40.5f;return x+1.5f;}", 42),
+            ("int main(void){return 85.0/2;}", 42),
+            ("int main(void){return -42.9f;}", 214),
+            ("int main(void){double x=0.0/0.0;return x!=x;}", 1),
+            ("int main(void){return 0.0/0.0<0.0;}", 0),
+            ("int main(void){return sizeof(1f+2)+sizeof(1.0+2);}", 12),
+            ("int main(void){return -0.0==0.0;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(void){float x=3.0f;return -(x*2.0f+1.0f);}").stdout
+        for instruction in ("  mulss %xmm1, %xmm0\n", "  addss %xmm1, %xmm0\n", "  xorps %xmm1, %xmm0\n"):
+            self.assertIn(instruction, assembly)
+        self.assertIn("  and %edi, %eax\n", compile_program("int main(void){return 42&15;}").stdout)
+        self.assertIn("  and %rdi, %rax\n", compile_program("int main(void){return 42L&15;}").stdout)
+
     def test_floating_comparisons(self):
         for source, expected in [
             ("int main(void){return 2.0==2;}", 1),
@@ -917,7 +935,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         node = grammar_tree(parse_body("return 1|2^3&4;").body.body[0].lhs)
         self.assertEqual((node.kind, node.rhs.kind, node.rhs.rhs.kind), ("|", "^", "&"))
         for spelling, instruction in (("&", "and"), ("|", "or"), ("^", "xor")):
-            self.assertIn(f"  {instruction} %rdi, %rax\n",
+            self.assertIn(f"  {instruction} %edi, %eax\n",
                           compile_program(f"int main(void){{return 7{spelling}3;}}").stdout)
 
     def test_remainder(self):

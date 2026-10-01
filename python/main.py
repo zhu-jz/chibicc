@@ -1,6 +1,6 @@
-"""Lesson 141: Floating-point comparisons.
+"""Lesson 142: Floating arithmetic and negation.
 
-Based on chibicc commit cf9ceecb2f8cad2fb694b15c14ca1cf98e9524e7.
+Based on chibicc commit 83f76ebb66712a2560b2993e92265b574b1ab7ed.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

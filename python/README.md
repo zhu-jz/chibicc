@@ -1,17 +1,16 @@
-# Lesson 235: Recognize C11 Unicode identifiers
+# Lesson 236: Accept dollar signs in GNU identifiers
 
-Original chibicc commit: [`0e5d250ebfd29845c8c26b0ad63379994a2b8560`](https://github.com/rui314/chibicc/commit/0e5d250ebfd29845c8c26b0ad63379994a2b8560).
+Original chibicc commit: [`adb8b988897758d0d4f74dcd9129bff0831634ae`](https://github.com/rui314/chibicc/commit/adb8b988897758d0d4f74dcd9129bff0831634ae).
 Earlier explanations are available in Git history.
 
-Identifiers now use the original C11 code-point ranges for starting and
-continuing characters. Greek, Japanese and many other characters are allowed;
-combining marks can continue a name but cannot start it. These rules differ
-from Python's isidentifier, so unicode.py preserves the original range tables
-and the archive build includes that module.
+The identifier ranges now accept $ as both a first and subsequent character,
+following the original GNU extension. Names such as $$$, a$b and $0 become
+single IDENT tokens. They work in local declarations and macro names through
+the existing parser and preprocessor paths.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int π=42;int main(void){return π;}
+int main(void){int $$$=42;return $$$;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -19,13 +18,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The assembler retains the UTF-8 global symbol π. Main takes its address and
-loads the stored integer. Tests run Unicode locals and globals, a combining
-mark, macro names, universal-escape spelling, allowed ranges and a rejected
-symbol, plus original fixtures and the packaged compiler. Python already walks
-decoded characters, replacing C's byte-length decode_utf8 scan. It performs no
-identifier normalization. Its previously documented Unicode whitespace handling
-is retained, including characters C's byte-oriented whitespace scan differs on.
+Local names disappear into frame offsets in assembly; main loads that slot
+and returns 42. Tests check raw spellings, local and macro names, trailing-dollar
+global/function symbols and original fixtures. Python adds the same dollar
+range to both tables, rather than relying on Python identifier rules. This
+commit changes accepted token characters only; symbol printing keeps the
+original assembler syntax, including its limitations for leading-dollar
+external symbols.
 
 ## Tests and attribution
 

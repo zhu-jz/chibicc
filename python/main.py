@@ -1,6 +1,6 @@
-"""Lesson 235: Recognize C11 Unicode identifiers.
+"""Lesson 236: Accept dollar signs in GNU identifiers.
 
-Based on chibicc commit 0e5d250ebfd29845c8c26b0ad63379994a2b8560.
+Based on chibicc commit adb8b988897758d0d4f74dcd9129bff0831634ae.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

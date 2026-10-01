@@ -80,6 +80,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dollar_identifiers(self):
+        self.assertEqual([(t.kind,t.text) for t in tokenize_raw('$$$ a$b $0')[:-1]],[('IDENT',s) for s in ('$$$','a$b','$0')])
+        self.assert_program_returns('int main(void){int $$$=42;return $$$;}',42)
+        self.assert_program_returns('#define VALUE$ 42\nint main(void){return VALUE$;}',42)
+        self.assert_program_returns('int x$=42;int main(void){return x$;}',42)
+        self.assert_program_returns('int f$(int x){return x+1;}int main(void){return f$(41);}',42)
+
     def test_unicode_identifiers(self):
         for name in ('π','あβ0¾','🍣','a\u0300'):
             self.assert_program_returns('int main(void){int ' + name + '=42;return ' + name + ';}',42)

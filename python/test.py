@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_block_extern_declarations(self):
+        source = "int main(){extern int g;int f(int x);extern int h(int x);return f(g)+h(21);}"
+        self.assert_program_returns(source, 42, "int g=21;int f(int x){return x;}int h(int x){return x;}")
+        self.assert_program_returns("int main(){int g=42;{extern int g;g=1;}return g;}", 42, "int g=0;")
+        function = next(var for var in parse(tokenize(source)) if var.name == "main")
+        self.assertEqual(function.locals, [])
+        assembly = compile_program(source).stdout
+        self.assertNotIn("g:\n", assembly)
+        self.assertIn("  call f\n", assembly)
+        result = compile_program("int main(){{int f(int x);}return f(42);}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("implicit declaration", result.stderr)
+
     def test_extern_global_declarations(self):
         source = "extern int g;extern int *p;int main(){return g+*p;}"
         self.assert_program_returns(source, 42, "int g=21;int *p=&g;")

@@ -1,38 +1,35 @@
-# Lesson 116: Extern global declarations
+# Lesson 117: Extern declarations inside blocks
 
-Original chibicc commit: [`006a45ccd475296ee19ec87891523d89ce3f2f24`](https://github.com/rui314/chibicc/commit/006a45ccd475296ee19ec87891523d89ce3f2f24).
+Original chibicc commit: [`27647455e4cb7db1545a7b69c3a324aa025a471a`](https://github.com/rui314/chibicc/commit/27647455e4cb7db1545a7b69c3a324aa025a471a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`extern int g;` now declares a global without defining storage. References still
-use its symbol; the linker supplies its definition from another object. Objects
-track is_definition, ordinary globals and string objects set it, and data emission
-skips declarations. Function prototypes remain nondefinitions too.
+Compound statements now route function declarations and extern variable
+declarations through the global-object parser. Their names are bound in the
+current block scope, but they allocate no local stack slots or data definitions.
+Leaving the block removes those name bindings. Ordinary declarations still
+allocate locals and create initializer statements.
 
-Python booleans and fields mirror upstream storage attributes. This step handles
-file-scope extern variables; block-scope behavior is unchanged. An extern with
-an initializer also remains a nondefinition in this historical parser. Upstream's
-new storage-class check rejects typedef only when both static and extern are
-also present, so it temporarily accepts some invalid two-class combinations.
-Tests preserve that exact change instead of implementing later validation.
+Python reuses the existing parsers and Scope objects, as upstream reuses its
+global-object routines and linked scope records. This commit does not add broader
+redeclaration checking. Block function prototypes work with or without extern.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'extern int g;int main(){return g;}\n' > /tmp/lesson116.c
-printf 'int g=42;\n' > /tmp/lesson116-helper.c
-python3 python/main.py /tmp/lesson116.c > /tmp/lesson116.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson116 /tmp/lesson116.s /tmp/lesson116-helper.c
-/tmp/lesson116
+printf 'int main(){extern int g;int f(int x);return f(g);}\n' > /tmp/lesson117.c
+printf 'int g=42;int f(int x){return x;}\n' > /tmp/lesson117-helper.c
+python3 python/main.py /tmp/lesson117.c > /tmp/lesson117.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson117 /tmp/lesson117.s /tmp/lesson117-helper.c
+/tmp/lesson117
 echo $?
 ```
 
-Python emits no g label or data storage, but main loads g through RIP-relative
-addressing. GCC compiles the separate helper and links both; exit status is 42.
-Tests cover external variables and pointers, omitted data labels, definition
-flags, prototypes, historical storage combinations, and the new upstream extern
-program. The Python compiler itself never invokes GCC.
+Main loads external g and passes it in edi to f, with no local g slot or emitted
+g storage. Exit status is 42. Tests check variable and function declarations,
+external linking, block shadowing, restored outer names, zero local slots,
+assembly calls, escaped-scope rejection, and original extern examples.
 
 ## Tests and attribution
 

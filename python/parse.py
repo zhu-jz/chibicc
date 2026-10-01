@@ -1089,6 +1089,12 @@ class Parser:
                 if attr.is_typedef:
                     position = self.parse_typedef(position, basety)
                     continue
+                if self.is_function(position):
+                    position = self.function(position, basety, attr)
+                    continue
+                if attr.is_extern:
+                    position = self.global_variable(position, basety, attr)
+                    continue
                 node, position = self.declaration(position, basety)
             else:
                 node, position = self.stmt(position)

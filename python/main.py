@@ -1,6 +1,6 @@
-"""Lesson 116: Extern global declarations.
+"""Lesson 117: Extern declarations inside blocks.
 
-Based on chibicc commit 006a45ccd475296ee19ec87891523d89ce3f2f24.
+Based on chibicc commit 27647455e4cb7db1545a7b69c3a324aa025a471a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

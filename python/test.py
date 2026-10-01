@@ -13,7 +13,7 @@ import time
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
-from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline, canonicalize_newline
+from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline, canonicalize_newline, convert_universal_chars
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 from main import add_default_include_paths
@@ -79,6 +79,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_universal_character_escapes(self):
+        self.assertEqual(convert_universal_chars(r'\u03B1\U0001F32E'), 'α🌮')
+        self.assertEqual(convert_universal_chars(r'\\u03B1\u0000\u12xz'), r'\\u03B1\u0000\u12xz')
+        for spelling, size in [(r'"\u03B1\u03B2\u03B3"',7), (r'"\u65E5\u672C\u8A9E"',10), (r'"\U0001F32E"',5)]:
+            self.assert_program_returns('int main(void){return sizeof(' + spelling + ');}',size)
+        self.assert_program_returns(r'int main(void){return "\U0001F32E"[0]==(char)240;}',1)
+        self.assert_program_returns(r'int main(void){return sizeof("\\u03B1");}',7)
+        for spelling in (r'"\uD800"',r'"\U00110000"'):
+            result = compile_program('int main(void){return sizeof(' + spelling + ');}')
+            self.assertEqual(result.returncode,1)
+            self.assertIn('invalid Unicode code point',result.stderr)
+
     def test_canonical_newlines(self):
         self.assertEqual(canonicalize_newline('a\r\nb\rc\nd\r\r\n'),'a\nb\nc\nd\n\n')
         for newline in ('\n','\r\n','\r'):

@@ -1,6 +1,6 @@
-"""Lesson 223: Normalize source newlines before tokenizing.
+"""Lesson 224: Convert universal character escapes to UTF-8.
 
-Based on chibicc commit 74bcec5b22a601451fac9d0878003d04205abca6.
+Based on chibicc commit c31886aa7a52fd8639e09bbdf8ac8ea854c313f6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

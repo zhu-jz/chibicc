@@ -1,27 +1,32 @@
-# Lesson 223: Normalize source newlines before tokenizing
+# Lesson 224: Convert universal character escapes to UTF-8
 
-Original chibicc commit: [`74bcec5b22a601451fac9d0878003d04205abca6`](https://github.com/rui314/chibicc/commit/74bcec5b22a601451fac9d0878003d04205abca6).
+Original chibicc commit: [`c31886aa7a52fd8639e09bbdf8ac8ea854c313f6`](https://github.com/rui314/chibicc/commit/c31886aa7a52fd8639e09bbdf8ac8ea854c313f6).
 Earlier explanations are available in Git history.
 
-File and stdin input now convert CRLF and lone CR to LF before removing
-backslash-newline pairs. This gives Windows, old-Mac and Unix line endings
-the same preprocessing and diagnostic behavior. It also lets a backslash at
-the end of a CRLF line continue a macro definition correctly.
+Source normalization now replaces nonzero four-digit backslash-u and eight-digit
+backslash-U sequences with their characters before tokenization. Other escaped
+pairs are copied together, so an escaped backslash does not start a universal
+escape. Malformed and zero-valued sequences retain the original fallback.
+Ordinary string decoding then stores UTF-8 bytes plus a terminator.
 
 ```sh
-printf '#define VALUE \\\r\n42\r\nint main(void){return VALUE;}\r\n' > /tmp/lesson.c
+cat > /tmp/lesson.c <<'C'
+int main(void){return sizeof("\u03B1\u03B2\u03B3")+35;}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The source becomes the usual VALUE macro definition and main loads 42 into
-rax. Tests cover all three newline forms, continuation, normalized File text,
-preserved line numbers, diagnostics and original fixtures. Python creates
-normalized strings with ordered replacements; C compacts its character buffer
-in place. Raw tokenize still consumes the supplied string directly, while
-all real compiler file/stdin input uses the new normalization pipeline.
+Each Greek letter occupies two UTF-8 bytes, making sizeof 7 including zero;
+adding 35 returns 42. Tests cover Greek, Japanese, a four-byte emoji, escaped
+backslashes, unchanged malformed/zero escapes, invalid code points and original
+fixtures. Python already stores source as Unicode and uses chr plus the existing
+UTF-8 encoder, so no manual unicode.c port is needed. Unlike the C byte encoder,
+Python explicitly rejects surrogates and values beyond Unicode's range with a
+source diagnostic. Wide character semantics and Unicode identifiers are not
+added by this commit.
 
 ## Tests and attribution
 

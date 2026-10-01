@@ -52,12 +52,40 @@ def remove_backslash_newline(source):
     return "".join(result)
 
 
+def convert_universal_chars(source):
+    result = []
+    position = 0
+    while position < len(source):
+        length = 4 if source.startswith("\\u", position) else 8 if source.startswith("\\U", position) else 0
+        if length:
+            digits = source[position + 2:position + 2 + length]
+            if len(digits) == length and all(c in string.hexdigits for c in digits):
+                value = int(digits, 16)
+                if value:
+                    if value > 0x10ffff or 0xd800 <= value <= 0xdfff:
+                        raise CompileError(position, "invalid Unicode code point")
+                    result.append(chr(value))
+                    position += length + 2
+                    continue
+            result.append(source[position])
+            position += 1
+        elif source[position] == "\\":
+            result.append(source[position:position + 2])
+            position += 2
+        else:
+            result.append(source[position])
+            position += 1
+    return "".join(result)
+
+
 def tokenize_file(path, files):
     path = str(path)
     source = remove_backslash_newline(canonicalize_newline(read_file(path)))
     file = File(path, len(files) + 1, source)
     files.append(file)
     try:
+        source = convert_universal_chars(source)
+        file.contents = source
         tokens = tokenize(source)
     except CompileError as error:
         error.file = file

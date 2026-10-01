@@ -11,7 +11,7 @@ import unittest
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
-from tokenizer import tokenize as tokenize_raw
+from tokenizer import tokenize as tokenize_raw, tokenize_file
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 
@@ -72,6 +72,44 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_quoted_include_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "main.c"
+            headers = Path(directory) / "headers"
+            (headers / "nested").mkdir(parents=True)
+            first = headers / "first.h"
+            second = headers / "nested" / "second.h"
+            source.write_text('#include "headers/first.h"\nint main(void){return first();}\n')
+            first.write_text('#include "nested/second.h"\nint first(void){return 20+second();}\n')
+            second.write_text('int second(void){return 22;}\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for number, file in enumerate((source, first, second), 1):
+                self.assertIn(f'  .file {number} "{file}"\n', result.stdout)
+                self.assertIn(f"  .loc {number} ", result.stdout)
+            assembly = Path(directory) / "program.s"
+            assembly.write_text(result.stdout)
+            executable = Path(directory) / "program"
+            subprocess.run(["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)], check=True)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            files = []
+            tokens = preprocess(tokenize_file(source, files), files)
+            self.assertEqual([file.file_no for file in files], [1, 2, 3])
+            self.assertTrue(any(token.text == "second" and token.file.file_no == 3 for token in tokens))
+            for text, message in (("int bad(void){return missing;}\n", "undefined variable"),
+                                  ('char *bad="\\x";\n', "invalid hex escape")):
+                second.write_text(text)
+                result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertTrue(result.stderr.startswith(f"{second}:1:"), result.stderr)
+                self.assertIn(message, result.stderr)
+            source.write_text('#include "missing.h"\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("missing.h", result.stderr)
+            self.assertTrue(result.stderr.startswith(f"{source}:1:"), result.stderr)
+        self.assertIn("expected a filename", compile_program("#include <file.h>\n").stderr)
+
     def test_null_preprocessor_directives(self):
         self.assert_program_returns("#\n /* comment */ #\nint main(void){return 42;}\n#\n", 42)
         tokens = tokenize_raw(" /*comment*/ #\n int x; #\n")
@@ -145,8 +183,8 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(COMPILER), "-S", str(first), str(second)],
                                     cwd=directory, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn(f'.file 1 "{first}"', (Path(directory) / "main.s").read_text())
-            self.assertIn(f'.file 1 "{second}"', (Path(directory) / "answer.s").read_text())
+            self.assertIn(f'  .file 1 "{first}"', (Path(directory) / "main.s").read_text())
+            self.assertIn(f'  .file 1 "{second}"', (Path(directory) / "answer.s").read_text())
             result = subprocess.run([sys.executable, str(COMPILER), "-c", "-o", str(executable), str(first), str(second)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
@@ -1563,7 +1601,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(void){typedef int t;t t=3;return t;}", 3),
         ]:
             self.assert_program_returns(source, expected)
-        self.assertEqual(compile_program("typedef int T;").stdout, '.file 1 "-"\n')
+        self.assertEqual(compile_program("typedef int T;").stdout, '  .file 1 "-"\n')
         program = parse_body("typedef int T;T x=1;")
         self.assertEqual([var.name for var in program.locals], ["x"])
         for source, message in [
@@ -1627,7 +1665,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("int f(int x);int f(int x){return x;}").stdout
         self.assertEqual(assembly.splitlines().count("f:"), 1)
         self.assertNotIn("  .data", assembly)
-        self.assertEqual(compile_program("int printf();").stdout, '.file 1 "-"\n')
+        self.assertEqual(compile_program("int printf();").stdout, '  .file 1 "-"\n')
         self.assertEqual(compile_program("int f(int); ").returncode, 0)
 
     def test_nested_declarators(self):
@@ -1845,7 +1883,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         source_text = "int main(void){\n return 42;\n}\n"
         result = compile_program(source_text)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(result.stdout.startswith('.file 1 "-"\n'))
+        self.assertTrue(result.stdout.startswith('  .file 1 "-"\n'))
         locations = [line for line in result.stdout.splitlines() if ".loc" in line]
         self.assertEqual(locations, ["  .loc 1 2"] * 4)
         with tempfile.TemporaryDirectory() as directory:
@@ -1961,7 +1999,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = subprocess.run(compiler_command("-o", str(output), str(source)),
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(output.read_text(), f'.file 1 "{source}"\n')
+            self.assertEqual(output.read_text(), f'  .file 1 "{source}"\n')
             source.write_text("int main(void){1=2;}")
             output.write_text("keep")
             result = subprocess.run(compiler_command("-o", str(output), str(source)),
@@ -2459,7 +2497,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(compile_program("{return 1;}").returncode, 1)
         self.assertEqual(compile_program("int main(void){} return 3;").returncode, 1)
         self.assertEqual(compile_program("int main(void){return 1}").returncode, 1)
-        self.assertEqual(compile_program("").stdout, '.file 1 "-"\n')
+        self.assertEqual(compile_program("").stdout, '  .file 1 "-"\n')
         self.assertEqual(parse(tokenize("")), [])
 
     def test_return_tree(self):

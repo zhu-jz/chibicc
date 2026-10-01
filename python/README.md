@@ -1,39 +1,39 @@
-# Lesson 159: Null preprocessing directives
+# Lesson 160: Quoted includes and source files
 
-Original chibicc commit: [`146c7b3dd47bb65da2da86cce7f4d75d8efa157d`](https://github.com/rui314/chibicc/commit/146c7b3dd47bb65da2da86cce7f4d75d8efa157d).
+Original chibicc commit: [`d367510fcc1396fa252c4b87439c2f9fcd0abbe7`](https://github.com/rui314/chibicc/commit/d367510fcc1396fa252c4b87439c2f9fcd0abbe7).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Tokens now record at_bol, meaning they are the first non-whitespace token seen on
-a line. Preprocessing recognizes # only with that flag. A # followed by the next
-line's token is the legal null directive and is removed; other directive text
-gets an invalid-preprocessor-directive error at the next token.
+#include "name.h" now reads a file relative to the including file's directory
+and inserts its tokens before the remaining input. Included tokens are copied
+shallowly, like the original append helper, and their directives are processed
+in turn. This supports nested quoted includes. Other include forms remain outside
+this commit's grammar.
 
-Python keeps the original token objects and rewrites their containing list.
-Metadata is excluded from token equality, like the existing diagnostic line
-number. The scanner matches the original handling of comments: a whole block
-comment is skipped without processing its internal newlines for this new flag.
-File input is already normalized to end with a newline.
-
-The new original macro.c fixture is compiled directly by our compiler. Other
-fixtures still use GCC preprocessing as the original build requires at this step.
-This ensures null directives are actually tested by our preprocessing stage.
+A File object stores name, file number, and source text. Tokens refer to their
+File, diagnostics read the correct source line, and code generation emits every
+.file directive plus .loc using each token's file number. Python passes a file
+list through the pipeline instead of maintaining C globals. Filename escaping
+and the existing UTF-8 diagnostics are preserved; include-open errors also name
+the attempted path for clarity.
 
 ## Assembly and WSL example
 
 ```sh
-printf '#\n/* comment */ #\nint main(void){return 42;}\n' > /tmp/lesson159.c
-python3 python/main.py -S -o /tmp/lesson159.s /tmp/lesson159.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson159 /tmp/lesson159.s
-/tmp/lesson159
+printf 'int answer(void){return 42;}\n' > /tmp/lesson160.h
+printf '#include "lesson160.h"\nint main(void){return answer();}\n' > /tmp/lesson160.c
+python3 python/main.py -S -o /tmp/lesson160.s /tmp/lesson160.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson160 /tmp/lesson160.s
+/tmp/lesson160
 echo $?
 ```
 
-The two null directives disappear before parsing. Assembly still moves 42 into
-rax and returns through main's epilogue, giving shell exit status 42. Tests cover
-line metadata, whitespace/comments, non-directive # tokens, invalid directives,
-emitted assembly, execution, and the directly compiled original macro fixture.
+.file 1 identifies the C source and .file 2 the header. The header function's
+.loc points to file 2; main calls it indirectly and exits with 42. Tests cover
+nested relative includes, file numbers, header assembly locations, header lexer
+and parser diagnostics, missing/wrong include operands, real execution, and the
+original include1/include2 fixtures through the native preprocessing stage.
 
 ## Tests and attribution
 

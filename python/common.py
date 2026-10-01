@@ -18,6 +18,13 @@ def to_int32(value):
 
 
 @dataclass
+class File:
+    name: str
+    file_no: int
+    contents: str
+
+
+@dataclass
 class Token:
     kind: str
     text: str
@@ -28,6 +35,7 @@ class Token:
     line_no: int = field(default=0, compare=False)
     fvalue: float = 0.0
     at_bol: bool = field(default=False, compare=False)
+    file: Optional[File] = field(default=None, compare=False)
 
 
 class CompileError(Exception):
@@ -36,9 +44,11 @@ class CompileError(Exception):
         if isinstance(position, Token):
             self.position = position.position
             self.line_no = position.line_no or None
+            self.file = position.file
         else:
             self.position = position
             self.line_no = None
+            self.file = None
 
 
 @dataclass

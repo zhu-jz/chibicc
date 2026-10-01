@@ -1,6 +1,6 @@
-"""Lesson 159: Null preprocessing directives.
+"""Lesson 160: Quoted includes and source files.
 
-Based on chibicc commit 146c7b3dd47bb65da2da86cce7f4d75d8efa157d.
+Based on chibicc commit d367510fcc1396fa252c4b87439c2f9fcd0abbe7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -14,7 +14,7 @@ from codegen import codegen
 from common import CompileError
 from parse import parse
 from preprocess import preprocess
-from tokenizer import read_file, tokenize
+from tokenizer import tokenize_file
 
 
 def usage(status):
@@ -97,19 +97,20 @@ def write_output(path, assembly):
 
 
 def cc1(filename, output_path):
+    files = []
     try:
-        source = read_file(filename)
-        tokens = tokenize(source)
-        tokens = preprocess(tokens)
+        tokens = tokenize_file(filename, files)
+        tokens = preprocess(tokens, files)
         program = parse(tokens)
-        assembly = codegen(program)
-        escaped_filename = filename.replace("\\", "\\\\").replace('"', '\\"')
-        assembly = f'.file 1 "{escaped_filename}"' + ("\n" + assembly if assembly else "")
+        assembly = codegen(program, files)
         write_output(output_path, assembly)
     except CompileError as error:
         if error.position is None:
             print(error, file=sys.stderr)
         else:
+            file = error.file or files[0]
+            source = file.contents
+            filename = file.name
             position = error.position
             line_start = source.rfind("\n", 0, position) + 1
             line_end = source.find("\n", position)

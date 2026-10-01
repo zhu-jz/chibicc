@@ -166,7 +166,8 @@ class CodeGenerator:
 
     def gen_expr(self, node):
         if node.tok is not None:
-            self.assembly.append(f"  .loc 1 {node.tok.line_no}")
+            file_no = node.tok.file.file_no if node.tok.file else 1
+            self.assembly.append(f"  .loc {file_no} {node.tok.line_no}")
         if node.kind == "NULL_EXPR":
             return
         if node.kind == "MEMZERO":
@@ -367,7 +368,8 @@ class CodeGenerator:
 
     def gen_stmt(self, node):
         if node.tok is not None:
-            self.assembly.append(f"  .loc 1 {node.tok.line_no}")
+            file_no = node.tok.file.file_no if node.tok.file else 1
+            self.assembly.append(f"  .loc {file_no} {node.tok.line_no}")
         if node.kind == "IF":
             self.label_count += 1
             label = self.label_count
@@ -462,8 +464,11 @@ class CodeGenerator:
             raise CompileError(var.ty.name, "unsupported parameter size")
         self.assembly.append(f"  mov {register}, {var.offset}(%rbp)")
 
-    def generate(self, program):
+    def generate(self, program, files=()):
         self.assembly = []
+        for file in files:
+            name = file.name.replace("\\", "\\\\").replace('"', '\\"')
+            self.assembly.append(f'  .file {file.file_no} "{name}"')
         for var in program:
             if not var.is_function and var.is_definition:
                 section = ".data" if var.init_data is not None else ".bss"
@@ -528,5 +533,5 @@ class CodeGenerator:
         return "\n".join(self.assembly)
 
 
-def codegen(program):
-    return CodeGenerator().generate(program)
+def codegen(program, files=()):
+    return CodeGenerator().generate(program, files)

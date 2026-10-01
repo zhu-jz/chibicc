@@ -8,7 +8,7 @@ import string
 import re
 import sys
 
-from common import CompileError, Token
+from common import CompileError, Token, File
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
 from type import ty_float, ty_double
 
@@ -27,6 +27,21 @@ def read_file(path):
     if not source.endswith("\n"):
         source += "\n"
     return source
+
+
+def tokenize_file(path, files):
+    path = str(path)
+    source = read_file(path)
+    file = File(path, len(files) + 1, source)
+    files.append(file)
+    try:
+        tokens = tokenize(source)
+    except CompileError as error:
+        error.file = file
+        raise
+    for token in tokens:
+        token.file = file
+    return tokens
 
 
 def read_escaped_char(source, position):

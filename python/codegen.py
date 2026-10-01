@@ -135,6 +135,12 @@ class CodeGenerator:
         self.depth -= 1
 
     def cmp_zero(self, ty):
+        if ty.kind in ("FLOAT", "DOUBLE"):
+            suffix = "ss" if ty.kind == "FLOAT" else "sd"
+            clear = "xorps" if ty.kind == "FLOAT" else "xorpd"
+            self.assembly.extend((f"  {clear} %xmm1, %xmm1",
+                                  f"  ucomi{suffix} %xmm1, %xmm0"))
+            return
         register = "%eax" if is_integer(ty) and ty.size <= 4 else "%rax"
         self.assembly.append(f"  cmp $0, {register}")
 
@@ -246,7 +252,8 @@ class CodeGenerator:
             self.label_count += 1
             label = self.label_count
             self.gen_expr(node.cond)
-            self.assembly.extend(("  cmp $0, %rax", f"  je .L.else.{label}"))
+            self.cmp_zero(node.cond.ty)
+            self.assembly.append(f"  je .L.else.{label}")
             self.gen_expr(node.then)
             self.assembly.extend((f"  jmp .L.end.{label}", f".L.else.{label}:"))
             self.gen_expr(node.els)
@@ -254,7 +261,8 @@ class CodeGenerator:
             return
         if node.kind == "NOT":
             self.gen_expr(node.lhs)
-            self.assembly.extend(("  cmp $0, %rax", "  sete %al", "  movzx %al, %rax"))
+            self.cmp_zero(node.lhs.ty)
+            self.assembly.extend(("  sete %al", "  movzx %al, %rax"))
             return
         if node.kind == "BITNOT":
             self.gen_expr(node.lhs)
@@ -267,9 +275,11 @@ class CodeGenerator:
             branch = "je" if is_and else "jne"
             destination = f".L.false.{label}" if is_and else f".L.true.{label}"
             self.gen_expr(node.lhs)
-            self.assembly.extend(("  cmp $0, %rax", f"  {branch} {destination}"))
+            self.cmp_zero(node.lhs.ty)
+            self.assembly.append(f"  {branch} {destination}")
             self.gen_expr(node.rhs)
-            self.assembly.extend(("  cmp $0, %rax", f"  {branch} {destination}",
+            self.cmp_zero(node.rhs.ty)
+            self.assembly.extend((f"  {branch} {destination}",
                                   f"  mov ${1 if is_and else 0}, %rax", f"  jmp .L.end.{label}",
                                   f"{destination}:", f"  mov ${0 if is_and else 1}, %rax",
                                   f".L.end.{label}:"))
@@ -348,7 +358,7 @@ class CodeGenerator:
             self.label_count += 1
             label = self.label_count
             self.gen_expr(node.cond)
-            self.assembly.append("  cmp $0, %rax")
+            self.cmp_zero(node.cond.ty)
             self.assembly.append(f"  je  .L.else.{label}")
             self.gen_stmt(node.then)
             self.assembly.append(f"  jmp .L.end.{label}")
@@ -365,7 +375,7 @@ class CodeGenerator:
             self.assembly.append(f".L.begin.{label}:")
             if node.cond is not None:
                 self.gen_expr(node.cond)
-                self.assembly.append("  cmp $0, %rax")
+                self.cmp_zero(node.cond.ty)
                 self.assembly.append(f"  je {node.brk_label}")
             self.gen_stmt(node.then)
             self.assembly.append(f"{node.cont_label}:")
@@ -381,7 +391,8 @@ class CodeGenerator:
             self.gen_stmt(node.then)
             self.assembly.append(f"{node.cont_label}:")
             self.gen_expr(node.cond)
-            self.assembly.extend(("  cmp $0, %rax", f"  jne .L.begin.{label}",
+            self.cmp_zero(node.cond.ty)
+            self.assembly.extend((f"  jne .L.begin.{label}",
                                   f"{node.brk_label}:"))
             return
         if node.kind == "SWITCH":

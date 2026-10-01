@@ -1,42 +1,36 @@
-# Lesson 142: Floating arithmetic and negation
+# Lesson 143: Floating conditions
 
-Original chibicc commit: [`83f76ebb66712a2560b2993e92265b574b1ab7ed`](https://github.com/rui314/chibicc/commit/83f76ebb66712a2560b2993e92265b574b1ab7ed).
+Original chibicc commit: [`0ce109302715f8186b90671a53517a63a2741022`](https://github.com/rui314/chibicc/commit/0ce109302715f8186b90671a53517a63a2741022).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Numeric addition/subtraction now accepts floating types as well as integers.
-After common-type conversion, floating binary operations use addss/subss/mulss/
-divss for float and addsd/subsd/mulsd/divsd for double. The existing floating
-stack helpers preserve operands and call alignment. Negation toggles the IEEE
-sign bit with xorps or xorpd, preserving signed zero and NaN payload bits.
+The shared zero-comparison helper now handles float and double, and all condition
+sites call it. Integer conditions compare eax or rax according to their type;
+floating conditions zero xmm1 with xorps/xorpd and compare xmm0 using ucomiss/ucomisd.
+Conditional branches, logical operators, and Boolean casts use the resulting flags.
+Short circuit evaluation still skips the right operand when appropriate.
 
-This original commit also makes integer bitwise and/or/xor use eax/edi for
-four-byte operands and rax/rdi for eight-byte operands. Python emits the same
-instructions and operates on syntax trees; Python float is used only to decode
-literals, not to execute the compiled arithmetic.
-
-Floating division follows the target's usual SSE environment: zero divided by
-zero produces NaN, which the comparison instructions handle. General floating
-truth tests, floating argument-register handling, global floating initializers,
-and floating constant-expression evaluation remain incomplete at this point in
-the original history. These later features have not been prepared in advance.
+The Python implementation emits these instructions directly. Positive and negative
+floating zero are false. This historical commit treats unordered NaN comparisons
+as zero in truth tests because it uses the zero flag alone; tests deliberately
+record this limitation instead of silently changing the original progression.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){double x=21.5;return x*2-1;}\n' > /tmp/lesson142.c
-python3 python/main.py /tmp/lesson142.c > /tmp/lesson142.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson142 /tmp/lesson142.s
-/tmp/lesson142
+printf 'int main(void){double x=0.5;if(x)return 42;return 1;}\n' > /tmp/lesson143.c
+python3 python/main.py /tmp/lesson143.c > /tmp/lesson143.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson143 /tmp/lesson143.s
+/tmp/lesson143
 echo $?
 ```
 
-The integer operands convert to double. mulsd computes 43.0, subsd gives 42.0,
-and cvttsd2sil converts the return to int. The executable prints nothing; `echo $?`
-shows its exit status 42. Tests cover both floating widths, mixed types, division,
-negation, signed zero, NaN, result sizes, SSE arithmetic/sign instructions,
-integer bitwise widths, real execution, and original float/sizeof examples.
+ucomisd compares x against zero; je selects the false branch only when its zero
+flag is set. Here x is nonzero, so main returns 42 in eax and the shell displays
+exit status 42. The executable prints nothing itself. Tests cover both floating
+widths, loops, short circuit side effects, signed zero, Boolean casts, historical
+NaN behavior, emitted comparisons, execution, and the original C fixtures.
 
 ## Tests and attribution
 

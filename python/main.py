@@ -1,6 +1,6 @@
-"""Lesson 142: Floating arithmetic and negation.
+"""Lesson 143: Floating conditions.
 
-Based on chibicc commit 83f76ebb66712a2560b2993e92265b574b1ab7ed.
+Based on chibicc commit 0ce109302715f8186b90671a53517a63a2741022.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

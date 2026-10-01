@@ -60,6 +60,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_conditions(self):
+        for source, expected in [
+            ("int main(void){if(0.0)return 1;return 42;}", 42),
+            ("int main(void){float x=0.5f;if(x)return 42;return 1;}", 42),
+            ("int main(void){double x=3;int n=0;while(x){x--;n++;}return n;}", 3),
+            ("int main(void){float x=3;int n=0;do n++;while(--x);return n;}", 3),
+            ("int main(void){int x=0;0.0&&++x;0.5||++x;return x;}", 0),
+            ("int main(void){return !0.0+!(-0.0f)+(0.5f&&2.0)+(0.0||2.0);}", 4),
+            ("int main(void){return 0.0?1:42;}", 42),
+            ("int main(void){return (_Bool)0.5f;}", 1),
+            ("int main(void){return !(0.0/0.0);}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        for literal, clear, compare in (("0.0f", "xorps", "ucomiss"), ("0.0", "xorpd", "ucomisd")):
+            assembly = compile_program(f"int main(void){{return !{literal};}}").stdout
+            self.assertIn(f"  {clear} %xmm1, %xmm1\n  {compare} %xmm1, %xmm0\n", assembly)
+
     def test_floating_arithmetic(self):
         for source, expected in [
             ("int main(void){double x=21.5;return x*2-1;}", 42),
@@ -967,7 +984,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assert_program_returns("int main(void){int x;return !&x;}", 0)
         node = parse_body("return !0;").body.body[0].lhs.lhs
         self.assertEqual((node.kind, node.ty.kind), ("NOT", "INT"))
-        self.assertIn("  cmp $0, %rax\n  sete %al\n  movzx %al, %rax\n",
+        self.assertIn("  cmp $0, %eax\n  sete %al\n  movzx %al, %rax\n",
                       compile_program("int main(void){return !0;}").stdout)
 
     def test_integer_bases(self):
@@ -2282,10 +2299,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
 
     def test_exact_assembly(self):
         cases = [
-            ("if(1) 2; else 3;", "  mov $1, %rax\n  cmp $0, %rax\n"
+            ("if(1) 2; else 3;", "  mov $1, %rax\n  cmp $0, %eax\n"
              "  je  .L.else.1\n  mov $2, %rax\n  jmp .L.end.1\n"
              ".L.else.1:\n  mov $3, %rax\n.L.end.1:\n"),
-            ("if(0) ;", "  mov $0, %rax\n  cmp $0, %rax\n"
+            ("if(0) ;", "  mov $0, %rax\n  cmp $0, %eax\n"
              "  je  .L.else.1\n  jmp .L.end.1\n.L.else.1:\n.L.end.1:\n"),
             ("return 3; 42;", "  mov $3, %rax\n  jmp .L.return.main\n  mov $42, %rax\n"),
             ("return 1; return 2;", "  mov $1, %rax\n  jmp .L.return.main\n"

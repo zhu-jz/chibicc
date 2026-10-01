@@ -1,6 +1,6 @@
-"""Lesson 170: Stop recursive object-like expansion with hidesets.
+"""Lesson 171: Add #ifdef and #ifndef.
 
-Based on chibicc commit acce00228b842af35df5af8c97398765a386ab1e.
+Based on chibicc commit 1f80f581e517ae4a5df6ab38af48a0d2a1089c73.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

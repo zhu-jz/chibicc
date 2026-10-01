@@ -38,7 +38,7 @@ def is_hash(token):
 
 def skip_cond_incl2(tokens, position):
     while tokens[position].kind != "EOF":
-        if is_hash(tokens[position]) and tokens[position + 1].text == "if":
+        if is_hash(tokens[position]) and tokens[position + 1].text in ("if", "ifdef", "ifndef"):
             position = skip_cond_incl2(tokens, position + 2)
             continue
         if is_hash(tokens[position]) and tokens[position + 1].text == "endif":
@@ -49,7 +49,7 @@ def skip_cond_incl2(tokens, position):
 
 def skip_cond_incl(tokens, position):
     while tokens[position].kind != "EOF":
-        if is_hash(tokens[position]) and tokens[position + 1].text == "if":
+        if is_hash(tokens[position]) and tokens[position + 1].text in ("if", "ifdef", "ifndef"):
             position = skip_cond_incl2(tokens, position + 2)
             continue
         if is_hash(tokens[position]) and tokens[position + 1].text in ("elif", "else", "endif"):
@@ -146,6 +146,15 @@ def preprocess2(tokens, files, macros, conditions):
                 value, position = eval_const_expr(tokens, position, files, macros, conditions)
                 conditions.append(CondIncl(token, bool(value)))
                 if not value:
+                    position = skip_cond_incl(tokens, position)
+                continue
+            if tokens[position].text in ("ifdef", "ifndef"):
+                directive = tokens[position]
+                defined = find_macro(tokens[position + 1], macros) is not None
+                included = defined if directive.text == "ifdef" else not defined
+                conditions.append(CondIncl(directive, included))
+                position = skip_line(tokens, min(position + 2, len(tokens) - 1))
+                if not included:
                     position = skip_cond_incl(tokens, position)
                 continue
             if tokens[position].text == "elif":

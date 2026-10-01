@@ -1,32 +1,31 @@
-# Lesson 170: Stop recursive object-like expansion with hidesets
+# Lesson 171: Add #ifdef and #ifndef
 
-Original chibicc commit: [`acce00228b842af35df5af8c97398765a386ab1e`](https://github.com/rui314/chibicc/commit/acce00228b842af35df5af8c97398765a386ab1e).
+Original chibicc commit: [`1f80f581e517ae4a5df6ab38af48a0d2a1089c73`](https://github.com/rui314/chibicc/commit/1f80f581e517ae4a5df6ab38af48a0d2a1089c73).
 Earlier explanations are available in Git history.
 
-Each token now carries a set of macro names already used in its expansion.
-Expanding a macro copies its replacement tokens, combines their existing
-hidesets with the invoking token's hideset, and adds the current macro name.
-A name found in its own token's hideset is passed through without expansion.
-This stops both direct and indirect recursion while permitting other expansions.
+`#ifdef NAME` includes its branch when the name has a current macro definition;
+`#ifndef NAME` includes it when no definition exists. Empty replacement bodies
+still count as definitions. The name is looked up directly without expansion.
+Both directives use the existing conditional stack and support alternatives.
 
-Python uses immutable `frozenset` values instead of C linked lists. Shared sets
-cannot accidentally change a different token's expansion history, and set union
-expresses the original operation directly.
+Skipping now recognizes all three opening directives. Header guards work by
+combining `#ifndef` with `#define`, so repeated includes can discard an already
+processed header. This original commit treats a non-identifier operand as an
+undefined name; the Python port preserves that behavior rather than adding a
+later validation rule.
 
 ```sh
-printf 'int main(void){int VALUE=6;\n#define VALUE VALUE+3\nreturn VALUE;}\n' > /tmp/lesson.c
-python3 python/main.py -E /tmp/lesson.c
+printf '#define PRESENT\n#ifdef PRESENT\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 9
+echo $?  # 42
 ```
 
-The return expression becomes `VALUE+3`, where the surviving identifier refers
-to the local variable. Assembly loads that variable, adds 3 and returns 9 in
-`%rax`. Tests inspect hidesets, run direct and indirect recursion, and check
-preprocessing finishes within a timeout. The complete source and packaged
-compiler suites are also checked at this milestone.
+Only the selected `main` reaches code generation. Assembly puts 42 in `%rax`
+and returns through its frame cleanup. Tests cover both directives, empty
+macros, undefinition, nested skips, the historical operand behavior and a
+header included twice with a guard.
 
 ## Tests and attribution
 

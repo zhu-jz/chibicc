@@ -72,6 +72,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_ifdef_ifndef_directives(self):
+        for prefix in ('#define PRESENT\n#ifdef PRESENT\n', '#ifndef ABSENT\n',
+                       '#define PRESENT\n#undef PRESENT\n#ifndef PRESENT\n'):
+            self.assert_program_returns(prefix + 'int main(void){return 42;}\n#else\ninvalid\n#endif\n', 42)
+        self.assert_program_returns('#ifdef ABSENT\n#ifdef ALSO_ABSENT\ninvalid\n#endif\n#ifndef THIRD\ninvalid\n#endif\n#else\nint main(void){return 7;}\n#endif\n', 7)
+        # This original step treats a non-identifier as an undefined name.
+        self.assert_program_returns('#ifdef 123\ninvalid\n#else\nint main(void){return 11;}\n#endif\n', 11)
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / 'guard.h'
+            source = Path(directory) / 'main.c'
+            header.write_text('#ifndef GUARD\n#define GUARD\nint answer=42;\n#endif\n')
+            source.write_text('#include "guard.h"\n#include "guard.h"\nint main(void){return answer;}\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.count('int answer'), 1)
+            self.assert_program_returns(result.stdout, 42)
+
     def test_recursive_object_macros(self):
         self.assert_program_returns('int main(void){int VALUE=6;\n#define VALUE VALUE+3\nreturn VALUE;}\n', 9)
         self.assert_program_returns('int main(void){int FIRST=3;\n#define FIRST SECOND*5\n#define SECOND FIRST+2\nreturn FIRST;}\n', 13)

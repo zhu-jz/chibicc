@@ -23,6 +23,7 @@ class CondIncl:
 class Macro:
     name: str
     body: list
+    is_objlike: bool = True
 
 
 def skip_line(tokens, position):
@@ -89,6 +90,22 @@ def add_hideset(tokens, hideset):
     return [replace(token, hideset=token.hideset | hideset) for token in tokens]
 
 
+def read_macro_definition(tokens, position, macros):
+    name = tokens[position]
+    if name.kind != "IDENT":
+        raise CompileError(name, "macro name must be an identifier")
+    position += 1
+    is_objlike = tokens[position].has_space or tokens[position].text != "("
+    if not is_objlike:
+        position += 1
+        if tokens[position].text != ")":
+            raise CompileError(tokens[position], "expected ')'")
+        position += 1
+    body, position = copy_line(tokens, position)
+    macros[name.text] = Macro(name.text, body, is_objlike)
+    return position
+
+
 def expand_macro(tokens, position, macros):
     token = tokens[position]
     if token.text in token.hideset:
@@ -96,6 +113,13 @@ def expand_macro(tokens, position, macros):
     macro = find_macro(token, macros)
     if macro is None:
         return False
+    if not macro.is_objlike:
+        if tokens[position + 1].text != "(":
+            return False
+        if tokens[position + 2].text != ")":
+            raise CompileError(tokens[position + 2], "expected ')'")
+        tokens[position:position + 3] = [replace(tok) for tok in macro.body[:-1]]
+        return True
     hideset = token.hideset | {macro.name}
     tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)
     return True
@@ -129,11 +153,7 @@ def preprocess2(tokens, files, macros, conditions):
                 position -= 1
                 continue
             if tokens[position].text == "define":
-                name = tokens[position + 1]
-                if name.kind != "IDENT":
-                    raise CompileError(name, "macro name must be an identifier")
-                body, position = copy_line(tokens, position + 2)
-                macros[name.text] = Macro(name.text, body)
+                position = read_macro_definition(tokens, position + 1, macros)
                 continue
             if tokens[position].text == "undef":
                 name = tokens[position + 1]

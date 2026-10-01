@@ -1,6 +1,6 @@
-"""Lesson 171: Add #ifdef and #ifndef.
+"""Lesson 172: Add zero-argument function-like macros.
 
-Based on chibicc commit 1f80f581e517ae4a5df6ab38af48a0d2a1089c73.
+Based on chibicc commit dec3b3fa02ffb343c37f82d36ae02be6bb30eb03.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -108,7 +108,9 @@ def print_tokens(tokens, output_path):
             break
         if index > 0 and token.at_bol:
             parts.append("\n")
-        parts.append(" " + token.text)
+        if token.has_space and not token.at_bol:
+            parts.append(" ")
+        parts.append(token.text)
     write_output(output_path, "".join(parts) + "\n")
 
 

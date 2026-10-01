@@ -1,31 +1,34 @@
-# Lesson 171: Add #ifdef and #ifndef
+# Lesson 172: Add zero-argument function-like macros
 
-Original chibicc commit: [`1f80f581e517ae4a5df6ab38af48a0d2a1089c73`](https://github.com/rui314/chibicc/commit/1f80f581e517ae4a5df6ab38af48a0d2a1089c73).
+Original chibicc commit: [`dec3b3fa02ffb343c37f82d36ae02be6bb30eb03`](https://github.com/rui314/chibicc/commit/dec3b3fa02ffb343c37f82d36ae02be6bb30eb03).
 Earlier explanations are available in Git history.
 
-`#ifdef NAME` includes its branch when the name has a current macro definition;
-`#ifndef NAME` includes it when no definition exists. Empty replacement bodies
-still count as definitions. The name is looked up directly without expansion.
-Both directives use the existing conditional stack and support alternatives.
+A definition whose opening parenthesis immediately follows its name is now
+function-like: `#define ANSWER() 42` expands only when followed by `()`.
+Without an argument list, its name remains an ordinary identifier. A space or
+comment before the definition's parenthesis instead makes it object-like.
+This step accepts no macro parameters or arguments.
 
-Skipping now recognizes all three opening directives. Header guards work by
-combining `#ifndef` with `#define`, so repeated includes can discard an already
-processed header. This original commit treats a non-identifier operand as an
-undefined name; the Python port preserves that behavior rather than adding a
-later validation rule.
+The tokenizer records whether whitespace or a comment preceded each token.
+`-E` now uses that information instead of inserting a space before every token.
+Multiple spaces collapse to one, and indentation at line starts is omitted.
+Macro replacement tokens still carry their definition's spacing. Function-like
+expansion at this original step does not yet add a hideset; recursive function
+macros remain a limitation. Object-like recursion protection is retained.
 
 ```sh
-printf '#define PRESENT\n#ifdef PRESENT\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#define ANSWER() 42\nint main(void){return ANSWER ();}\n' > /tmp/lesson.c
+python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Only the selected `main` reaches code generation. Assembly puts 42 in `%rax`
-and returns through its frame cleanup. Tests cover both directives, empty
-macros, undefinition, nested skips, the historical operand behavior and a
-header included twice with a guard.
+After expansion the return expression is a number, so assembly loads 42 into
+`%rax` and returns. It makes no function call for the macro. Tests check bare
+identifiers, empty bodies, object-like parentheses, whitespace and comments,
+`-E` output, rejected parameters and arguments, and executable exit values.
 
 ## Tests and attribution
 

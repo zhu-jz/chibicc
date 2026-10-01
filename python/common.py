@@ -47,6 +47,7 @@ class Token:
     line_no: int = field(default=0, compare=False)
     fvalue: float = 0.0
     at_bol: bool = field(default=False, compare=False)
+    has_space: bool = field(default=False, compare=False)
     file: Optional[File] = field(default=None, compare=False)
     hideset: frozenset[str] = field(default_factory=frozenset, compare=False)
 

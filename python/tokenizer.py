@@ -245,11 +245,13 @@ def tokenize(source):
     tokens = []
     position = 0
     at_bol = True
+    has_space = False
 
     def append_token(token):
-        nonlocal at_bol
+        nonlocal at_bol, has_space
         token.at_bol = at_bol
-        at_bol = False
+        token.has_space = has_space
+        at_bol = has_space = False
         tokens.append(token)
 
     while position < len(source):
@@ -258,6 +260,7 @@ def tokenize(source):
         if source.startswith("//", position):
             end = source.find("\n", position + 2)
             position = len(source) if end == -1 else end
+            has_space = True
             continue
 
         if source.startswith("/*", position):
@@ -265,15 +268,18 @@ def tokenize(source):
             if end == -1:
                 raise CompileError(position, "unclosed block comment")
             position = end + 2
+            has_space = True
             continue
 
         if character == "\n":
             position += 1
             at_bol = True
+            has_space = False
             continue
 
         if character.isspace():
             position += 1
+            has_space = True
             continue
 
         if "0" <= character <= "9" or (character == "." and position + 1 < len(source) and "0" <= source[position + 1] <= "9"):

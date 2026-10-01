@@ -72,6 +72,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_zero_argument_macros_and_spacing(self):
+        self.assert_program_returns('#define ANSWER() 42\nint main(void){return ANSWER ();}\n', 42)
+        self.assert_program_returns('#define ANSWER() 42\nint main(void){int ANSWER=5;return ANSWER+ANSWER();}\n', 47)
+        self.assert_program_returns('#define CALL ()\nint answer(void){return 42;}int main(void){return answer CALL;}\n', 42)
+        self.assert_program_returns('#define EMPTY()\nint main(void){EMPTY() return 7;}\n', 7)
+        self.assert_program_returns('#define ANSWER/**/()\nint answer(void){return 11;}int main(void){return answer ANSWER;}\n', 11)
+        for source in ('#define F(x) x\n', '#define F() 42\nint main(void){return F(1);}\n'):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("expected ')'", result.stderr)
+        tokens = tokenize_raw('a/**/(b)\n c +d')
+        self.assertEqual([t.has_space for t in tokens[:-1]], [False, True, False, False, True, True, False])
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                input='int  main(void){/*gap*/return\t42;}\n', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, 'int main(void){ return 42;}\n')
+
     def test_ifdef_ifndef_directives(self):
         for prefix in ('#define PRESENT\n#ifdef PRESENT\n', '#ifndef ABSENT\n',
                        '#define PRESENT\n#undef PRESENT\n#ifndef PRESENT\n'):
@@ -223,18 +240,18 @@ int main(void){return 42;}
             result = subprocess.run([sys.executable, str(COMPILER), "-E", str(source)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout, " int value = 42 ;\n int main ( void ) { return value ; }\n")
+            self.assertEqual(result.stdout, "int value=42;\nint main(void){return value;}\n")
             self.assert_program_returns(result.stdout, 42)
             result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), "-"],
                                     input=f'#include "{header}"\n', capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "")
-            self.assertEqual(output.read_text(), " int value = 42 ;\n")
+            self.assertEqual(output.read_text(), "int value=42;\n")
             result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), str(source), str(source)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
             self.assertIn("multiple files", result.stderr)
-        for text, expected in (("not_valid_c", " not_valid_c\n"), ("", "\n"), ("0x2a", " 0x2a\n")):
+        for text, expected in (("not_valid_c", "not_valid_c\n"), ("", "\n"), ("0x2a", "0x2a\n")):
             result = subprocess.run([sys.executable, str(COMPILER), "-E", "-"],
                                     input=text, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)

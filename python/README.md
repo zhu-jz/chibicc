@@ -1,36 +1,39 @@
-# Lesson 143: Floating conditions
+# Lesson 144: Calls with floating arguments and results
 
-Original chibicc commit: [`0ce109302715f8186b90671a53517a63a2741022`](https://github.com/rui314/chibicc/commit/0ce109302715f8186b90671a53517a63a2741022).
+Original chibicc commit: [`8ec1ebf176b88522fc4ec3980d20c78e13fdd526`](https://github.com/rui314/chibicc/commit/8ec1ebf176b88522fc4ec3980d20c78e13fdd526).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The shared zero-comparison helper now handles float and double, and all condition
-sites call it. Integer conditions compare eax or rax according to their type;
-floating conditions zero xmm1 with xorps/xorpd and compare xmm0 using ucomiss/ucomisd.
-Conditional branches, logical operators, and Boolean casts use the resulting flags.
-Short circuit evaluation still skips the right operand when appropriate.
+Function calls now pass floating arguments through xmm0–xmm7, independently of
+the six integer/pointer argument registers. The compiler evaluates arguments
+from right to left, saves each result on the stack, then restores them in source
+order into their appropriate registers. A floating return already arrives in
+xmm0, ready for subsequent arithmetic or conversion.
 
-The Python implementation emits these instructions directly. Positive and negative
-floating zero are false. This historical commit treats unordered NaN comparisons
-as zero in truth tests because it uses the zero flag alone; tests deliberately
-record this limitation instead of silently changing the original progression.
+Python reverses a list instead of recursively visiting a C linked list. This
+commit changes the chosen argument evaluation order; C itself does not promise
+an order. Calls beyond six integer or eight floating register arguments receive
+clear Python errors; passing excess arguments on the stack is not implemented
+at this historical point. Definitions with floating parameters are still
+incomplete. The original commit also removes the old eax=0 before calls, leaving
+floating variadic-call bookkeeping incomplete for now.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){double x=0.5;if(x)return 42;return 1;}\n' > /tmp/lesson143.c
-python3 python/main.py /tmp/lesson143.c > /tmp/lesson143.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson143 /tmp/lesson143.s
-/tmp/lesson143
+printf 'double twice(double);int main(void){return twice(21.0);}\n' > /tmp/lesson144.c
+printf 'double twice(double x){return x*2;}\n' > /tmp/lesson144-helper.c
+python3 python/main.py /tmp/lesson144.c > /tmp/lesson144.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson144 /tmp/lesson144.s /tmp/lesson144-helper.c
+/tmp/lesson144
 echo $?
 ```
 
-ucomisd compares x against zero; je selects the false branch only when its zero
-flag is set. Here x is nonzero, so main returns 42 in eax and the shell displays
-exit status 42. The executable prints nothing itself. Tests cover both floating
-widths, loops, short circuit side effects, signed zero, Boolean casts, historical
-NaN behavior, emitted comparisons, execution, and the original C fixtures.
+The caller restores 21.0 into xmm0 and calls the separately compiled helper. The
+helper returns 42.0 in xmm0; cvttsd2sil converts main's result to int, so the shell
+shows exit status 42. Tests cover float and double calls, mixed register classes,
+nested calls, evaluation order, emitted register restores, and original fixtures.
 
 ## Tests and attribution
 

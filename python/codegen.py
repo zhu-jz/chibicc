@@ -130,8 +130,8 @@ class CodeGenerator:
         self.assembly.extend(("  sub $8, %rsp", "  movsd %xmm0, (%rsp)"))
         self.depth += 1
 
-    def popf(self, register):
-        self.assembly.extend((f"  movsd (%rsp), {register}", "  add $8, %rsp"))
+    def popf(self, index):
+        self.assembly.extend((f"  movsd (%rsp), %xmm{index}", "  add $8, %rsp"))
         self.depth -= 1
 
     def cmp_zero(self, ty):
@@ -214,14 +214,25 @@ class CodeGenerator:
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":
-            if len(node.args) > len(ARGREG):
+            fp_count = sum(arg.ty.kind in ("FLOAT", "DOUBLE") for arg in node.args)
+            if len(node.args) - fp_count > len(ARGREG):
                 raise CompileError(node.tok, "at most 6 arguments are supported")
-            for arg in node.args:
+            if fp_count > 8:
+                raise CompileError(node.tok, "at most 8 floating arguments are supported")
+            for arg in reversed(node.args):
                 self.gen_expr(arg)
-                self.push()
-            for index in range(len(node.args) - 1, -1, -1):
-                self.pop(ARGREG[index])
-            self.assembly.append("  mov $0, %rax")
+                if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                    self.pushf()
+                else:
+                    self.push()
+            gp, fp = 0, 0
+            for arg in node.args:
+                if arg.ty.kind in ("FLOAT", "DOUBLE"):
+                    self.popf(fp)
+                    fp += 1
+                else:
+                    self.pop(ARGREG[gp])
+                    gp += 1
             if self.depth % 2:
                 self.assembly.extend(("  sub $8, %rsp", f"  call {node.funcname}",
                                       "  add $8, %rsp"))
@@ -290,7 +301,7 @@ class CodeGenerator:
             self.gen_expr(node.rhs)
             self.pushf()
             self.gen_expr(node.lhs)
-            self.popf("%xmm1")
+            self.popf(1)
             suffix = "ss" if node.lhs.ty.kind == "FLOAT" else "sd"
             if node.kind in ("+", "-", "*", "/"):
                 instruction = {"+": "add", "-": "sub", "*": "mul", "/": "div"}[node.kind]

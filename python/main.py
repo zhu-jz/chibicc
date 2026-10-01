@@ -1,6 +1,6 @@
-"""Lesson 143: Floating conditions.
+"""Lesson 144: Calls with floating arguments and results.
 
-Based on chibicc commit 0ce109302715f8186b90671a53517a63a2741022.
+Based on chibicc commit 8ec1ebf176b88522fc4ec3980d20c78e13fdd526.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

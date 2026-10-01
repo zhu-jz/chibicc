@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_external_calls(self):
+        helper = "float f(float a,float b){return a+b;}double d(double a,double b){return a+b;}double mix(int a,double b,int c,float d){return a+b+c+d;}"
+        for source, expected in [
+            ("float f(float,float);int main(void){return f(20.5,21.5);}", 42),
+            ("double d(double,double);int main(void){return d(20.5,21.5);}", 42),
+            ("double mix(int,double,int,float);int main(void){return mix(10,10.5,20,1.5);}", 42),
+            ("double d(double,double);int main(void){return d(d(10.5,10),d(10.5,11));}", 42),
+        ]:
+            self.assert_program_returns(source, expected, helper)
+        assembly = compile_program("double d(double,double);int main(void){return d(20.5,21.5);}").stdout
+        self.assertIn("  movsd (%rsp), %xmm0\n", assembly)
+        self.assertIn("  movsd (%rsp), %xmm1\n", assembly)
+        self.assertIn("  call d\n", assembly)
+        self.assert_program_returns("int f(int,int);int main(void){int x=0;return f(++x,++x);}", 21, "int f(int a,int b){return 10*a+b;}")
+
     def test_floating_conditions(self):
         for source, expected in [
             ("int main(void){if(0.0)return 1;return 42;}", 42),
@@ -300,7 +315,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(len(ty.params), 1)
         self.assertEqual(tokenize("...")[0].text, "...")
         assembly = compile_program("int sum(int n,...);int main(void){return sum(1,42);}").stdout
-        self.assertIn("  mov $0, %rax\n  call sum\n", assembly)
+        self.assertIn("  call sum\n", assembly)
         self.assertEqual(compile_program("int sum(int n,...,int x);").returncode, 1)
 
     def test_small_function_return_values(self):
@@ -1544,7 +1559,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(void){int i=0,j=2;*(i=5,&j)=6;return i+j;}", 11),
             ("int main(void){char x;return sizeof(1,x);}", 1),
             ("int main(void){int x=(1,2);return x;}", 2),
-            ("int pair(int a,int b){return a+b;}int main(void){int x=0;return pair((x=1,7),x);}", 8),
+            ("int pair(int a,int b){return a+b;}int main(void){int x=0;return pair((x=1,7),x);}", 7),
         ]:
             self.assert_program_returns(source, expected)
         node = parse_body("return 1,2,3;").body.body[0].lhs.lhs
@@ -1927,8 +1942,8 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         ]:
             self.assert_program_returns(declarations + source, expected, helpers)
         assembly = compile_program(declarations + 'int main(void){return add6(1,2,3,4,5,6);}').stdout
-        self.assertIn("  pop %r9\n  pop %r8\n  pop %rcx\n  pop %rdx\n"
-                      "  pop %rsi\n  pop %rdi\n", assembly)
+        self.assertIn("  pop %rdi\n  pop %rsi\n  pop %rdx\n  pop %rcx\n"
+                      "  pop %r8\n  pop %r9\n", assembly)
         result = compile_program('int f();int main(void){return f(1,2,3,4,5,6,7);}')
         self.assertEqual(result.returncode, 1)
         self.assertIn("at most 6 arguments", result.stderr)
@@ -1945,7 +1960,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(call.funcname, "ret3")
         self.assertEqual(call.ty.kind, "INT")
         assembly = compile_program(declarations + 'int main(void){return ret3();}').stdout
-        self.assertIn("  mov $0, %rax\n  call ret3\n", assembly)
+        self.assertIn("  call ret3\n", assembly)
         self.assertEqual(compile_program(declarations + 'int main(void){return ret3(,);}').returncode, 1)
 
     def test_pointer_arithmetic(self):

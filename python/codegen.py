@@ -286,7 +286,8 @@ class CodeGenerator:
                 self.gen_stmt(statement)
             return
         if node.kind == "RETURN":
-            self.gen_expr(node.lhs)
+            if node.lhs is not None:
+                self.gen_expr(node.lhs)
             self.assembly.append(f"  jmp .L.return.{self.current_fn.name}")
             return
         if node.kind == "GOTO":

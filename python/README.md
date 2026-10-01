@@ -1,37 +1,31 @@
-# Lesson 121: Compound literals
+# Lesson 122: Return without a value
 
-Original chibicc commit: [`127056dc1de6ddad280f6cf09cb15538dca22f43`](https://github.com/rui314/chibicc/commit/127056dc1de6ddad280f6cf09cb15538dca22f43).
+Original chibicc commit: [`30b3e216cd4eca3b8a13cb0a0613f053ac1d4925`](https://github.com/rui314/chibicc/commit/30b3e216cd4eca3b8a13cb0a0613f053ac1d4925).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`(type){initializer}` now creates an unnamed object. At file scope it becomes
-anonymous global data, allowing nested pointer relocations. Inside a block it
-becomes a local initialized object; a comma node sequences initialization before
-returning that object's value or address. Compound literals are lvalues, so they
-can be assigned to or addressed.
+`return;` now creates a RETURN node with no operand. Code generation skips the
+expression and jumps to the same shared epilogue used by value-returning paths.
+This supports an early exit from a void function without manufacturing a value.
 
-The cast parser distinguishes a following brace and hands the expression back
-to unary/postfix parsing. Python checks scope-list length where upstream checks
-the outer scope link, then reuses existing initializer lowering. This historical
-postfix path returns early: wrap the literal in parentheses before applying a
-subscript or member suffix, as the original tests do.
+Python None replaces C's null operand pointer. This historical parser does not
+yet enforce return-value rules based on the function's declared return type.
+A return without a value does not promise any particular value in rax.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int *p=&(int){42};int main(){return *p;}\n' > /tmp/lesson121.c
-python3 python/main.py /tmp/lesson121.c > /tmp/lesson121.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson121 /tmp/lesson121.s
-/tmp/lesson121
+printf 'int g;void f(void){g=42;return;g=1;}int main(){f();return g;}\n' > /tmp/lesson122.c
+python3 python/main.py /tmp/lesson122.c > /tmp/lesson122.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson122 /tmp/lesson122.s
+/tmp/lesson122
 echo $?
 ```
 
-Assembly emits an anonymous int containing 42 and a .quad relocation from p to
-that object. Main follows the pointer and returns 42. Local literals instead
-emit stack zeroing and stores. Tests check scalar, array and struct values,
-runtime local initial values, writable literal storage, global relocations,
-nested pointer trees, assembly, and the new original compound-literal program.
+After storing 42, f jumps to .L.return.f and skips the later store. Main reads g
+and returns exit status 42. Tests verify early exit, absent AST operand, emitted
+jump without a value instruction, real execution, and updated function examples.
 
 ## Tests and attribution
 

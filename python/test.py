@@ -60,6 +60,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_return_without_value(self):
+        self.assert_program_returns("int g;void f(void){g=42;return;g=1;}int main(){f();return g;}", 42)
+        function = next(var for var in parse(tokenize("void f(void){return;}")) if var.is_function)
+        self.assertIsNone(function.body.body[0].lhs)
+        assembly = compile_program("void f(void){return;}").stdout
+        self.assertIn("  jmp .L.return.f\n", assembly)
+        self.assertNotIn("  mov $", assembly)
+
     def test_compound_literals(self):
         for source, expected in [
             ("int main(){return (int){42};}", 42),
@@ -2314,7 +2322,6 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("else return 1;", "else return 1;\n^ expected an expression\n"),
             ("if(1)", "if(1)\n     ^ expected an expression\n"),
             ("if(0) 1=2; return 3;", "if(0) 1=2; return 3;\n      ^ not an lvalue\n"),
-            ("return;", "return;\n      ^ expected an expression\n"),
             ("return 1", "return 1\n        ^ expected ';'\n"),
             ("return=1;", "return=1;\n      ^ expected an expression\n"),
             ("return 1; 2", "return 1; 2\n           ^ expected ';'\n"),

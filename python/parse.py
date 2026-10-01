@@ -479,6 +479,8 @@ class Parser:
     def stmt(self, position):
         token = self.tokens[position]
         if self.tokens[position].text == "return":
+            if self.tokens[position + 1].text == ";":
+                return Node("RETURN", tok=token), position + 2
             node, position = self.expr(position + 1)
             if self.tokens[position].text != ";":
                 raise CompileError(self.tokens[position], "expected ';'")

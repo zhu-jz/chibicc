@@ -1,36 +1,40 @@
-# Lesson 156: Compile multiple input files
+# Lesson 157: Link executables unless -c is given
 
-Original chibicc commit: [`b833cd0f297ba7979c23cff1b88c27beb4f2f737`](https://github.com/rui314/chibicc/commit/b833cd0f297ba7979c23cff1b88c27beb4f2f737).
+Original chibicc commit: [`8b726b54893e11427533fcceb7206b97c25f50a6`](https://github.com/rui314/chibicc/commit/8b726b54893e11427533fcceb7206b97c25f50a6).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The driver collects input paths in a Python list and compiles each file separately.
-Each child gets explicit -cc1-input and -cc1-output options so it selects the right
-translation unit even though the copied command line contains every input.
-Default output names use each basename; multiple inputs with a single -o are
-rejected. This step produces separate objects or assembly files and does not link.
+The driver now compiles and assembles C inputs into temporary objects, then runs
+GNU ld to create an executable. -c stops at object files; -S stops at assembly.
+Normal linking accepts multiple sources and existing .o inputs, with a single -o
+for the final executable or a.out by default. The driver rejects unknown suffixes.
 
-Option arguments are checked before processing help, matching the original -o
-precheck. Python also checks the new internal option arguments and missing
--cc1-input explicitly, giving readable errors where C would use a null pointer.
-Temporary assembly files are cleaned up after each source is assembled.
+The linker command supplies x86-64 startup objects, the dynamic loader, library
+search paths, libc, and GCC runtime libraries. Python uses glob and Path to find
+them with the original search order; it invokes ld directly and never asks GCC
+to compile C. Temporary objects live until linking completes and are then removed.
+The historical .s branch assembles a file but does not add it to the link inputs;
+.o inputs retain the original branch behavior even with stopping flags.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void);int main(void){return f();}\n' > /tmp/lesson156-main.c
-printf 'int f(void){return 42;}\n' > /tmp/lesson156-answer.c
-(cd /tmp && python3 /home/zhu/chibicc/python/main.py lesson156-main.c lesson156-answer.c)
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson156 /tmp/lesson156-main.o /tmp/lesson156-answer.o
-/tmp/lesson156
+printf 'int f(void);int main(void){return f();}\n' > /tmp/lesson157-main.c
+printf 'int f(void){return 42;}\n' > /tmp/lesson157-answer.c
+python3 python/main.py -### -o /tmp/lesson157 /tmp/lesson157-main.c /tmp/lesson157-answer.c
+/tmp/lesson157
+echo $?
+python3 python/main.py -S -o /tmp/lesson157.s /tmp/lesson157-main.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson157-gcc /tmp/lesson157.s /tmp/lesson157-answer.c
+/tmp/lesson157-gcc
 echo $?
 ```
 
-The first object contains an indirect call to external f; the second defines f
-and returns 42. Linking resolves the address, and the executable exits with 42.
-Tests check both objects, their linked execution, separate .s outputs and source
-metadata, ambiguous -o rejection, option validation, and the original examples.
+The trace shows the compiler children, as, and ld. Linking resolves f's function
+address; main calls it and exits with 42. The later commands demonstrate linking
+the emitted assembly with GCC as well. Tests check executable/object ELF types, multiple sources,
+existing objects, a.out, dynamic libc calls, suffix errors, assembly, and upstream.
 
 ## Tests and attribution
 

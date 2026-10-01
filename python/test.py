@@ -66,13 +66,43 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_linker_driver_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "main.c"
+            second = Path(directory) / "answer.c"
+            first.write_text("int f(void);int main(void){return f();}\n")
+            second.write_text("int f(void){return 42;}\n")
+            executable = Path(directory) / "program"
+            result = subprocess.run([sys.executable, str(COMPILER), "-###", "-o", str(executable), str(first), str(second)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(executable.read_bytes()[16:18], b"\x02\x00")
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            self.assertIn("ld -o ", result.stderr)
+            self.assertIn("crtbegin.o", result.stderr)
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", str(first), str(second)],
+                                    cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            result = subprocess.run([sys.executable, str(COMPILER), "main.o", "answer.o"], cwd=directory,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(Path(directory) / "a.out")], timeout=5).returncode, 42)
+            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(executable), "-"],
+                                    input="int puts(char*);int main(void){puts(\"linked\");return 42;}", capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            executed = subprocess.run([str(executable)], capture_output=True, text=True, timeout=5)
+            self.assertEqual((executed.returncode, executed.stdout), (42, "linked\n"))
+            result = subprocess.run([sys.executable, str(COMPILER), "source.xyz"], cwd=directory,
+                                    capture_output=True, text=True)
+            self.assertIn("unknown file extension", result.stderr)
+
     def test_multiple_driver_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / "main.c"
             second = Path(directory) / "answer.c"
             first.write_text("int f(void);int main(void){return f();}\n")
             second.write_text("int f(void){return 42;}\n")
-            result = subprocess.run([sys.executable, str(COMPILER), str(first), str(second)],
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", str(first), str(second)],
                                     cwd=directory, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             objects = [str(Path(directory) / name) for name in ("main.o", "answer.o")]
@@ -85,10 +115,10 @@ class ExpressionCompilerTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(f'.file 1 "{first}"', (Path(directory) / "main.s").read_text())
             self.assertIn(f'.file 1 "{second}"', (Path(directory) / "answer.s").read_text())
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", str(executable), str(first), str(second)],
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", "-o", str(executable), str(first), str(second)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot specify '-o' with multiple files", result.stderr)
+            self.assertIn("cannot specify '-o' with '-c' or '-S' with multiple files", result.stderr)
         result = subprocess.run([sys.executable, str(COMPILER), "--help", "-o"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
 
@@ -96,7 +126,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "program.c"
             source.write_text("int main(void){return 42;}\n")
-            result = subprocess.run([sys.executable, str(COMPILER), str(source)], cwd=directory,
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", str(source)], cwd=directory,
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             obj = Path(directory) / "program.o"
@@ -109,16 +139,16 @@ class ExpressionCompilerTests(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("  mov $42, %rax\n", (Path(directory) / "program.s").read_text())
-            result = subprocess.run([sys.executable, str(COMPILER), "-###", "-o", str(obj), str(source)],
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", "-###", "-o", str(obj), str(source)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("as -c ", result.stderr)
             temporary = result.stderr.splitlines()[0].rsplit(" -cc1-output ", 1)[1]
             self.assertFalse(Path(temporary).exists())
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", directory, str(source)],
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", "-o", directory, str(source)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
-            result = subprocess.run([sys.executable, str(COMPILER), "-o", "", str(source)],
+            result = subprocess.run([sys.executable, str(COMPILER), "-c", "-o", "", str(source)],
                                     cwd=directory, capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
 

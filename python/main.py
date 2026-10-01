@@ -1,6 +1,6 @@
-"""Lesson 156: Compile multiple input files.
+"""Lesson 157: Link executables unless -c is given.
 
-Based on chibicc commit b833cd0f297ba7979c23cff1b88c27beb4f2f737.
+Based on chibicc commit 8b726b54893e11427533fcceb7206b97c25f50a6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -8,6 +8,7 @@ import sys
 import subprocess
 from pathlib import Path
 import tempfile
+import glob
 
 from codegen import codegen
 from common import CompileError
@@ -28,6 +29,7 @@ def parse_args(arguments):
     opt_cc1 = False
     opt_trace = False
     opt_S = False
+    opt_c = False
     position = 0
     while position < len(arguments):
         if arguments[position] in ("-o", "-cc1-input", "-cc1-output"):
@@ -38,6 +40,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-c":
+            opt_c = True
+            position += 1
+            continue
         if argument == "-S":
             opt_S = True
             position += 1
@@ -74,7 +80,7 @@ def parse_args(arguments):
         position += 1
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, base_file, cc1_output
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, base_file, cc1_output
 
 
 def write_output(path, assembly):
@@ -141,27 +147,74 @@ def replace_extension(filename, extension):
     return name + extension
 
 
+def find_library_path():
+    for directory in ("/usr/lib/x86_64-linux-gnu", "/usr/lib64"):
+        if (Path(directory) / "crti.o").exists():
+            return directory
+    raise CompileError(None, "library path is not found")
+
+
+def find_gcc_library_path():
+    for pattern in ("/usr/lib/gcc/x86_64-linux-gnu/*/crtbegin.o",
+                    "/usr/lib/gcc/x86_64-pc-linux-gnu/*/crtbegin.o",
+                    "/usr/lib/gcc/x86_64-redhat-linux/*/crtbegin.o"):
+        matches = sorted(glob.glob(pattern))
+        if matches:
+            return str(Path(matches[-1]).parent)
+    raise CompileError(None, "gcc library path is not found")
+
+
+def run_linker(inputs, output, trace):
+    library = find_library_path()
+    gcc_library = find_gcc_library_path()
+    command = ["ld", "-o", output, "-m", "elf_x86_64", "-dynamic-linker",
+               "/lib64/ld-linux-x86-64.so.2", f"{library}/crt1.o", f"{library}/crti.o",
+               f"{gcc_library}/crtbegin.o", f"-L{gcc_library}", f"-L{library}", f"-L{library}/..",
+               "-L/usr/lib64", "-L/lib64", "-L/usr/lib/x86_64-linux-gnu",
+               "-L/usr/lib/x86_64-pc-linux-gnu", "-L/usr/lib/x86_64-redhat-linux",
+               "-L/usr/lib", "-L/lib", *inputs, "-lc", "-lgcc", "--as-needed", "-lgcc_s",
+               "--no-as-needed", f"{gcc_library}/crtend.o", f"{library}/crtn.o"]
+    return run_subprocess(command, trace)
+
+
 def main():
     try:
-        inputs, opt_o, opt_cc1, opt_trace, opt_S, base_file, cc1_output = parse_args(sys.argv[1:])
+        inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, base_file, cc1_output = parse_args(sys.argv[1:])
         if opt_cc1:
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
             return cc1(base_file, cc1_output)
-        if len(inputs) > 1 and opt_o is not None:
-            raise CompileError(None, "cannot specify '-o' with multiple files")
-        for filename in inputs:
-            output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
-            if opt_S:
-                status = run_cc1(sys.argv[1:], filename, output_path, opt_trace)
-            else:
-                with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
-                    assembly_path = str(Path(directory) / "input.s")
+        if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S):
+            raise CompileError(None, "cannot specify '-o' with '-c' or '-S' with multiple files")
+        linker_inputs = []
+        with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
+            for index, filename in enumerate(inputs):
+                output_path = opt_o if opt_o is not None else replace_extension(filename, ".s" if opt_S else ".o")
+                if filename.endswith(".o"):
+                    linker_inputs.append(filename)
+                    continue
+                if filename.endswith(".s"):
+                    if not opt_S:
+                        status = run_subprocess(["as", "-c", filename, "-o", output_path], opt_trace)
+                        if status:
+                            return status
+                    continue
+                if not filename.endswith(".c") and filename != "-":
+                    raise CompileError(None, f"unknown file extension: {filename}")
+                if opt_S:
+                    status = run_cc1(sys.argv[1:], filename, output_path, opt_trace)
+                else:
+                    assembly_path = str(Path(directory) / f"{index}.s")
+                    object_path = output_path if opt_c else str(Path(directory) / f"{index}.o")
                     status = run_cc1(sys.argv[1:], filename, assembly_path, opt_trace)
                     if not status:
-                        status = run_subprocess(["as", "-c", assembly_path, "-o", output_path], opt_trace)
-            if status:
-                return status
+                        status = run_subprocess(["as", "-c", assembly_path, "-o", object_path], opt_trace)
+                    if not opt_c:
+                        linker_inputs.append(object_path)
+                if status:
+                    return status
+            if linker_inputs:
+                return run_linker(linker_inputs, opt_o if opt_o is not None else "a.out", opt_trace)
         return 0
     except CompileError as error:
         print(error, file=sys.stderr)

@@ -1,6 +1,6 @@
-"""Lesson 250: Include optional tokens in variadic macros.
+"""Lesson 251: Omit commas before empty GNU variadic arguments.
 
-Based on chibicc commit 338144869fa82097d7767a032cbaac616ba0cd01.
+Based on chibicc commit 083c27559e5d8fce9c3b588fc4c01769ca9dd10d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

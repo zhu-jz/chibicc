@@ -1,29 +1,27 @@
-# Lesson 250: Include optional tokens in variadic macros
+# Lesson 251: Omit commas before empty GNU variadic arguments
 
-Original chibicc commit: [`338144869fa82097d7767a032cbaac616ba0cd01`](https://github.com/rui314/chibicc/commit/338144869fa82097d7767a032cbaac616ba0cd01).
+Original chibicc commit: [`083c27559e5d8fce9c3b588fc4c01769ca9dd10d`](https://github.com/rui314/chibicc/commit/083c27559e5d8fce9c3b588fc4c01769ca9dd10d).
 Earlier explanations are available in Git history.
 
-During function-like macro substitution, `__VA_OPT__(tokens)` now keeps its
-parenthesized tokens only when the raw `__VA_ARGS__` token list is nonempty.
-Balanced parentheses allow nested expressions and commas inside that token list.
-This lets a variadic macro insert a separator only when extra arguments exist.
+The GNU `,##__VA_ARGS__` extension now removes all three tokens when the raw
+variadic argument list is empty. With nonempty arguments it keeps the comma
+and expands the argument normally, bypassing ordinary token pasting.
+The special case applies only to the variadic parameter name.
 
 ```sh
-printf '#define SUM(x,...) x __VA_OPT__(+) __VA_ARGS__\nint main(void){return SUM(12,30);}\n' > /tmp/lesson.c
+printf '#define CALL(f,x,...) f(x,##__VA_ARGS__)\nint f(int x){return x;}int main(void){return CALL(f,42);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Preprocessing produces `12+30`. Assembly loads the operands, adds them and
-returns 42. Tests check empty and nonempty arguments, nested parentheses, optional
-separators and the original sprintf fixtures. Python copies tokens into a list
-where C links them into the output chain.
-This historical implementation tests raw emptiness, so an argument macro that
-later expands to nothing still counts as present. It copies the optional body
-without substituting named parameters inside it; that limitation is preserved
-and explicitly tested rather than claiming full modern standard behavior.
+The expansion is `f(42)` with no trailing comma. Assembly passes 42 in the first
+integer argument register, calls f and returns its value. Tests inspect empty,
+explicitly empty and multi-argument expansions, run both call forms, retain
+ordinary named-parameter pasting, and execute the original sprintf fixtures.
+Python advances a token-list index where C advances linked pointers. Like the
+original step, empty detection occurs before argument macro expansion.
 
 ## Tests and attribution
 

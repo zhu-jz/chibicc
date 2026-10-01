@@ -81,6 +81,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_gnu_variadic_comma(self):
+        for call, expected in [('M(1)', ['1']), ('M(1,)', ['1']), ('M(1,2,3)', ['1', ',', '2', ',', '3'])]:
+            tokens = tokenize('#define M(x,...) x,##__VA_ARGS__\n' + call + '\n')
+            self.assertEqual([t.text for t in tokens[:-1]], expected)
+        self.assert_program_returns('#define CALL(f,x,...) f(x,##__VA_ARGS__)\nint f(int x){return x;}int main(void){return CALL(f,42);}', 42)
+        self.assert_program_returns('#define CALL(f,x,...) f(x,##__VA_ARGS__)\nint f(int x,int y){return x+y;}int main(void){return CALL(f,12,30);}', 42)
+        self.assert_program_returns('#define M(x,y) (1,##x y)\nint main(void){return M(,42);}', 42)
+
     def test_va_opt(self):
         self.assert_program_returns('#define M(...) 40 __VA_OPT__(+2)\nint main(void){return M();}', 40)
         self.assert_program_returns('#define M(...) 40 __VA_OPT__(+2)\nint main(void){return M(99);}', 42)

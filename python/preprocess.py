@@ -265,6 +265,16 @@ def subst(body, args, files, macros, conditions, include_paths):
             result.append(new_str_token(join_tokens(argument), token))
             position += 2
             continue
+        if token.text == "," and body[position + 1].text == "##":
+            name = body[position + 2].text
+            argument = args.get(name)
+            if name == "__VA_ARGS__" and argument is not None:
+                if argument[0].kind == "EOF":
+                    position += 3
+                else:
+                    result.append(replace(token))
+                    position += 2
+                continue
         if token.text == "##":
             if not result:
                 raise CompileError(token, "'##' cannot appear at start of macro expansion")

@@ -1,28 +1,28 @@
-# Lesson 243: Choose a union member in an initializer
+# Lesson 244: Find fields inside anonymous structs
 
-Original chibicc commit: [`31dc1dfa211ee27e74907ce3aa3986401dcedb82`](https://github.com/rui314/chibicc/commit/31dc1dfa211ee27e74907ce3aa3986401dcedb82).
+Original chibicc commit: [`95eb5b01b30b24d68cbeb3991f65c617fc2a35cb`](https://github.com/rui314/chibicc/commit/95eb5b01b30b24d68cbeb3991f65c617fc2a35cb).
 Earlier explanations are available in Git history.
 
-A union stores all its members at the same address. Initializers now record
-which member was selected by a `.field` designator instead of always writing
-the first member. Nested array and struct designators can select a union member
-too. Without a designator, the first member is still the default.
+A struct designator can now name a field inside an anonymous struct member.
+The lookup first selects the anonymous container, then leaves `.field` unconsumed
+so recursive designation can find the inner field. Ordinary named members still
+advance past the field name immediately.
 
 ```sh
-printf 'int main(void){union T{int a;char b[4];}x={.b[1]=42};return x.b[1];}\n' > /tmp/lesson.c
+printf 'int main(void){struct{struct{int a,b;};int c;}x={.b=12,30};return x.a+x.b+x.c;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Local assembly zeroes the union, then stores one byte at its base address plus
-one. Loading that byte and returning it gives exit status 42. Global initializers
-write the selected member into the shared byte buffer instead. Tests also cover
-empty global arrays of unions and nested selections, alongside original fixtures.
-Python stores the selected Member object or None instead of a nullable C pointer.
-The original restriction to a single initializer inside a union is preserved;
-a trailing comma in the designated form is not accepted at this step.
+Assembly zeroes the object, stores 12 into the inner b field and 30 into c,
+then loads and adds them. The anonymous struct contributes its member offsets
+but needs no extra runtime representation. Tests cover nested anonymous structs,
+global initialization and an anonymous struct inside a union, plus original fixtures.
+Python returns a Member and token-list index instead of a C pointer and output
+parameter. This original step searches anonymous structs; anonymous union lookup
+in initializer designators is not extended here.
 
 ## Tests and attribution
 

@@ -1,6 +1,6 @@
-"""Lesson 243: Choose a union member in an initializer.
+"""Lesson 244: Find fields inside anonymous structs.
 
-Based on chibicc commit 31dc1dfa211ee27e74907ce3aa3986401dcedb82.
+Based on chibicc commit 95eb5b01b30b24d68cbeb3991f65c617fc2a35cb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

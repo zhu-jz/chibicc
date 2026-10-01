@@ -1095,6 +1095,10 @@ class Parser:
         if token.kind != "IDENT":
             raise CompileError(token, "expected a field designator")
         for member in ty.members:
+            if member.ty.kind == "STRUCT" and member.name is None:
+                if self.get_struct_member(member.ty, token) is not None:
+                    return member, position
+                continue
             if member.name is not None and member.name.text == token.text:
                 return member, position + 2
         raise CompileError(token, "struct has no such member")

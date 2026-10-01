@@ -80,6 +80,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_anonymous_struct_designators(self):
+        for source, expected in [
+            ('int main(void){struct{struct{int a;struct{int b;};};int c;}x={1,2,3,.b=4,5};return x.a+x.b+x.c;}', 10),
+            ('struct{struct{int a,b;};int c;}x={.b=12,30};int main(void){return x.a+x.b+x.c;}', 42),
+            ('int main(void){union{struct{int a,b;};int c;}x={.b=42};return x.a+x.b;}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+
     def test_union_designated_initializers(self):
         for source, expected in [
             ('int main(void){union T{int a;char b[4];}x={.b[1]=42};return x.b[1]+x.b[0];}', 42),

@@ -1,6 +1,6 @@
-"""Lesson 232: Initialize arrays from UTF-16 strings.
+"""Lesson 233: Initialize UTF-32 and wide arrays.
 
-Based on chibicc commit 36230e0827ca33a9b09ea5aa7b06e170fd188ca1.
+Based on chibicc commit 6adba75af879d8ac2bc43a7337b02e64d10e60f1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -79,6 +79,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_utf32_array_initializers(self):
+        for prefix,spelling in [('U','unsigned int'),('L','int')]:
+            self.assert_program_returns(f'int main(void){{{spelling} x[]={prefix}"🤔x";return x[0]==129300&&x[1]==120&&x[2]==0&&sizeof(x)==12;}}',1)
+            self.assert_program_returns(f'{spelling} x[]={prefix}"β";int main(void){{return x[0]-904;}}',42)
+        self.assert_program_returns(r'unsigned int x[]=U"\xffffffff";int main(void){return x[0]>>31;}',1)
+        self.assert_program_returns(r'int x[]=L"\xffffffff";int main(void){return x[0]>>31;}',255)
+        self.assert_program_returns('int main(void){unsigned int x[1]=U"βx";return sizeof(x)+38;}',42)
+
     def test_utf16_array_initializers(self):
         self.assert_program_returns('int main(void){unsigned short x[]=u"αβ";return x[0]==945&&x[1]==946&&x[2]==0&&sizeof(x)==6;}',1)
         self.assert_program_returns('unsigned short x[]=u"🍣";int main(void){return x[0]==0xd83c&&x[1]==0xdf63&&x[2]==0&&sizeof(x)==6;}',1)

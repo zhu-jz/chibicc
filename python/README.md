@@ -1,18 +1,16 @@
-# Lesson 232: Initialize arrays from UTF-16 strings
+# Lesson 233: Initialize UTF-32 and wide arrays
 
-Original chibicc commit: [`36230e0827ca33a9b09ea5aa7b06e170fd188ca1`](https://github.com/rui314/chibicc/commit/36230e0827ca33a9b09ea5aa7b06e170fd188ca1).
+Original chibicc commit: [`6adba75af879d8ac2bc43a7337b02e64d10e60f1`](https://github.com/rui314/chibicc/commit/6adba75af879d8ac2bc43a7337b02e64d10e60f1).
 Earlier explanations are available in Git history.
 
-String-based array initialization now reads complete two-byte units for short
-arrays, while char arrays retain signed-byte reading. An omitted array bound
-uses the literal's unit count, including zero. Local initialization emits
-assignments to each element; global initialization serializes those values.
-The original also simplifies its L-character scan increment, which Python
-already expressed as a returned next index.
+String initialization now handles four-byte array elements too. It reads
+uint32-sized units from the literal payload, then normal assignment or global
+serialization converts to the destination's signed or unsigned type. Both
+U strings and Linux L wide strings can initialize complete arrays.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){unsigned short x[]=u"β";return x[0]-904;}
+int main(void){unsigned int x[]=U"β";return x[0]-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -20,13 +18,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The array contains the complete unit 946 and a zero. Two-byte stores initialize
-it, and indexed loading/subtraction returns 42. Tests cover inferred bounds,
-local and global arrays, exact serialized bytes, surrogate pairs, truncation
-to an explicit shorter bound, zero-filled larger bounds and original fixtures.
-Python decodes little-endian slices rather than casting buffer pointers.
-Four-byte array initializers remain unsupported at this historical step and
-receive CompileError instead of the C unreachable assertion.
+Four-byte stores initialize 946 and zero. The indexed load and subtraction
+return 42. Tests cover local/global unsigned and signed arrays, supplementary
+characters, inferred and truncated bounds, high-bit shifts and original fixtures.
+Python extends its existing little-endian unit reader to size 4 rather than
+adding pointer casts. Adjacent wide-string concatenation still has its earlier
+one-byte assumptions until that original step is reached.
 
 ## Tests and attribution
 

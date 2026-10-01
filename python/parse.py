@@ -1072,7 +1072,7 @@ class Parser:
             init.__dict__.update(complete.__dict__)
         count = min(init.ty.array_len, token.ty.array_len)
         size = init.ty.base.size
-        if size not in (1, 2):
+        if size not in (1, 2, 4):
             raise CompileError(token, "unsupported string initializer element size")
         for index in range(count):
             value = int.from_bytes(token.str[index * size:(index + 1) * size], 'little')

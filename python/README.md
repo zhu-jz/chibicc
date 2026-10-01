@@ -1,26 +1,28 @@
-# Lesson 252: Skip pragma directives
+# Lesson 253: Name variadic macro parameters
 
-Original chibicc commit: [`74ec9f6f3964d4beaa3970bd99c8660f958b694e`](https://github.com/rui314/chibicc/commit/74ec9f6f3964d4beaa3970bd99c8660f958b694e).
+Original chibicc commit: [`007e526ec50bde4b366d0927ad20d9cd4ac53abf`](https://github.com/rui314/chibicc/commit/007e526ec50bde4b366d0927ad20d9cd4ac53abf).
 Earlier explanations are available in Git history.
 
-Preprocessing now discards `#pragma` and the remainder of its physical line.
-This permits sources containing implementation-specific directives to compile.
-At this historical step every pragma is ignored, including `once` and `pack`.
+GNU macro definitions can now name their variadic tail, as in `args...`.
+Each macro records that name rather than a boolean variadic flag, and invocation
+collects the remaining comma-separated tokens under it. GNU comma removal also
+recognizes the chosen variadic name.
 
 ```sh
-printf '#pragma unknown example\nint main(void){return 42;}\n' > /tmp/lesson.c
+printf '#define SUM(x,args...) x+args\nint main(void){return SUM(12,30);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The pragma emits no tokens or assembly. Main loads 42 and returns normally.
-Tests verify arbitrary, empty and end-of-file pragmas, unchanged struct alignment
-under `pack`, and repeated inclusion despite `once`, plus the original fixtures.
-Python stops at EOF as well as the next line; the C loop assumes it can advance
-until a token begins a line. The EOF guard avoids an invalid pointer traversal
-without adding semantics for any particular pragma.
+Substitution produces `12+30`; the ordinary addition assembly returns 42.
+Tests cover an empty tail, only a variadic parameter, fixed parameters before it,
+multi-argument calls, comma removal and the original macro.c additions.
+Python passes the variadic name alongside its argument dictionary instead of
+adding C's is_va_args flag to each linked argument node. The earlier __VA_OPT__
+helper still checks the literal name __VA_ARGS__, just as in this original
+commit, so it does not recognize a GNU tail named args. That limit is tested.
 
 ## Tests and attribution
 

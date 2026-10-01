@@ -1,6 +1,6 @@
-"""Lesson 252: Skip pragma directives.
+"""Lesson 253: Name variadic macro parameters.
 
-Based on chibicc commit 74ec9f6f3964d4beaa3970bd99c8660f958b694e.
+Based on chibicc commit 007e526ec50bde4b366d0927ad20d9cd4ac53abf.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

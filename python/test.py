@@ -81,6 +81,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_gnu_named_variadic_macros(self):
+        self.assert_program_returns('#define M(args...) args\nint main(void){return M() 42;}', 42)
+        self.assert_program_returns('#define M(x,args...) x+args\nint main(void){return M(12,30);}', 42)
+        self.assert_program_returns('#define M(args...) f(args)\nint f(int a,int b){return a+b;}int main(void){return M(12,30);}', 42)
+        self.assert_program_returns('#define M(x,args...) f(x,##args)\nint f(int x){return x;}int main(void){return M(42);}', 42)
+        self.assert_program_returns('#define M(x,args...) f(x,##args)\nint f(int x,int y){return x+y;}int main(void){return M(12,30);}', 42)
+        self.assert_program_returns('#define M(args...) 40 __VA_OPT__(+2)\nint main(void){return M(1);}', 40)
+
     def test_ignored_pragmas(self):
         for pragma in ('once', 'pack(1)', 'unknown "anything" 42', ''):
             self.assert_program_returns('#pragma ' + pragma + '\nint main(void){return 42;}', 42)

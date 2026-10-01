@@ -1,33 +1,37 @@
-# Lesson 191: Add the __func__ identifier
+# Lesson 192: Add the GNU __FUNCTION__ identifier
 
-Original chibicc commit: [`ba6b4b63751ed65f2fcd74965d2b337a1a65752b`](https://github.com/rui314/chibicc/commit/ba6b4b63751ed65f2fcd74965d2b337a1a65752b).
+Original chibicc commit: [`82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f`](https://github.com/rui314/chibicc/commit/82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f).
 Earlier explanations are available in Git history.
 
-Every function definition now binds `__func__` in its function scope to a
-static character array containing its name and a terminating zero. It is a
-parser-provided variable, not a preprocessor macro. Its array size is therefore
-the name length plus one, and returning its address is safe after the call.
+Every function definition now also binds `__FUNCTION__` to a static character
+array containing the current function name. It is GNU's alternate name for the
+same information supplied by `__func__`, and is introduced by the parser rather
+than by macro expansion.
 
-The parser creates an ordinary anonymous global string object and a scoped
-binding for it. This also creates an unused string for functions that never
-reference __func__, matching the original C commit. Tests now select function
-objects explicitly because each function also adds a string object. Instruction
-snapshots omit global data; separate tests inspect the generated string and
-assemble/link/run the complete emitted output. Anonymous label numbers change
-because those strings consume identifiers.
+This original commit creates a separate string object for each binding, even
+when neither is used. Their bytes and sizes match but their addresses differ
+in this compiler. Python preserves both objects and their function-scope
+bindings. Anonymous label numbers shift once more; tests inspect strings and
+select functions by name rather than assuming every global object is a function.
 
 ```sh
-printf 'int main(void){return sizeof(__func__);}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof(__FUNCTION__);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 5 for main plus its terminating zero
 ```
 
-Assembly emits the bytes of main and a zero in static data. The sizeof
-expression produces a constant 5, which is loaded into `%rax` and returned.
-Tests cover array size, character access, returning the string, local shadowing,
-rejection outside functions, original fixtures and earlier AST/assembly checks.
+Assembly emits two static strings with the bytes of main and a zero. sizeof
+becomes a constant, so the function loads 5 into `%rax` and returns through
+its frame cleanup. A character reference instead loads from the selected
+string's address. Tests cover size, returning the string, distinct addresses,
+shadowing and rejection outside a function; the original function fixture runs
+unchanged. Both complete source and packaged compiler suites are checked.
+
+This completes the requested batch of fifty consecutive lessons, 143–192.
+The README describes this current lesson; earlier explanations remain in each
+Python Git commit, which records its corresponding full original commit hash.
 
 ## Tests and attribution
 

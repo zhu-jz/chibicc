@@ -77,6 +77,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_identifier(self):
+        self.assert_program_returns('int main(void){return sizeof(__FUNCTION__);}', 5)
+        self.assert_program_returns('char *answer(void){return __FUNCTION__;}int main(void){return answer()[5];}', 114)
+        self.assert_program_returns('int main(void){return __func__==__FUNCTION__;}', 0)
+        self.assert_program_returns('int main(void){int __FUNCTION__=42;return __FUNCTION__;}', 42)
+        result = compile_program('char *name=__FUNCTION__;')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('undefined variable', result.stderr)
+
     def test_func_identifier(self):
         self.assert_program_returns('int main(void){return sizeof(__func__);}', 5)
         self.assert_program_returns('int answer(void){return __func__[0];}int main(void){return answer();}', 97)
@@ -87,7 +96,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertIn('undefined variable', result.stderr)
         program = parse(tokenize('int main(void){return sizeof(__func__);}'))
         strings = [obj for obj in program if obj.init_data == b'main\0']
-        self.assertEqual(len(strings), 1)
+        self.assertEqual(len(strings), 2)
         self.assertEqual(strings[0].ty.kind, 'ARRAY')
 
     def test_variadic_macros(self):
@@ -1229,7 +1238,7 @@ int main(void){return 42;}
         function = next(var for var in program if var.is_function)
         self.assertEqual(function.locals, [])
         assembly = compile_program("int f(void){static int x=42;return x;}").stdout
-        self.assertIn("  .data\n.L..1:\n  .byte 42\n", assembly)
+        self.assertIn("  .data\n.L..2:\n  .byte 42\n", assembly)
         self.assertNotIn("  rep stosb\n", assembly)
         result = compile_program("int g(void);int main(void){static int x=g();return x;}")
         self.assertEqual(result.returncode, 1)
@@ -1512,7 +1521,7 @@ int main(void){return 42;}
         self.assertIn("  mov $97, %rax\n", assembly)
         self.assertIn("  mov %al, (%rdi)\n", assembly)
         objects = parse(tokenize('int main(void){char x[]="abc";return x[0];}'))
-        self.assertEqual([obj.init_data for obj in objects if not obj.is_function], [b'main\0'])
+        self.assertEqual([obj.init_data for obj in objects if not obj.is_function], [b'main\0', b'main\0'])
 
     def test_excess_initializer_elements(self):
         for source, expected in [
@@ -2608,7 +2617,7 @@ int main(void){return 42;}
         self.assertEqual(token.ty.size, 4)
         assembly = compile_program('int main(void){return "abc"[0];}').stdout
         self.assertIn("  .byte 97\n  .byte 98\n  .byte 99\n  .byte 0\n", assembly)
-        self.assertIn("  lea .L..1(%rip), %rax", assembly)
+        self.assertIn("  lea .L..2(%rip), %rax", assembly)
         for source in ['int main(void){return "abc;}', 'int main(void){return "a\nb"[0];}']:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
@@ -2942,7 +2951,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertIsNone(node.inc)
         self.assertEqual(instruction_assembly(CodeGenerator().generate([program]) + "\n"), PROLOGUE + "  sub $0, %rsp\n"
                          ".L.begin.1:\n  mov $3, %rax\n  jmp .L.return.main\n"
-                         ".L..2:\n  jmp .L.begin.1\n.L..1:\n" + EPILOGUE)
+                         ".L..3:\n  jmp .L.begin.1\n.L..2:\n" + EPILOGUE)
         for source, position, message in [
             ('int main(void){for 1;}', 19, "expected '('"),
             ('int main(void){for(1 2;3) ;}', 21, "expected ';'"),

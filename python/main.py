@@ -1,6 +1,6 @@
-"""Lesson 191: Add the __func__ identifier.
+"""Lesson 192: Add the GNU __FUNCTION__ identifier.
 
-Based on chibicc commit ba6b4b63751ed65f2fcd74965d2b337a1a65752b.
+Based on chibicc commit 82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

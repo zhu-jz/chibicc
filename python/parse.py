@@ -1291,6 +1291,8 @@ class Parser:
         name = function.name.encode("utf-8") + b"\0"
         literal = self.new_string_literal(name, array_of(ty_char, len(name)))
         self.push_scope("__func__").var = literal
+        literal = self.new_string_literal(name, array_of(ty_char, len(name)))
+        self.push_scope("__FUNCTION__").var = literal
         function.body, position = self.compound_stmt(position + 1)
         function.locals = self.locals
         self.leave_scope()

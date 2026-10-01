@@ -1,41 +1,38 @@
-# Lesson 101: Infer array lengths from initializers
+# Lesson 102: Local struct initializers
 
-Original chibicc commit: [`5b955336032881edf835a50fb63f9581af1efd73`](https://github.com/rui314/chibicc/commit/5b955336032881edf835a50fb63f9581af1efd73).
+Original chibicc commit: [`e9d2c46ab3cc8b8518df289a4fc24a9e3fc9b3fe`](https://github.com/rui314/chibicc/commit/e9d2c46ab3cc8b8518df289a4fc24a9e3fc9b3fe).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-An incomplete outer array type may now be completed by its initializer. Strings
-supply their byte length including the terminator. For a brace list, the parser
-first counts outer elements using a dummy initializer, then allocates a complete
-initializer tree and parses the list again. Only the real tree emits assignments,
-so side effects still execute once. Inner array dimensions must remain complete.
+Struct initializers now allocate a child initializer for each member, indexed
+in declaration order. Brace lists fill those children; omitted members remain
+zero and excess supplied values are discarded. A designation path may contain
+a Member as well as array indices, so lowering can assign nested struct fields,
+arrays within structs, and members of structs within arrays. Existing MEMBER
+address generation applies each member's aligned offset.
 
-The variable receives the initializer's completed type before clearing/assignment
-lowering and stack allocation. An incomplete-array typedef stays unchanged, so
-two variables using it can infer different lengths. Declarations check for a
-still-incomplete object after processing an optional initializer.
-
-Python returns the initializer and token index, then sets var.ty; C uses an
-additional Type** output parameter. Replacing the initializer's fields mirrors
-the original struct copy. The two parsing passes can allocate compiler temporaries
-in both passes, matching the original; they do not execute source expressions.
+Python lists replace indexed child-pointer storage and InitDesg.member identifies
+a member path. This original commit temporarily requires braces for every struct
+initializer, rejecting the previously supported `struct T b=a;` form. Ordinary
+struct assignment remains supported; the older copy test now uses that form.
+Union brace initialization and complete aggregate syntax are still unavailable.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int a[]={1,2,42};return a[2];}\n' > /tmp/lesson101.c
-python3 python/main.py /tmp/lesson101.c > /tmp/lesson101.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson101 /tmp/lesson101.s
-/tmp/lesson101
+printf 'int main(){struct T{char a;int b;} x={1,42};return x.b;}\n' > /tmp/lesson102.c
+python3 python/main.py /tmp/lesson102.c > /tmp/lesson102.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson102 /tmp/lesson102.s
+/tmp/lesson102
 echo $?
 ```
 
-The inferred array is twelve bytes. Its clearing uses `mov $12, %rcx`, followed
-by element stores; the final scaled load returns 42. The shell displays 42.
-Tests cover numeric/string inference, independent typedef uses, multidimensional
-arrays, once-only runtime effects, type metadata, assembly size, missing
-initializers, and the updated original initializer program.
+The emitter clears x, stores one byte for a, then adds b's aligned offset four
+and stores 42 with eax. Main exits with 42. Tests cover partial/empty structs,
+nested aggregates, arrays of structs with inferred lengths, member ordering,
+padding zeroing, expression-initializer rejection, assembly offsets, real
+execution, and the updated original initializer program.
 
 ## Tests and attribution
 

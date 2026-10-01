@@ -49,6 +49,8 @@ def new_initializer(ty, is_flexible=False):
             init.is_flexible = True
             return init
         init.children = [new_initializer(ty.base) for _ in range(ty.array_len)]
+    elif ty.kind == "STRUCT":
+        init.children = [new_initializer(member.ty) for member in ty.members]
     return init
 
 
@@ -650,7 +652,7 @@ class Parser:
                     position += 1
                 first = False
                 ty, position = self.declarator(position, basety)
-                members.append(Member(ty, ty.name))
+                members.append(Member(ty, ty.name, idx=len(members)))
             position += 1
         ty = struct_type()
         ty.members = members
@@ -885,11 +887,31 @@ class Parser:
             index += 1
         return position + 1
 
+    def struct_initializer(self, position, init):
+        if self.tokens[position].text != "{":
+            raise CompileError(self.tokens[position], "expected '{'")
+        position += 1
+        index = 0
+        while self.tokens[position].text != "}":
+            if index:
+                if self.tokens[position].text != ",":
+                    raise CompileError(self.tokens[position], "expected ','")
+                position += 1
+            if index < len(init.ty.members):
+                member = init.ty.members[index]
+                position = self.initializer2(position, init.children[member.idx])
+            else:
+                position = self.skip_excess_element(position)
+            index += 1
+        return position + 1
+
     def initializer2(self, position, init):
         if init.ty.kind == "ARRAY" and self.tokens[position].kind == "STR":
             return self.string_initializer(position, init)
         if init.ty.kind == "ARRAY":
             return self.array_initializer(position, init)
+        if init.ty.kind == "STRUCT":
+            return self.struct_initializer(position, init)
         init.expr, position = self.assign(position)
         return position
 
@@ -902,6 +924,8 @@ class Parser:
         if designation.var is not None:
             return Node("VAR", var=designation.var, tok=token)
         array = self.init_desg_expr(designation.parent, token)
+        if designation.member is not None:
+            return Node("MEMBER", lhs=array, member=designation.member, tok=token)
         index = Node("NUM", value=designation.idx, tok=token)
         return Node("DEREF", lhs=new_add(array, index, token), tok=token)
 
@@ -911,6 +935,14 @@ class Parser:
             for index, child in enumerate(init.children):
                 child_designation = InitDesg(parent=designation, idx=index)
                 assignment = self.create_lvar_init(child, ty.base, child_designation, token)
+                expression = Node("COMMA", expression, assignment, tok=token)
+            return expression
+        if ty.kind == "STRUCT":
+            expression = Node("NULL_EXPR", tok=token)
+            for member in ty.members:
+                child_designation = InitDesg(parent=designation, member=member)
+                assignment = self.create_lvar_init(init.children[member.idx], member.ty,
+                                                   child_designation, token)
                 expression = Node("COMMA", expression, assignment, tok=token)
             return expression
         if init.expr is None:

@@ -1,6 +1,6 @@
-"""Lesson 101: Infer array lengths from initializers.
+"""Lesson 102: Local struct initializers.
 
-Based on chibicc commit 5b955336032881edf835a50fb63f9581af1efd73.
+Based on chibicc commit e9d2c46ab3cc8b8518df289a4fc24a9e3fc9b3fe.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

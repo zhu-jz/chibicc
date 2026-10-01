@@ -58,6 +58,7 @@ class Member:
     name: Token
     offset: int = 0
     tok: Optional[Token] = field(default=None, compare=False)
+    idx: int = 0
 
 
 @dataclass
@@ -137,4 +138,5 @@ class Initializer:
 class InitDesg:
     parent: Optional["InitDesg"] = None
     idx: int = 0
+    member: Optional[Member] = None
     var: Optional[Obj] = None

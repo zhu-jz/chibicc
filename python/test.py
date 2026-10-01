@@ -60,6 +60,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_struct_initializers(self):
+        for source, expected in [
+            ("int main(){struct T{char a;int b;} x={1,42};return x.b;}", 42),
+            ("int main(){struct T{int a,b,c;} x={42};return x.a+x.b+x.c;}", 42),
+            ("int main(){struct T{int a,b;} x={};return x.a+x.b;}", 0),
+            ("int main(){struct T{int a[2];struct U{int x;} b;} v={{1,2},{42}};return v.b.x;}", 42),
+            ("int main(){struct T{int a,b;} v[]={{1,2},{3,42}};return v[1].b;}", 42),
+            ("int main(){struct T{char a;int b;} x={1};char *p=&x;return p[1]+p[2]+p[3];}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body("struct T{char a;int b;} x={1,42};")
+        self.assertEqual([member.idx for member in function.locals[0].ty.members], [0, 1])
+        self.assertIn("  add $4, %rax\n", compile_program("int main(){struct T{char a;int b;} x={1,42};return x.b;}").stdout)
+        result = compile_program("int main(){struct T{int x;} a={42};struct T b=a;return b.x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected '{'", result.stderr)
+
     def test_deduced_array_lengths(self):
         for source, expected in [
             ("int main(){int a[]={1,2,42};return a[2];}", 42),
@@ -846,7 +863,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("int main(){struct t{char a;int b;} x,y;char *p=&x;int i;for(i=0;i<sizeof(x);i=i+1)p[i]=i;y=x;char *q=&y;return q[7];}", 7),
             ("int main(){union t{int a;char b[4];} x,y;x.a=515;y=x;return y.b[1];}", 2),
             ("struct t{int a;} g;int main(){struct t x;x.a=42;g=x;return g.a;}", 42),
-            ("int main(){struct t{int a;} x;x.a=42;x=x;struct t y=x;return y.a;}", 42),
+            ("int main(){struct t{int a;} x;x.a=42;x=x;struct t y;y=x;return y.a;}", 42),
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program("int main(){struct {char a[3];} x,y;y=x;return 0;}").stdout

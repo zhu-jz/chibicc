@@ -8,7 +8,7 @@ import string
 import sys
 
 from common import CompileError, Token
-from type import array_of, ty_char
+from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
 
 
 def read_file(path):
@@ -96,16 +96,18 @@ def read_char_literal(source, start):
     if end == -1:
         raise CompileError(position, "unclosed char literal")
     value = data[0] if data[0] < 128 else data[0] - 256
-    return Token("NUM", source[start:end + 1], start, value), end + 1
+    return Token("NUM", source[start:end + 1], start, value, ty=ty_int), end + 1
 
 
 def read_int_literal(source, start):
     position = start
     base = 10
     alphanumeric = string.ascii_letters + string.digits
-    if (source[start:start + 2].lower() in ("0x", "0b")
-            and start + 2 < len(source) and source[start + 2] in alphanumeric):
-        base = 16 if source[start + 1].lower() == "x" else 2
+    prefix = source[start:start + 2].lower()
+    if (start + 2 < len(source) and
+            ((prefix == "0x" and source[start + 2] in string.hexdigits) or
+             (prefix == "0b" and source[start + 2] in "01"))):
+        base = 16 if prefix == "0x" else 2
         position += 2
     elif source[start] == "0":
         base = 8
@@ -113,15 +115,50 @@ def read_int_literal(source, start):
     first_digit = position
     while position < len(source) and source[position] in digits:
         position += 1
-    if position < len(source) and source[position] in alphanumeric:
-        raise CompileError(position, "invalid digit")
     try:
         value = int(source[first_digit:position], base)
     except ValueError:
         raise CompileError(start, "integer is too large to convert") from None
-    if value > 2**63 - 1:
-        raise CompileError(start, "integer must fit in a signed 64-bit immediate")
-    return Token("NUM", source[start:position], start, value), position
+    if value > 2**64 - 1:
+        raise CompileError(start, "integer must fit in unsigned 64 bits")
+    is_long = is_unsigned = False
+    suffix = source[position:]
+    if suffix[:3] in ("LLU", "LLu", "llU", "llu", "ULL", "Ull", "uLL", "ull"):
+        is_long = is_unsigned = True
+        position += 3
+    elif suffix[:2].lower() in ("lu", "ul"):
+        is_long = is_unsigned = True
+        position += 2
+    elif suffix[:2] in ("LL", "ll"):
+        is_long = True
+        position += 2
+    elif suffix[:1] in ("L", "l"):
+        is_long = True
+        position += 1
+    elif suffix[:1] in ("U", "u"):
+        is_unsigned = True
+        position += 1
+    if position < len(source) and source[position] in alphanumeric:
+        raise CompileError(position, "invalid digit")
+    if is_long and is_unsigned:
+        ty = ty_ulong
+    elif is_long:
+        ty = ty_ulong if base != 10 and value >= 2**63 else ty_long
+    elif is_unsigned:
+        ty = ty_ulong if value >= 2**32 else ty_uint
+    elif base == 10:
+        ty = ty_long if value >= 2**31 else ty_int
+    elif value >= 2**63:
+        ty = ty_ulong
+    elif value >= 2**32:
+        ty = ty_long
+    elif value >= 2**31:
+        ty = ty_uint
+    else:
+        ty = ty_int
+    if value >= 2**63:
+        value -= 2**64
+    return Token("NUM", source[start:position], start, value, ty=ty), position
 
 
 def is_ident1(character):

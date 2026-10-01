@@ -1,6 +1,6 @@
-"""Lesson 131: Unsigned integer types and operations.
+"""Lesson 132: Integer literal suffixes and types.
 
-Based on chibicc commit 34ab83bdf49a23a47bc90354a5a4d22686d8d92a.
+Based on chibicc commit aaf10459d93fb6c0f4539cb792c02a8d15cb0299.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

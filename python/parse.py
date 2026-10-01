@@ -473,7 +473,7 @@ class Parser:
             return Node("VAR", var=var, tok=token), position + 1
 
         if token.kind == "NUM":
-            return Node("NUM", value=token.value, tok=token), position + 1
+            return Node("NUM", value=token.value, tok=token, ty=token.ty), position + 1
 
         raise CompileError(token, "expected an expression")
 

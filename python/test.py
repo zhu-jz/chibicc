@@ -60,6 +60,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_integer_literal_suffixes(self):
+        for spelling, kind, unsigned in (("42", "INT", False), ("42U", "INT", True),
+                                        ("42L", "LONG", False), ("42ull", "LONG", True),
+                                        ("0xffffffff", "INT", True),
+                                        ("0xffffffffffffffff", "LONG", True),
+                                        ("18446744073709551615", "LONG", False)):
+            token = tokenize(spelling)[0]
+            self.assertEqual((token.ty.kind, token.ty.is_unsigned), (kind, unsigned))
+        for source, expected in [
+            ("int main(void){return sizeof(0L)+sizeof(0U);}", 12),
+            ("int main(void){return -1U>>30;}", 3),
+            ("int main(void){return 0xffffffffffffffffLL>>63;}", 1),
+            ("int main(void){return 18446744073709551615>>63;}", 255),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertIn("  shr %cl, %rax\n", compile_program("int main(void){return -1ULL>>63;}").stdout)
+        for spelling in ("1lL", "1UU", "1LLL", "1ULx"):
+            with self.assertRaises(CompileError):
+                tokenize(spelling)
+
     def test_unsigned_integer_operations(self):
         for source, expected in [
             ("int main(void){unsigned char x=255;return x<0;}", 0),
@@ -822,7 +842,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             token = tokenize(spelling)[0]
             self.assertEqual((token.text, token.value), (spelling, value))
             self.assert_program_returns(f"int main(void){{return {spelling};}}", value & 255)
-        for spelling, position in [("08", 1), ("0b2", 2), ("0xG", 2), ("123abc", 3), ("0x", 1)]:
+        for spelling, position in [("08", 1), ("0b2", 1), ("0xG", 1), ("123abc", 3), ("0x", 1)]:
             with self.assertRaises(CompileError) as caught:
                 tokenize(spelling)
             self.assertEqual(caught.exception.position, position)
@@ -1232,9 +1252,9 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual(tokenize("short")[0].kind, "KEYWORD")
         result = compile_program("int main(void){short x;}")
         self.assertEqual(result.returncode, 0, result.stderr)
-        result = compile_program("int main(void){return 9223372036854775808;}")
+        result = compile_program("int main(void){return 18446744073709551616;}")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("signed 64-bit immediate", result.stderr)
+        self.assertIn("unsigned 64 bits", result.stderr)
 
     def test_four_byte_ints(self):
         for source, expected in [
@@ -2466,7 +2486,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("18 11", "18 11\n   ^ expected ';'\n"),
             ("--", "--\n  ^ expected an expression\n"),
             ("1 + +", "1 + +\n     ^ expected an expression\n"),
-            ("1+9223372036854775808", "1+9223372036854775808\n  ^ integer must fit in a signed 64-bit immediate\n"),
+            ("1+18446744073709551616", "1+18446744073709551616\n  ^ integer must fit in unsigned 64 bits\n"),
             ("1\u2003+@", "1\u2003+@\n   ^ expected an expression\n"),
             ("(1+2", "(1+2\n    ^ expected ')'\n"),
             ("1)", "1)\n ^ expected ';'\n"),

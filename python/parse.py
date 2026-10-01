@@ -40,7 +40,7 @@ def new_sub(lhs, rhs, token):
         add_type(rhs)
         return Node("-", lhs, rhs, tok=token, ty=lhs.ty)
     if lhs.ty.base is not None and rhs.ty.base is not None:
-        difference = Node("-", lhs, rhs, tok=token, ty=ty_int)
+        difference = Node("-", lhs, rhs, tok=token, ty=ty_long)
         return Node("/", difference, Node("NUM", value=lhs.ty.base.size, tok=token), tok=token)
     raise CompileError(token, "invalid operands")
 
@@ -439,24 +439,24 @@ class Parser:
             ty, position = self.typename(position + 2)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
-            return Node("NUM", value=ty.size, tok=token), position + 1
+            return Node("NUM", value=ty.size, tok=token, ty=ty_ulong), position + 1
 
         if token.text == "sizeof":
             operand, position = self.unary(position + 1)
             add_type(operand)
-            return Node("NUM", value=operand.ty.size, tok=token), position
+            return Node("NUM", value=operand.ty.size, tok=token, ty=ty_ulong), position
 
         if (token.text == "_Alignof" and self.tokens[position + 1].text == "("
                 and self.is_typename(position + 2)):
             ty, position = self.typename(position + 2)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
-            return Node("NUM", value=ty.align, tok=token), position + 1
+            return Node("NUM", value=ty.align, tok=token, ty=ty_ulong), position + 1
 
         if token.text == "_Alignof":
             operand, position = self.unary(position + 1)
             add_type(operand)
-            return Node("NUM", value=operand.ty.align, tok=token), position
+            return Node("NUM", value=operand.ty.align, tok=token, ty=ty_ulong), position
 
         if token.kind == "IDENT":
             if self.tokens[position + 1].text == "(":

@@ -1,40 +1,33 @@
-# Lesson 132: Integer literal suffixes and types
+# Lesson 133: Wide pointer differences and size queries
 
-Original chibicc commit: [`aaf10459d93fb6c0f4539cb792c02a8d15cb0299`](https://github.com/rui314/chibicc/commit/aaf10459d93fb6c0f4539cb792c02a8d15cb0299).
+Original chibicc commit: [`8b8f3de48bba31ccfa84e3573075b2125bc130c3`](https://github.com/rui314/chibicc/commit/8b8f3de48bba31ccfa84e3573075b2125bc130c3).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Integer tokens now carry their type. U requests unsigned, L/LL request an
-eight-byte integer, and their supported combinations work in either order.
-Decimal unsuffixed numbers choose int or long. Nondecimal numbers may also
-choose unsigned int or unsigned long to fit their bit pattern. Character literals
-carry int type. Parser-created numeric nodes still default to int.
+Pointer subtraction now produces signed long before dividing by element size,
+retaining all 64 address bits. sizeof and _Alignof produce unsigned long numeric
+nodes, for both type and expression forms. Their shifts and arithmetic consequently
+use eight-byte unsigned operations rather than four-byte int operations.
 
-Python parses the magnitude, selects the historical type, then stores the signed
-64-bit representation in Token.value. Thus hex ffffffffffffffff is unsigned long
-with value -1 internally. The original also accepts the maximum unsigned value
-in decimal as signed long; its right shift is arithmetic. Hex/binary prefixes now
-require an actual base-valid digit, changing malformed-prefix diagnostic positions.
-
-The port accepts magnitudes through 2**64-1. Larger values get an explicit error;
-upstream strtoul can saturate on overflow because this commit ignores errno.
-Python uses exact integer conversion rather than host C library conversion.
+Python supplies explicit types on these numeric and subtraction nodes, matching
+upstream new_ulong and long pointer-difference annotations. Type sizes themselves
+remain Python integers; this change describes the generated C expression type.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){return -1ULL>>62;}\n' > /tmp/lesson132.c
-python3 python/main.py /tmp/lesson132.c > /tmp/lesson132.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson132 /tmp/lesson132.s
-/tmp/lesson132
+printf 'int main(void){return sizeof(char)<<63>>63;}\n' > /tmp/lesson133.c
+python3 python/main.py /tmp/lesson133.c > /tmp/lesson133.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson133 /tmp/lesson133.s
+/tmp/lesson133
 echo $?
 ```
 
-The unsigned-long operand uses all 64 bits and `shr %cl,%rax`; shifting leaves
-3, the exit status. Tests check suffix types and spelling, inferred unsigned
-hex types, decimal/hex maximum-value behavior, malformed suffixes, range errors,
-assembly widths, execution, and the expanded original literal program.
+The size one shifts to the top bit with shl on rax, then shr shifts in zeros and
+returns it to one. Exit status is 1. Tests check query result types, nested sizeof,
+64-bit logical shifts, pointer differences beyond 32 bits without dereferencing
+those addresses, signed comparisons, emitted widths, and original C examples.
 
 ## Tests and attribution
 

@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_wide_pointer_and_size_expressions(self):
+        for source, expected in [
+            ("int main(void){return sizeof(sizeof(char));}", 8),
+            ("int main(void){return sizeof(_Alignof(int));}", 8),
+            ("int main(void){return sizeof(char)<<63>>63;}", 1),
+            ("int main(void){return _Alignof(char)<<63>>63;}", 1),
+            ("int main(void){return (char*)0x100000000-(char*)0==4294967296;}", 1),
+            ("int main(void){return (char*)0-(char*)0x100000000<0;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        node = parse_body("return sizeof(char);").body.body[0].lhs.lhs
+        self.assertEqual((node.ty.kind, node.ty.is_unsigned), ("LONG", True))
+        assembly = compile_program("int main(void){return sizeof(char)<<63>>63;}").stdout
+        self.assertIn("  shr %cl, %rax\n", assembly)
+
     def test_integer_literal_suffixes(self):
         for spelling, kind, unsigned in (("42", "INT", False), ("42U", "INT", True),
                                         ("42L", "LONG", False), ("42ull", "LONG", True),
@@ -1091,7 +1106,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("int main(void){int x;int *p=&x;return (p+1)-p;}").stdout
         self.assertIn("  add %rdi, %rax\n", assembly)
         self.assertIn("  sub %rdi, %rax\n", assembly)
-        self.assertIn("  cdq\n  idiv %edi\n", assembly)
+        self.assertIn("  cqo\n  idiv %rdi\n", assembly)
 
     def test_sizeof_type_names(self):
         for source, expected in [
@@ -1817,9 +1832,9 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(expression.rhs.kind, "*")
         self.assertEqual(expression.rhs.rhs.value, 4)
         expression = parse_body("int x,y; return &x-&y;").body.body[-1].lhs.lhs
-        self.assertEqual(expression.ty.kind, "INT")
+        self.assertEqual(expression.ty.kind, "LONG")
         self.assertEqual(expression.kind, "/")
-        self.assertEqual(expression.lhs.ty.kind, "INT")
+        self.assertEqual(expression.lhs.ty.kind, "LONG")
         self.assertEqual((expression.lhs.kind, expression.rhs.kind), ("CAST", "CAST"))
         self.assertEqual(expression.rhs.lhs.value, 4)
         expression = parse_body("int x; return &x-1+2;").body.body[-1].lhs.lhs

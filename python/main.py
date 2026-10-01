@@ -1,6 +1,6 @@
-"""Lesson 132: Integer literal suffixes and types.
+"""Lesson 133: Wide pointer differences and size queries.
 
-Based on chibicc commit aaf10459d93fb6c0f4539cb792c02a8d15cb0299.
+Based on chibicc commit 8b8f3de48bba31ccfa84e3573075b2125bc130c3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -197,6 +197,14 @@ class Parser:
         if self.tokens[position].text != "?":
             return cond, position
         token = self.tokens[position]
+        if self.tokens[position + 1].text == ":":
+            add_type(cond)
+            var = self.new_lvar("", cond.ty)
+            saved = Node("ASSIGN", Node("VAR", var=var, tok=token), cond, tok=token)
+            otherwise, position = self.conditional(position + 2)
+            choice = Node("COND", cond=Node("VAR", var=var, tok=token),
+                          then=Node("VAR", var=var, tok=token), els=otherwise, tok=token)
+            return Node("COMMA", saved, choice, tok=token), position
         then, position = self.expr(position + 1)
         if self.tokens[position].text != ":":
             raise CompileError(self.tokens[position], "expected ':'")

@@ -1,6 +1,6 @@
-"""Lesson 257: Give function types a GNU sizeof value.
+"""Lesson 258: Omit the middle operand of a conditional.
 
-Based on chibicc commit aee7891acb3e653dcfb10ec4172ae4d099ebf034.
+Based on chibicc commit e28a612e9c2293182a83d5a7c6f48129455ce951.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

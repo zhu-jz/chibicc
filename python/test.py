@@ -81,6 +81,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_omitted_conditional_operand(self):
+        for source, expected in [
+            ('int main(void){return 42?:0;}', 42),
+            ('int main(void){return 0?:0?:42;}', 42),
+            ('int main(void){int x=41;int y=++x?:0;return y+(x!=42);}', 42),
+            ('int n;int f(void){n++;return 42;}int main(void){int x=f()?:0;return n==1?x:0;}', 42),
+            ('int main(void){double x=0;return x?:42.0;}', 42),
+            ('int main(void){int x=42;int *p=&x;return *(p?:0);}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+
     def test_sizeof_function_types(self):
         for expression, expected in [('sizeof(main)', 1), ('sizeof(typeof(main))', 1), ('_Alignof(main)', 1), ('sizeof(&main)', 8)]:
             self.assert_program_returns('int main(void){return ' + expression + ';}', expected)

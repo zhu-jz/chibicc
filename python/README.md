@@ -1,26 +1,28 @@
-# Lesson 257: Give function types a GNU sizeof value
+# Lesson 258: Omit the middle operand of a conditional
 
-Original chibicc commit: [`aee7891acb3e653dcfb10ec4172ae4d099ebf034`](https://github.com/rui314/chibicc/commit/aee7891acb3e653dcfb10ec4172ae4d099ebf034).
+Original chibicc commit: [`e28a612e9c2293182a83d5a7c6f48129455ce951`](https://github.com/rui314/chibicc/commit/e28a612e9c2293182a83d5a7c6f48129455ce951).
 Earlier explanations are available in Git history.
 
-Function types now have size and alignment 1. Standard C disallows sizeof on a
-function, but this GNU extension gives it the constant value 1. Function pointers
-remain ordinary eight-byte pointers; executable function code has no such
-one-byte storage limit.
+GNU `a ?: b` now saves a in an unnamed local and rewrites the expression as
+`(tmp=a, tmp ? tmp : b)`. Saving the value is essential: an increment or function
+call in a must run once, even though its value is both the condition and result.
+The ordinary conditional type conversion still applies to the result branches.
 
 ```sh
-printf 'int main(void){return sizeof(main)+41;}\n' > /tmp/lesson.c
+printf 'int main(void){int x=41;int y=++x?:0;return y+(x!=42);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Parsing replaces sizeof(main) with 1, and the assembly adds 41 before returning.
-Tests cover expression and type-name forms, function alignment, pointer size and
-the original sizeof.c addition. Python initializes the two Type fields directly;
-C uses its new_type constructor. This step changes type metadata, not function
-calling conventions or how emitted machine code is measured.
+Assembly increments x, stores its value into the compiler's temporary, tests that
+saved value and reloads it for the true branch. The return also checks x stayed
+42. Tests cover true and false branches, nested expressions, single evaluation,
+floating and pointer values, plus the original arithmetic fixtures.
+Python builds the same assignment, comma and conditional Nodes explicitly;
+C allocates linked node structures. No dedicated assembly instruction is needed
+for the extension because existing expression generation handles the rewrite.
 
 ## Tests and attribution
 

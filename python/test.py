@@ -60,6 +60,27 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_address_initializers(self):
+        for source, expected in [
+            ("int g=42;int *p=&g;int main(){return *p;}", 42),
+            ("int g[2]={1,42};int *p=g+1;int main(){return *p;}", 42),
+            ("int g[2]={42,1};int *p=g-1;int main(){return p[1];}", 42),
+            ("struct T{char a;int b;} g={1,42};int *p=&g.b;int main(){return *p;}", 42),
+            ("struct T{int a[2];} g={{1,42}};int *p=g.a;int main(){return p[1];}", 42),
+            ("int g=42;int *p[2]={&g,&g};int main(){return *p[1];}", 42),
+            ("union T{int a;char b[8];} g={42};int main(){return g.a;}", 42),
+            ('char *p="abc"+1;int main(){return p[0];}', 98),
+            ("int g=42;int *p=1?&g:0;int main(){return *p;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        program = parse(tokenize("int g[2];int *p=g+1;"))
+        pointer = next(var for var in program if var.name == "p")
+        self.assertEqual([(rel.offset, rel.label, rel.addend) for rel in pointer.relocations], [(0, "g", 4)])
+        self.assertIn("  .quad g+4\n", compile_program("int g[2];int *p=g+1;int main(){return 0;}").stdout)
+        result = compile_program("int g=42;int x=g;int main(){return x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid initializer", result.stderr)
+
     def test_global_struct_initializers(self):
         for source, expected in [
             ("struct T{char a;int b;} g={1,42};int main(){return g.b;}", 42),

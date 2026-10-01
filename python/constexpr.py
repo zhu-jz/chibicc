@@ -8,6 +8,50 @@ from common import CompileError
 from type import add_type, is_integer
 
 
+def evaluate_initializer(node):
+    """Return an integer addend and an optional global symbol name."""
+    add_type(node)
+    if node.kind in ("+", "-"):
+        value, label = evaluate_initializer(node.lhs)
+        right = evaluate_constant(node.rhs)
+        return (value + right if node.kind == "+" else value - right), label
+    if node.kind == "COND":
+        branch = node.then if evaluate_constant(node.cond) else node.els
+        return evaluate_initializer(branch)
+    if node.kind == "COMMA":
+        return evaluate_initializer(node.rhs)
+    if node.kind == "CAST":
+        value, label = evaluate_initializer(node.lhs)
+        if is_integer(node.ty) and node.ty.size in (1, 2, 4):
+            value &= (1 << (node.ty.size * 8)) - 1
+        return value, label
+    if node.kind == "ADDR":
+        return evaluate_address(node.lhs)
+    if node.kind == "MEMBER":
+        if node.ty.kind != "ARRAY":
+            raise CompileError(node.tok, "invalid initializer")
+        value, label = evaluate_address(node.lhs)
+        return value + node.member.offset, label
+    if node.kind == "VAR":
+        if node.var.ty.kind not in ("ARRAY", "FUNC"):
+            raise CompileError(node.tok, "invalid initializer")
+        return 0, node.var.name
+    return evaluate_constant(node), None
+
+
+def evaluate_address(node):
+    if node.kind == "VAR":
+        if node.var.is_local:
+            raise CompileError(node.tok, "not a compile-time constant")
+        return 0, node.var.name
+    if node.kind == "DEREF":
+        return evaluate_initializer(node.lhs)
+    if node.kind == "MEMBER":
+        value, label = evaluate_address(node.lhs)
+        return value + node.member.offset, label
+    raise CompileError(node.tok, "invalid initializer")
+
+
 def evaluate_constant(node):
     add_type(node)
     kind = node.kind

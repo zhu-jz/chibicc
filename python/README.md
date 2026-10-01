@@ -1,34 +1,40 @@
-# Lesson 106: Global struct initializers
+# Lesson 107: Global union initializers and relocations
 
-Original chibicc commit: [`eeb62b6dd547da5742f3ed74f8c8ae534d883dd9`](https://github.com/rui314/chibicc/commit/eeb62b6dd547da5742f3ed74f8c8ae534d883dd9).
+Original chibicc commit: [`1eae5ae3678d079efc7d2807f10439e53932f811`](https://github.com/rui314/chibicc/commit/1eae5ae3678d079efc7d2807f10439e53932f811).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Global initializer serialization now descends through struct members. Each
-member's initializer is written at its aligned offset; the initial zero-filled
-buffer preserves omitted members and padding. Array recursion and struct
-recursion combine naturally for nested aggregates.
+Global union serialization writes the first member at offset zero. This original
+commit also adds address initializers. The evaluator now returns an integer
+addend plus an optional symbol, letting `g+1`, `&g.member`, string addresses,
+and nested array-member addresses become relocations. Arithmetic scales pointer
+steps to bytes before constant evaluation.
 
-Python keeps the same member indices and offsets as upstream and writes into a
-bytearray. Global union serialization and address relocations remain incomplete.
-Global struct copy expressions are not evaluated by this historical serializer;
-use brace lists for global struct initialization at this step.
+Relocation records contain an offset within the initialized object, a symbol
+name, and an addend. The data emitter writes .quad at each relocation and .byte
+elsewhere. The assembler/linker resolves final addresses. Numeric-only constant
+contexts still reject addresses; ordinary global scalar reads cannot initialize
+another global. This step's address relocations assume eight-byte storage.
+
+Python tuples replace C's label output pointer, and lists replace linked
+relocation records. Byte serialization explicitly targets little-endian x86-64.
+The constant evaluator still preserves earlier historical cast behavior.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'struct T{char a;int b;} g={1,42};int main(){return g.b;}\n' > /tmp/lesson106.c
-python3 python/main.py /tmp/lesson106.c > /tmp/lesson106.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson106 /tmp/lesson106.s
-/tmp/lesson106
+printf 'int g[2]={1,42};int *p=g+1;int main(){return *p;}\n' > /tmp/lesson107.c
+python3 python/main.py /tmp/lesson107.c > /tmp/lesson107.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson107 /tmp/lesson107.s
+/tmp/lesson107
 echo $?
 ```
 
-The .data section stores byte 1, three padding zeros, then the four-byte value
-42. Main adds offset four and loads g.b, yielding exit status 42. Tests check
-exact bytes, nested structs, arrays of structs, partial initialization, emitted
-data, real execution, and the original expanded initializer program.
+The data for p is `.quad g+4`, because each int occupies four bytes. Main loads
+p then dereferences it, returning 42. Tests cover signed addends, pointer arrays,
+member offsets, strings, conditional addresses, union data, relocation records,
+assembly, invalid scalar reads, and the expanded original C initializer suite.
 
 ## Tests and attribution
 

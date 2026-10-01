@@ -320,8 +320,16 @@ class CodeGenerator:
             if not var.is_function:
                 self.assembly.extend(["  .data", f"  .globl {var.name}", f"{var.name}:"])
                 if var.init_data is not None:
-                    for value in var.init_data:
-                        self.assembly.append(f"  .byte {value}")
+                    relocations = {rel.offset: rel for rel in var.relocations}
+                    position = 0
+                    while position < var.ty.size:
+                        if position in relocations:
+                            rel = relocations[position]
+                            self.assembly.append(f"  .quad {rel.label}{rel.addend:+d}")
+                            position += 8
+                        else:
+                            self.assembly.append(f"  .byte {var.init_data[position]}")
+                            position += 1
                 else:
                     self.assembly.append(f"  .zero {var.ty.size}")
         for function in program:

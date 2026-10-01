@@ -8,8 +8,8 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
-from common import Initializer, InitDesg, to_int32
-from constexpr import evaluate_constant
+from common import Initializer, InitDesg, Relocation, to_int32
+from constexpr import evaluate_constant, evaluate_initializer
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
@@ -980,27 +980,34 @@ class Parser:
         zero = Node("MEMZERO", var=var, tok=token)
         return Node("COMMA", zero, expression, tok=token), position
 
-    def write_gvar_data(self, init, ty, buffer, offset):
+    def write_gvar_data(self, init, ty, buffer, offset, relocations):
         if ty.kind == "ARRAY":
             for index, child in enumerate(init.children):
-                self.write_gvar_data(child, ty.base, buffer, offset + ty.base.size * index)
+                self.write_gvar_data(child, ty.base, buffer, offset + ty.base.size * index, relocations)
             return
         if ty.kind == "STRUCT":
             for member in ty.members:
                 self.write_gvar_data(init.children[member.idx], member.ty,
-                                     buffer, offset + member.offset)
+                                     buffer, offset + member.offset, relocations)
+            return
+        if ty.kind == "UNION":
+            self.write_gvar_data(init.children[0], ty.members[0].ty, buffer, offset, relocations)
             return
         if init.expr is not None:
+            value, label = evaluate_initializer(init.expr)
+            if label is not None:
+                relocations.append(Relocation(offset, label, value))
+                return
             if ty.size not in (1, 2, 4, 8):
                 raise CompileError(init.expr.tok, "unsupported initializer size")
-            value = evaluate_constant(init.expr) & ((1 << (ty.size * 8)) - 1)
+            value &= (1 << (ty.size * 8)) - 1
             buffer[offset:offset + ty.size] = value.to_bytes(ty.size, "little")
 
     def gvar_initializer(self, position, var):
         init, position = self.initializer(position, var.ty)
         var.ty = init.ty
         buffer = bytearray(var.ty.size)
-        self.write_gvar_data(init, var.ty, buffer, 0)
+        self.write_gvar_data(init, var.ty, buffer, 0, var.relocations)
         var.init_data = bytes(buffer)
         return position
 

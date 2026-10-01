@@ -62,6 +62,13 @@ class Member:
 
 
 @dataclass
+class Relocation:
+    offset: int
+    label: str
+    addend: int
+
+
+@dataclass
 class Obj:
     name: str
     offset: int = 0
@@ -75,6 +82,7 @@ class Obj:
     locals: list["Obj"] = field(default_factory=list)
     stack_size: int = 0
     init_data: Optional[bytes] = None
+    relocations: list[Relocation] = field(default_factory=list)
 
 
 @dataclass

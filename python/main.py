@@ -1,6 +1,6 @@
-"""Lesson 106: Global struct initializers.
+"""Lesson 107: Global union initializers and relocations.
 
-Based on chibicc commit eeb62b6dd547da5742f3ed74f8c8ae534d883dd9.
+Based on chibicc commit 1eae5ae3678d079efc7d2807f10439e53932f811.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

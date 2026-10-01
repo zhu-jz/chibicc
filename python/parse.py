@@ -1070,7 +1070,7 @@ class Parser:
         if init.is_flexible:
             complete = new_initializer(array_of(init.ty.base, token.ty.array_len))
             init.__dict__.update(complete.__dict__)
-        count = min(init.ty.array_len, len(token.str))
+        count = min(init.ty.array_len, token.ty.array_len)
         for index in range(count):
             byte = token.str[index]
             value = byte if byte < 128 else byte - 256

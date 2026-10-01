@@ -1,6 +1,6 @@
-"""Lesson 228: Read u8-prefixed string literals.
+"""Lesson 229: Transcode u-prefixed strings to UTF-16.
 
-Based on chibicc commit 57b21fe90296c867888d7c8c60d243bc254a39d7.
+Based on chibicc commit 9cabe1f204a8a6139e8b072dfd6f0a15275ad25f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

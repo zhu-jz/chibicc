@@ -1,16 +1,17 @@
-# Lesson 228: Read u8-prefixed string literals
+# Lesson 229: Transcode u-prefixed strings to UTF-16
 
-Original chibicc commit: [`57b21fe90296c867888d7c8c60d243bc254a39d7`](https://github.com/rui314/chibicc/commit/57b21fe90296c867888d7c8c60d243bc254a39d7).
+Original chibicc commit: [`9cabe1f204a8a6139e8b072dfd6f0a15275ad25f`](https://github.com/rui314/chibicc/commit/9cabe1f204a8a6139e8b072dfd6f0a15275ad25f).
 Earlier explanations are available in Git history.
 
-u8-prefixed strings now use the existing char-array reader. The prefix and
-quotes form one STR token; its payload is UTF-8 bytes followed by zero, just
-like an ordinary string at this stage. The reader accepts a separate quote
-position so diagnostics and stringizing retain the complete source spelling.
+u-prefixed strings now contain little-endian UTF-16 code units and have an
+unsigned-short array type. Supplementary characters become a surrogate pair,
+followed by one zero unit. Numeric escapes write one truncated sixteen-bit
+unit. Python uses the standard utf-16-le encoder for ordinary characters and
+explicit integer bytes for escapes, replacing the C manual surrogate calculation.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){char s[]=u8"α🌮";return sizeof(s)+35;}
+int main(void){return sizeof(u"🍣")+36;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,12 +19,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The two characters occupy six UTF-8 bytes plus zero; the initialized array
-has size 7. Its size plus 35 returns 42. Tests inspect the bytes and element
-type, initialize a char array, join adjacent strings, preserve the prefix in
-stringizing, diagnose an unclosed string and run original fixtures. Python
-keeps its existing UTF-8 encoding; this syntax adds no new runtime conversion.
-UTF-16, UTF-32 and wide string payloads remain separate later steps.
+The emoji uses two units plus zero, so its array size is six bytes. Indexed
+loads scale by two and use unsigned-short extension. Tests inspect empty,
+ASCII, Japanese and emoji payloads, exact surrogate values, escape units,
+stringizing, sizeof and original memcmp fixtures. At this historical step,
+string-based array initialization still reads individual bytes, and adjacent
+string joining still assumes a one-byte terminator. Those paths are not claimed
+as complete UTF-16 support; their original changes are still to come.
 
 ## Tests and attribution
 

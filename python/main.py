@@ -1,6 +1,6 @@
-"""Lesson 134: Unsigned pointer comparisons.
+"""Lesson 135: Unsigned and signed constant evaluation.
 
-Based on chibicc commit 6880a39d2a5aec8e5ed32c276109936ed503d0bb.
+Based on chibicc commit 7ba6fe8d94af2a232a9da82b815502513f52e465.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

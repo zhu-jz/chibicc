@@ -60,6 +60,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unsigned_constant_expressions(self):
+        for source, expected in [
+            ("enum{N=(char)255};int main(void){return N==-1;}", 1),
+            ("int main(void){char a[1U<-1];return sizeof(a);}", 1),
+            ("int main(void){char a[(unsigned long)-1/(1L<<62)+1];return sizeof(a);}", 4),
+            ("unsigned long g=(unsigned long)-100/2;int main(void){return g==9223372036854775758UL;}", 1),
+            ("unsigned long g=-1UL>>63;int main(void){return g;}", 1),
+            ("char g=(char)255;int main(void){return g<0;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        var = parse(tokenize("unsigned long g=-1UL>>63;"))[0]
+        self.assertEqual(var.init_data, b"\x01"+b"\x00"*7)
+        self.assertIn("g:\n  .byte 1\n", compile_program("unsigned long g=-1UL>>63;int main(void){return g;}").stdout)
+
     def test_unsigned_pointer_comparisons(self):
         self.assert_program_returns("int main(void){return (void*)0xffffffffffffffff>(void*)0;}", 1)
         self.assert_program_returns("int main(void){return (char*)0<=(char*)0xffffffffffffffff;}", 1)
@@ -610,7 +624,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             ("enum{N=(long)9007199254740993/3-3002399751580331};int main(void){return N;}", 0),
             ("int main(void){char a[1?3:1/0];return sizeof(a);}", 3),
             ("int main(void){char a[(int)0xfffffffffff+5];return sizeof(a);}", 4),
-            ("enum{N=(char)255};int main(void){return N==255;}", 1),
+            ("enum{N=(char)255};int main(void){return N==-1;}", 1),
             ("enum{N=(_Bool)256};int main(void){return N;}", 0),
         ]:
             self.assert_program_returns(source, expected)

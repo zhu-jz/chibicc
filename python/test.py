@@ -77,6 +77,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_preprocessing_numbers(self):
+        self.assertEqual([(t.kind, t.text) for t in tokenize_raw('0zz 4.57 0x1p-3 1e+2')[:-1]],
+                         [('PP_NUM', text) for text in ('0zz', '4.57', '0x1p-3', '1e+2')])
+        self.assert_program_returns('#define P(x,y) x##y\nint main(void){int f0zz=42;return P(f,0zz);}', 42)
+        self.assert_program_returns('#define P(x,y) x##y\nint main(void){return P(4,.57)+0.5;}', 5)
+        self.assert_program_returns('int main(void){return 0x1p3+34;}', 42)
+        self.assert_program_returns('#if 0x1p3 == 8\nint main(void){return 42;}\n#endif', 42)
+        self.assert_program_returns('#define UNUSED 0zz\n#if 0\n0zz\n#endif\nint main(void){return 42;}', 42)
+        self.assertEqual(tokenize('08')[0].ty.kind, 'DOUBLE')
+        self.assert_program_returns('int main(void){return 08;}', 8)
+        for text in ('0zz', '0b2', '1e+', '3.4.5'):
+            result = compile_program('int main(void){return ' + text + ';}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('invalid numeric constant', result.stderr)
+
     def test_repeated_function_dereference(self):
         for expression in ('f', '*f', '***f', '**p', '*****p'):
             self.assert_program_returns('int f(int x){return x+1;}int main(void){int(*p)(int)=f;return (' + expression + ')(41);}', 42)
@@ -2060,7 +2075,7 @@ int main(void){return 42;}
             token = tokenize(spelling)[0]
             self.assertEqual((token.text, token.value), (spelling, value))
             self.assert_program_returns(f"int main(void){{return {spelling};}}", value & 255)
-        for spelling in ("08", "0b2", "0xG", "123abc", "0x"):
+        for spelling in ("0b2", "0xG", "123abc", "0x"):
             self.assertEqual(compile_program(f"int main(void){{return {spelling};}}").returncode, 1)
         self.assertIn("  mov $42, %rax\n", compile_program("int main(void){return 0x2a;}").stdout)
 

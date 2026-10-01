@@ -7,7 +7,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 import os
 from dataclasses import dataclass, field, replace
 
-from tokenizer import convert_keywords, tokenize, tokenize_file, warn_tok
+from tokenizer import convert_pp_tokens, tokenize, tokenize_file, warn_tok
 from common import CompileError, File
 from parse import const_expr
 from type import array_of
@@ -81,6 +81,7 @@ def eval_const_expr(tokens, position, files, macros, conditions, include_paths):
     for index, token in enumerate(expression):
         if token.kind == "IDENT":
             expression[index] = new_num_token(0, token)
+    convert_pp_tokens(expression)
     value, rest = const_expr(expression)
     if expression[rest].kind != "EOF":
         raise CompileError(expression[rest], "extra token")
@@ -555,6 +556,6 @@ def preprocess(tokens, files=None, include_paths=()):
     preprocess2(tokens, files, init_macros(), conditions, include_paths)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
-    convert_keywords(tokens)
+    convert_pp_tokens(tokens)
     join_adjacent_string_literals(tokens)
     return tokens

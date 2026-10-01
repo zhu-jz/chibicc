@@ -205,7 +205,7 @@ def read_int_literal(source, start, check_range=True):
 def read_number(source, start):
     if source[start] != ".":
         token, position = read_int_literal(source, start, check_range=False)
-        if position == len(source) or source[position] not in ".eEfF":
+        if position == len(source):
             if token.value >= 2**64:
                 raise CompileError(start, "integer must fit in unsigned 64 bits")
             return token, position
@@ -216,7 +216,7 @@ def read_number(source, start):
         pattern = r"(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
     match = re.match(pattern, source[start:])
     if match is None:
-        raise CompileError(start, "invalid floating literal")
+        raise CompileError(start, "invalid numeric constant")
     spelling = match.group()
     try:
         value = float.fromhex(spelling) if hexadecimal else float(spelling)
@@ -229,6 +229,8 @@ def read_number(source, start):
         position += 1
     elif position < len(source) and source[position] in "lL":
         position += 1
+    if position != len(source):
+        raise CompileError(start, "invalid numeric constant")
     return Token("NUM", source[start:position], start, ty=ty, fvalue=value), position
 
 
@@ -302,8 +304,17 @@ def tokenize(source):
             continue
 
         if "0" <= character <= "9" or (character == "." and position + 1 < len(source) and "0" <= source[position + 1] <= "9"):
-            token, position = read_number(source, position)
-            append_token(token)
+            start = position
+            position += 1
+            while position < len(source):
+                if (source[position] in "eEpP" and position + 1 < len(source)
+                        and source[position + 1] in "+-"):
+                    position += 2
+                elif source[position] in string.ascii_letters + string.digits + ".":
+                    position += 1
+                else:
+                    break
+            append_token(Token("PP_NUM", source[start:position], start))
             continue
 
         if character == '"':
@@ -342,7 +353,14 @@ def tokenize(source):
     return tokens
 
 
-def convert_keywords(tokens):
+def convert_pp_tokens(tokens):
     for token in tokens:
         if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char", "struct", "union", "short", "long", "void", "typedef", "_Bool", "enum", "static", "goto", "break", "continue", "switch", "case", "default", "extern", "_Alignof", "_Alignas", "do", "signed", "unsigned", "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double"):
             token.kind = "KEYWORD"
+        elif token.kind == "PP_NUM":
+            try:
+                number, _ = read_number(token.text, 0)
+            except CompileError as error:
+                raise CompileError(token, str(error)) from None
+            token.kind, token.value, token.ty, token.fvalue = (
+                number.kind, number.value, number.ty, number.fvalue)

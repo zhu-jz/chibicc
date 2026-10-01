@@ -1,6 +1,6 @@
-"""Lesson 206: Treat function dereference as identity.
+"""Lesson 207: Convert preprocessing numbers after expansion.
 
-Based on chibicc commit e0b5da3b395e46bbc2e377a59d5cba33206288a9.
+Based on chibicc commit 3f2c2d5bca4f4506e0ab0b03959d96be427fa672.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

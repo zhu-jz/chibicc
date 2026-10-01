@@ -29,6 +29,9 @@ def new_add(lhs, rhs, token):
     # Canonicalize integer + pointer to pointer + integer.
     if lhs.ty.base is None and rhs.ty.base is not None:
         lhs, rhs = rhs, lhs
+    if lhs.ty.base.kind == "VLA":
+        rhs = Node("*", rhs, Node("VAR", var=lhs.ty.base.vla_size, tok=token), tok=token)
+        return Node("+", lhs, rhs, tok=token)
     rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token, ty=ty_long), tok=token)
     return Node("+", lhs, rhs, tok=token)
 
@@ -38,6 +41,10 @@ def new_sub(lhs, rhs, token):
     add_type(rhs)
     if is_numeric(lhs.ty) and is_numeric(rhs.ty):
         return Node("-", lhs, rhs, tok=token)
+    if lhs.ty.base is not None and lhs.ty.base.kind == "VLA":
+        rhs = Node("*", rhs, Node("VAR", var=lhs.ty.base.vla_size, tok=token), tok=token)
+        add_type(rhs)
+        return Node("-", lhs, rhs, tok=token, ty=lhs.ty)
     if lhs.ty.base is not None and is_integer(rhs.ty):
         rhs = Node("*", rhs, Node("NUM", value=lhs.ty.base.size, tok=token, ty=ty_long), tok=token)
         add_type(rhs)
@@ -1176,7 +1183,7 @@ class Parser:
                     raise CompileError(self.tokens[position], "variable-sized object may not be initialized")
                 var = self.new_lvar(ty.name.text, ty)
                 size = Node("VAR", var=ty.vla_size, tok=ty.name)
-                expression = Node("ASSIGN", Node("VAR", var=var, tok=ty.name), self.new_alloca(size), tok=ty.name)
+                expression = Node("ASSIGN", Node("VLA_PTR", var=var, tok=ty.name), self.new_alloca(size), tok=ty.name)
                 statements.append(Node("EXPR_STMT", lhs=expression, tok=ty.name))
                 continue
             var = self.new_lvar(ty.name.text, ty)

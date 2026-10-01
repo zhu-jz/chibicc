@@ -1,6 +1,6 @@
-"""Lesson 272: Compute variable-length array sizes at runtime.
+"""Lesson 273: Add pointer arithmetic for variable-length arrays.
 
-Based on chibicc commit e8667afd08ecbf7c9b05beb4ff399959d9722ff9.
+Based on chibicc commit 07f901057f5c6aa77c0f15f7a22dc0b88923c227.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -84,7 +84,9 @@ class CodeGenerator:
 
     def gen_addr(self, node):
         if node.kind == "VAR":
-            if node.var.is_local:
+            if node.var.ty.kind == "VLA":
+                self.assembly.append(f"  mov {node.var.offset}(%rbp), %rax")
+            elif node.var.is_local:
                 self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
             elif node.var.is_tls:
                 self.assembly.extend(("  mov %fs:0, %rax",
@@ -93,6 +95,9 @@ class CodeGenerator:
                 self.assembly.append(f"  mov {node.var.name}@GOTPCREL(%rip), %rax")
             else:
                 self.assembly.append(f"  lea {node.var.name}(%rip), %rax")
+            return
+        if node.kind == "VLA_PTR":
+            self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
             return
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
@@ -111,7 +116,7 @@ class CodeGenerator:
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):
-        if ty.kind in ("ARRAY", "STRUCT", "UNION", "FUNC"):
+        if ty.kind in ("ARRAY", "STRUCT", "UNION", "FUNC", "VLA"):
             return
         if ty.kind in ("FLOAT", "DOUBLE"):
             instruction = "movss" if ty.kind == "FLOAT" else "movsd"

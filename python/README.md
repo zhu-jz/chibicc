@@ -1,33 +1,29 @@
-# Lesson 272: Compute variable-length array sizes at runtime
+# Lesson 273: Add pointer arithmetic for variable-length arrays
 
-Original chibicc commit: [`e8667afd08ecbf7c9b05beb4ff399959d9722ff9`](https://github.com/rui314/chibicc/commit/e8667afd08ecbf7c9b05beb4ff399959d9722ff9).
+Original chibicc commit: [`07f901057f5c6aa77c0f15f7a22dc0b88923c227`](https://github.com/rui314/chibicc/commit/07f901057f5c6aa77c0f15f7a22dc0b88923c227).
 Earlier explanations are available in Git history.
 
-Nonconstant array bounds now create VLA types containing a length expression and
-an object holding their computed byte size. Local declarations compute sizes
-from the innermost dimension outward, save them once and allocate storage with
-the previous alloca machinery. A pointer to a VLA computes the pointed-to size
-without allocating that array. sizeof uses the saved size rather than re-reading
-a bound variable that may have changed.
+A VLA variable stores its allocated address in an eight-byte local slot. Reading
+its address now loads that slot; a separate VLA_PTR node addresses the slot when
+initializing it. Array expressions remain addresses rather than loading an element.
+When an element is itself a VLA, pointer addition and subtraction multiply the
+index by its saved runtime byte size. This makes multidimensional indexing work.
 
 ```sh
-printf 'int main(void){int n=5;int x[n];n=9;return sizeof(x)+22;}\n' > /tmp/lesson.c
+printf 'int main(void){int n=3,m=5;int x[n][m];x[2][4]=42;return x[2][4];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly multiplies 5 by the four-byte int element size, saves 20, allocates the
-array and later loads that saved 20 for sizeof. Adding 22 returns 42 even after
-n becomes 9. Tests cover multidimensional sizes, mixed fixed/runtime dimensions,
-pointers to VLAs, single evaluation and rejected initialization, plus original vla.c.
-Python omits no-op sizing statements for ordinary declarations, while C emits
-NULL_EXPR nodes. VLA types still have an eight-byte local pointer representation.
-This step implements sizeof support; dynamic indexing is not extended ahead.
-The original constant-expression classifier omits remainder and tests only the
-right operand of comma expressions; those historical rules remain. If a fresh
-VLA type has no computed size, Python reports an error instead of C's null access.
+Assembly loads the allocated base address, multiplies row 2 by the saved 20-byte
+row size, and adds column 4 times four bytes. It writes 42 there and loads it back
+for the return value. Tests cover one and two dimensions, reversed addition and
+subtracting a row from a pointer, as well as the original VLA fixture.
+Python uses a string node kind instead of C's enum. The original VLA subtraction
+branch does not distinguish a numeric right operand from another pointer; this
+lesson does not extend pointer-difference semantics beyond that implementation.
 
 ## Tests and attribution
 

@@ -155,7 +155,7 @@ def add_type(node):
         node.ty = ty_int
     elif node.kind in ("BITNOT", "<<", ">>"):
         node.ty = node.lhs.ty
-    elif node.kind == "VAR":
+    elif node.kind in ("VAR", "VLA_PTR"):
         node.ty = node.var.ty
     elif node.kind == "COND":
         if node.then.ty.kind == "VOID" or node.els.ty.kind == "VOID":

@@ -332,6 +332,9 @@ class Parser:
             return Node("NEG", lhs=operand, tok=token), position
         if operator == "&":
             operand, position = self.cast(position + 1)
+            add_type(operand)
+            if operand.kind == "MEMBER" and operand.member.is_bitfield:
+                raise CompileError(token, "cannot take address of bitfield")
             return Node("ADDR", lhs=operand, tok=token), position
         if operator == "*":
             operand, position = self.cast(position + 1)

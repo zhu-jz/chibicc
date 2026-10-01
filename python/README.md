@@ -1,26 +1,27 @@
-# Lesson 213: Align zero-width bitfields
+# Lesson 214: Reject addresses of bitfields
 
-Original chibicc commit: [`17ea802ceaa76f55726488379959a983f891f631`](https://github.com/rui314/chibicc/commit/17ea802ceaa76f55726488379959a983f891f631).
+Original chibicc commit: [`c302a969d8217ab46113d494b8cd773cf057193d`](https://github.com/rui314/chibicc/commit/c302a969d8217ab46113d494b8cd773cf057193d).
 Earlier explanations are available in Git history.
 
-An unnamed zero-width bitfield now moves the bit cursor to the next boundary
-of its declared storage type. It allocates no value bits, but affects where
-following members begin. Struct size still rounds up to the aggregate alignment.
-Python's integer cursor and align_to perform the same layout operation as C.
+Unary & now checks the typed operand and reports cannot take address of
+bitfield for a direct bitfield member. A field can start between bytes and
+share storage with neighbors, so C has no ordinary pointer to its value.
+Taking the containing struct's address remains valid, including the temporary
+used by compound assignments. Python raises CompileError at the & token.
 
 ```sh
-printf 'int main(void){return sizeof(struct T{int a:3;int:0;int b:5;})+34;}\n' > /tmp/lesson.c
+printf 'int main(void){struct T{int a:3;int b;}x={1,42};int*p=&x.b;return *p;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The first field uses one int storage unit and the barrier starts b in another;
-sizeof is 8, emitted as an immediate. Adding 34 leaves 42 in rax. Tests check
-leading and trailing barriers, a long alignment boundary, member offsets and
-original fixtures. This commit adds layout only; anonymous initializer and
-address-taking rules remain at their current historical behavior.
+The ordinary member b still has a byte address: lea plus its offset forms
+the pointer, and the load returns 42. Replacing &x.b with &x.a gives the new
+diagnostic before assembly generation. Tests cover direct, parenthesized and
+arrow forms, valid ordinary members, existing bitfield updates and upstream
+fixtures. There is no new runtime instruction for this parser restriction.
 
 ## Tests and attribution
 

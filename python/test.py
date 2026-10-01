@@ -77,6 +77,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bitfield_address_rejection(self):
+        for expression in ('&x.a', '&(x.a)', '&p->a'):
+            result = compile_program('int main(void){struct T{int a:3;int b;}x;struct T*p=&x;' + expression + ';return 0;}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('cannot take address of bitfield', result.stderr)
+            self.assertNotIn('Traceback', result.stderr)
+        self.assert_program_returns('int main(void){struct T{int a:3;int b;}x={1,42};int*p=&x.b;return *p;}', 42)
+
     def test_zero_width_bitfield_alignment(self):
         for members, size in [('int a:3;int:0;int c:5;',8), ('int a:3;int:0;',4),
                               ('char a;long:0;char b;',16), ('int:0;int c:5;',4)]:

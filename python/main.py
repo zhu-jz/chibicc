@@ -1,6 +1,6 @@
-"""Lesson 213: Align zero-width bitfields.
+"""Lesson 214: Reject addresses of bitfields.
 
-Based on chibicc commit 17ea802ceaa76f55726488379959a983f891f631.
+Based on chibicc commit c302a969d8217ab46113d494b8cd773cf057193d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

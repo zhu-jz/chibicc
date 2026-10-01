@@ -25,6 +25,7 @@ class Macro:
     body: list
     is_objlike: bool = True
     params: list[str] = field(default_factory=list)
+    handler: object = None
 
 
 def skip_line(tokens, position):
@@ -291,18 +292,27 @@ def expand_macro(tokens, position, files, macros, conditions, include_paths):
     macro = find_macro(token, macros)
     if macro is None:
         return False
+    if macro.handler is not None:
+        tokens[position] = macro.handler(token)
+        return True
     if not macro.is_objlike:
         if tokens[position + 1].text != "(":
             return False
         args, rest = read_macro_args(tokens, position, macro.params)
         hideset = (token.hideset & tokens[rest - 1].hideset) | {macro.name}
         body = subst(macro.body, args, files, macros, conditions, include_paths)
-        tokens[position:rest] = add_hideset(body[:-1], hideset)
+        body = add_hideset(body[:-1], hideset)
+        for replacement in body:
+            replacement.origin = token
+        tokens[position:rest] = body
         tokens[position].at_bol = token.at_bol
         tokens[position].has_space = token.has_space
         return True
     hideset = token.hideset | {macro.name}
-    tokens[position:position + 1] = add_hideset(macro.body[:-1], hideset)
+    body = add_hideset(macro.body[:-1], hideset)
+    for replacement in body:
+        replacement.origin = token
+    tokens[position:position + 1] = body
     tokens[position].at_bol = token.at_bol
     tokens[position].has_space = token.has_space
     return True
@@ -431,6 +441,18 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
     return tokens
 
 
+def file_macro(template):
+    while template.origin is not None:
+        template = template.origin
+    return new_str_token(template.file.name if template.file else "-", template)
+
+
+def line_macro(template):
+    while template.origin is not None:
+        template = template.origin
+    return new_num_token(template.line_no, template)
+
+
 def init_macros():
     definitions = {
         '_LP64': '1',
@@ -482,6 +504,8 @@ def init_macros():
         for token in tokens:
             token.file = file
         macros[name] = Macro(name, tokens)
+    macros["__FILE__"] = Macro("__FILE__", [], handler=file_macro)
+    macros["__LINE__"] = Macro("__LINE__", [], handler=line_macro)
     return macros
 
 

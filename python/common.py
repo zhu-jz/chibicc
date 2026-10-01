@@ -50,6 +50,7 @@ class Token:
     has_space: bool = field(default=False, compare=False)
     file: Optional[File] = field(default=None, compare=False)
     hideset: frozenset[str] = field(default_factory=frozenset, compare=False)
+    origin: Optional["Token"] = field(default=None, compare=False, repr=False)
 
 
 class CompileError(Exception):

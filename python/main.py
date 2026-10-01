@@ -1,6 +1,6 @@
-"""Lesson 188: Add predefined macros.
+"""Lesson 189: Add __FILE__ and __LINE__.
 
-Based on chibicc commit 5f5a8507ff2f2509c27ac1a196fd1874345e5e95.
+Based on chibicc commit 6f17071885b98ac5dcdcc0b233ff204150a6826c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -73,6 +73,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_file_and_line_macros(self):
+        self.assert_program_returns('#define LINE __LINE__\n#define NEXT LINE\nint main(void){return NEXT;}\n', 3)
+        self.assert_program_returns('#define LINE() __LINE__\n\nint main(void){return LINE();}\n', 3)
+        tokens = tokenize('#define FIRST SECOND\n#define SECOND __LINE__\nFIRST\n')
+        self.assertEqual(tokens[0].value, 3)
+        self.assertEqual(tokenize('__FILE__')[0].str, b'-\0')
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / 'location.h'
+            source = Path(directory) / 'main.c'
+            header.write_text('char *header_file=__FILE__;\nint header_line=__LINE__;\n#define LINE() __LINE__\n#define FILE __FILE__\n')
+            source.write_text('#include "location.h"\nchar *source_file=FILE;\n\nint main(void){return LINE()+header_line;}\n')
+            result = subprocess.run([sys.executable, str(COMPILER), '-E', str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"' + str(header) + '"', result.stdout)
+            self.assertIn('"' + str(source) + '"', result.stdout)
+            self.assert_program_returns(result.stdout, 6)
+
     def test_predefined_macros(self):
         self.assert_program_returns('#if __STDC__ && defined(__x86_64__) && defined(__linux__)\nint main(void){return 42;}\n#else\n#error target\n#endif\n', 42)
         self.assert_program_returns('int main(void){return __SIZEOF_POINTER__==sizeof(void*) && __SIZEOF_LONG_DOUBLE__==sizeof(long double);}', 1)
@@ -2380,7 +2398,8 @@ int main(void){return 42;}
         with tempfile.TemporaryDirectory() as directory:
             for source in sorted(fixtures.glob("*.c")):
                 with self.subTest(source=source.name):
-                    compiled = subprocess.run(compiler_command("-I" + str(fixtures), str(source)), capture_output=True, text=True)
+                    compiled = subprocess.run(compiler_command("-Itest", "test/" + source.name),
+                                              cwd=fixtures.parent, capture_output=True, text=True)
                     self.assertEqual(compiled.returncode, 0, compiled.stderr)
                     assembly = Path(directory) / (source.stem + ".s")
                     executable = Path(directory) / source.stem

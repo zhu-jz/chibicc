@@ -1,32 +1,32 @@
-# Lesson 188: Add predefined macros
+# Lesson 189: Add __FILE__ and __LINE__
 
-Original chibicc commit: [`5f5a8507ff2f2509c27ac1a196fd1874345e5e95`](https://github.com/rui314/chibicc/commit/5f5a8507ff2f2509c27ac1a196fd1874345e5e95).
+Original chibicc commit: [`6f17071885b98ac5dcdcc0b233ff204150a6826c`](https://github.com/rui314/chibicc/commit/6f17071885b98ac5dcdcc0b233ff204150a6826c).
 Earlier explanations are available in Git history.
 
-Preprocessing initializes the original set of 41 built-in object-like macros.
-They identify the x86-64 Linux target, describe C type sizes and language
-assumptions, and supply a few alternate keyword spellings. They are ordinary
-macro definitions afterward: source can redefine or undefine them.
+Two dynamic predefined macros now create tokens from the source location.
+`__FILE__` becomes a quoted filename and `__LINE__` becomes an integer. Unlike
+fixed replacement bodies, their handlers inspect each invocation separately.
 
-Each Python compilation constructs a fresh dictionary, preventing changes from
-leaking into the next compilation. Built-in replacement tokens have a synthetic
-`<built-in>` source file, matching C. Values follow this historical compiler,
-not the host Python process or GCC: long double is still eight bytes, and some
-provided keyword aliases refer to syntax not implemented at this stage.
+Every ordinary macro replacement token records the invoking token as its
+origin. Dynamic handlers follow that chain to the original call location, so
+`#define LINE() __LINE__` reports where LINE is used, including when defined
+in a header and invoked in its caller. Python uses callable fields and token
+references in place of C function pointers and linked origin pointers. Raw
+in-memory tokenizer tests use '-' when no filename exists.
 
 ```sh
-printf '#if __STDC__ && defined(__x86_64__)\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#define LINE() __LINE__\n\nint main(void){return LINE();}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 3
 ```
 
-The target condition selects main; assembly loads 42 into `%rax` and returns.
-Tests check target conditions, type-size agreement, the unsigned size type,
-empty label prefix, the alignment alias, redefinition and reset between calls.
-The original fixture's new __STDC__ assertion runs unchanged.
+Expansion supplies the number 3; assembly loads it into `%rax` and returns.
+Tests check direct and chained expansions, header versus caller filenames and
+line numbers, and executable results. Upstream fixtures run from the Python
+directory with paths such as test/macro.c, matching their filename assertions.
 
 ## Tests and attribution
 

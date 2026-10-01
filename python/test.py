@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_trailing_initializer_commas(self):
+        for source, expected in [
+            ("int main(){int a[]={1,2,42,};return a[2];}", 42),
+            ("int main(){struct T{int a,b;} x={1,42,};return x.b;}", 42),
+            ("int main(){union T{int a;char b;} x={42,};return x.a;}", 42),
+            ("enum T{A,B=42,};int main(){return B;}", 42),
+            ("int main(){int a[2][2]={42,};return a[0][0]+a[1][1];}", 42),
+            ("struct T{int a,b;} g[]={1,2,3,42,};int main(){return g[1].b;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertIn("  mov $12, %rcx\n", compile_program("int main(){int a[]={1,2,42,};return a[2];}").stdout)
+        self.assertEqual(compile_program("int main(){int x={42,};}").returncode, 1)
+
     def test_scalar_initializer_braces(self):
         for source in [
             "int main(){int x={42};return x;}",
@@ -256,7 +269,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         self.assertEqual((node.lhs.rhs.kind, node.rhs.kind), ("ASSIGN", "ASSIGN"))
         assembly = compile_program("int main(){int a[2]={3,4};return a[1];}").stdout
         self.assertIn("  mov %eax, (%rdi)\n", assembly)
-        self.assertEqual(compile_program("int main(){int a[1]={1,};}").returncode, 1)
+        self.assert_program_returns("int main(){int a[1]={1,};return a[0];}", 1)
 
     def test_constant_expressions(self):
         for source, expected in [
@@ -626,7 +639,6 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, message in [
             ("enum Missing x;", "unknown enum type"),
             ("struct E{int a;};enum E x;", "not an enum tag"),
-            ("enum {a,};", "expected a variable name"),
             ("int main(){{enum {a};}return a;}", "undefined variable"),
         ]:
             result = compile_program(source)

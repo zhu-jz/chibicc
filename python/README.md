@@ -1,33 +1,34 @@
-# Lesson 109: Braces around scalar initializers
+# Lesson 110: Trailing commas in enum and initializer lists
 
-Original chibicc commit: [`a58958ccb40a127a83e3383ef3887e4721352238`](https://github.com/rui314/chibicc/commit/a58958ccb40a127a83e3383ef3887e4721352238).
+Original chibicc commit: [`fde464c47cb69e030b58d8d204a508d6babd3e09`](https://github.com/rui314/chibicc/commit/fde464c47cb69e030b58d8d204a508d6babd3e09).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A scalar initializer can now be surrounded by braces, including repeated nested
-braces: `int x={{{42}}};`. The parser recursively unwraps each brace pair and
-stores the same assignment expression. This applies to pointer initializers too,
-so a global braced pointer still becomes a relocation.
+Enums and array/struct initializer lists now recognize both `}` and `,}` as
+their end. Array-length inference counts the same elements with either ending.
+Unbraced nested aggregates stop before the parent's trailing comma, leaving it
+for the parent to consume. Union initialization optionally skips one comma.
 
-The Python recursion directly follows the C parser. Empty scalar braces and
-multiple scalar values still produce errors, as do trailing commas at this step.
-No new expression or assembly operation is required.
+Python returns the next token index from consume_end instead of updating C's
+output pointer. The historical commit does not change scalar-brace parsing:
+`int x={42,};` is still rejected, even though scalar braces without a trailing
+comma work. Empty scalar and union braces remain unsupported.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x={42};return x;}\n' > /tmp/lesson109.c
-python3 python/main.py /tmp/lesson109.c > /tmp/lesson109.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson109 /tmp/lesson109.s
-/tmp/lesson109
+printf 'int main(){int a[]={1,2,42,};return a[2];}\n' > /tmp/lesson110.c
+python3 python/main.py /tmp/lesson110.c > /tmp/lesson110.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson110 /tmp/lesson110.s
+/tmp/lesson110
 echo $?
 ```
 
-Assembly clears the local int and stores 42 just as for an unbraced initializer.
-Main loads x and returns exit status 42. Tests cover repeated braces, globals,
-array elements, pointer relocations, malformed scalar lists, emitted assembly,
-and the original initializer program.
+The trailing comma emits nothing. The inferred array still occupies 12 bytes,
+gets three int stores, and returns exit status 42. Tests cover arrays, structs,
+unions, enums, brace elision, length inference, assembly sizing, scalar grammar
+limits, and the original initializer suite.
 
 ## Tests and attribution
 

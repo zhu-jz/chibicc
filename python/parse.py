@@ -769,6 +769,17 @@ class Parser:
         ty, position = self.declspec(position)
         return self.abstract_declarator(position, ty)
 
+    def is_end(self, position):
+        return self.tokens[position].text == "}" or (
+            self.tokens[position].text == "," and self.tokens[position + 1].text == "}")
+
+    def consume_end(self, position):
+        if self.tokens[position].text == "}":
+            return position + 1
+        if self.tokens[position].text == "," and self.tokens[position + 1].text == "}":
+            return position + 2
+        raise CompileError(self.tokens[position], "expected '}'")
+
     def enum_specifier(self, position):
         ty = enum_type()
         tag = None
@@ -787,7 +798,7 @@ class Parser:
         position += 1
         value = 0
         first = True
-        while self.tokens[position].text != "}":
+        while not self.is_end(position):
             if not first:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
@@ -806,7 +817,7 @@ class Parser:
             value = to_int32(value + 1)
         if tag is not None:
             self.scopes[-1].tags[tag.text] = ty
-        return ty, position + 1
+        return ty, self.consume_end(position)
 
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
@@ -857,7 +868,7 @@ class Parser:
     def count_array_init_elements(self, position, ty):
         dummy = new_initializer(ty.base)
         count = 0
-        while self.tokens[position].text != "}":
+        while not self.is_end(position):
             if count:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
@@ -875,7 +886,7 @@ class Parser:
             complete = new_initializer(array_of(init.ty.base, count))
             init.__dict__.update(complete.__dict__)
         index = 0
-        while self.tokens[position].text != "}":
+        while not self.is_end(position):
             if index:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
@@ -885,14 +896,14 @@ class Parser:
             else:
                 position = self.skip_excess_element(position)
             index += 1
-        return position + 1
+        return self.consume_end(position)
 
     def struct_initializer(self, position, init):
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
         position += 1
         index = 0
-        while self.tokens[position].text != "}":
+        while not self.is_end(position):
             if index:
                 if self.tokens[position].text != ",":
                     raise CompileError(self.tokens[position], "expected ','")
@@ -903,14 +914,14 @@ class Parser:
             else:
                 position = self.skip_excess_element(position)
             index += 1
-        return position + 1
+        return self.consume_end(position)
 
     def array_initializer_without_braces(self, position, init):
         if init.is_flexible:
             count = self.count_array_init_elements(position, init.ty)
             init.__dict__.update(new_initializer(array_of(init.ty.base, count)).__dict__)
         for index in range(init.ty.array_len):
-            if self.tokens[position].text == "}":
+            if self.is_end(position):
                 break
             if index:
                 if self.tokens[position].text != ",":
@@ -921,7 +932,7 @@ class Parser:
 
     def struct_initializer_without_braces(self, position, init):
         for index, member in enumerate(init.ty.members):
-            if self.tokens[position].text == "}":
+            if self.is_end(position):
                 break
             if index:
                 if self.tokens[position].text != ",":
@@ -936,6 +947,8 @@ class Parser:
         if self.tokens[position].text != "{":
             return self.initializer2(position, init.children[0])
         position = self.initializer2(position + 1, init.children[0])
+        if self.tokens[position].text == ",":
+            position += 1
         if self.tokens[position].text != "}":
             raise CompileError(self.tokens[position], "expected '}'")
         return position + 1

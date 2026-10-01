@@ -1,6 +1,6 @@
-"""Lesson 109: Braces around scalar initializers.
+"""Lesson 110: Trailing commas in enum and initializer lists.
 
-Based on chibicc commit a58958ccb40a127a83e3383ef3887e4721352238.
+Based on chibicc commit fde464c47cb69e030b58d8d204a508d6babd3e09.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

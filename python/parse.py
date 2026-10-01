@@ -1071,9 +1071,13 @@ class Parser:
             complete = new_initializer(array_of(init.ty.base, token.ty.array_len))
             init.__dict__.update(complete.__dict__)
         count = min(init.ty.array_len, token.ty.array_len)
+        size = init.ty.base.size
+        if size not in (1, 2):
+            raise CompileError(token, "unsupported string initializer element size")
         for index in range(count):
-            byte = token.str[index]
-            value = byte if byte < 128 else byte - 256
+            value = int.from_bytes(token.str[index * size:(index + 1) * size], 'little')
+            if size == 1 and value >= 128:
+                value -= 256
             init.children[index].expr = Node("NUM", value=value, tok=token)
         return position + 1
 

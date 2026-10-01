@@ -1,6 +1,6 @@
-"""Lesson 231: Read L-prefixed wide strings.
+"""Lesson 232: Initialize arrays from UTF-16 strings.
 
-Based on chibicc commit cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8.
+Based on chibicc commit 36230e0827ca33a9b09ea5aa7b06e170fd188ca1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,16 +1,18 @@
-# Lesson 231: Read L-prefixed wide strings
+# Lesson 232: Initialize arrays from UTF-16 strings
 
-Original chibicc commit: [`cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8`](https://github.com/rui314/chibicc/commit/cae061af2b65ad0962fb4b6fe3b55abe2f3a5bf8).
+Original chibicc commit: [`36230e0827ca33a9b09ea5aa7b06e170fd188ca1`](https://github.com/rui314/chibicc/commit/36230e0827ca33a9b09ea5aa7b06e170fd188ca1).
 Earlier explanations are available in Git history.
 
-L-prefixed strings reuse the UTF-32 reader with signed int elements. On this
-x86-64 Linux target, wide strings therefore use four-byte little-endian units
-and a four-byte zero terminator. Their payload bytes can match U strings, but
-arithmetic and shifts follow signed rather than unsigned integer rules.
+String-based array initialization now reads complete two-byte units for short
+arrays, while char arrays retain signed-byte reading. An omitted array bound
+uses the literal's unit count, including zero. Local initialization emits
+assignments to each element; global initialization serializes those values.
+The original also simplifies its L-character scan increment, which Python
+already expressed as a returned next index.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return L"βb"[0]-904;}
+int main(void){unsigned short x[]=u"β";return x[0]-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -18,12 +20,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-An indexed four-byte load obtains 946; subtraction returns 42. Tests inspect
-payload bytes and element signedness, run a signed high-bit shift, preserve
-macro stringizing and execute original fixtures. Python passes ty_int into
-its existing UTF-32 reader, mirroring the C reuse. This deliberately targets
-Linux wide characters; Windows uses a different representation. Wider array
-initializer and concatenation paths still retain their earlier limitations.
+The array contains the complete unit 946 and a zero. Two-byte stores initialize
+it, and indexed loading/subtraction returns 42. Tests cover inferred bounds,
+local and global arrays, exact serialized bytes, surrogate pairs, truncation
+to an explicit shorter bound, zero-filled larger bounds and original fixtures.
+Python decodes little-endian slices rather than casting buffer pointers.
+Four-byte array initializers remain unsupported at this historical step and
+receive CompileError instead of the C unreachable assertion.
 
 ## Tests and attribution
 

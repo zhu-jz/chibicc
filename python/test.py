@@ -79,6 +79,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_utf16_array_initializers(self):
+        self.assert_program_returns('int main(void){unsigned short x[]=u"αβ";return x[0]==945&&x[1]==946&&x[2]==0&&sizeof(x)==6;}',1)
+        self.assert_program_returns('unsigned short x[]=u"🍣";int main(void){return x[0]==0xd83c&&x[1]==0xdf63&&x[2]==0&&sizeof(x)==6;}',1)
+        self.assert_program_returns('int main(void){unsigned short x[2]=u"abc";return x[0]+x[1];}',195)
+        self.assert_program_returns('unsigned short x[5]=u"β";int main(void){return x[1]+x[4];}',0)
+        source = 'unsigned short x[]=u"αβ";'
+        self.assertEqual(next(var.init_data for var in parse(tokenize(source)) if var.name == 'x'),'αβ'.encode('utf-16-le')+b'\0\0')
+
     def test_wide_string_literals(self):
         for text in ('','abc','日本語','🍣'):
             token = tokenize('L"' + text + '"')[0]
@@ -2014,7 +2022,7 @@ int main(void){return 42;}
             ('int main(void){char a[2]="abc";return a[1];}', 98),
             ('int main(void){char a[2][4]={"abc","def"};return a[1][2];}', 102),
             (r'int main(void){char a[2]="\x80";return a[0]<0;}', 1),
-            (r'int main(void){int a[2]="\x80";return a[0]<0;}', 1),
+            (r'int main(void){short a[2]=u"\xffff";return a[0]<0;}', 1),
         ]:
             self.assert_program_returns(source, expected)
         assembly = compile_program('int main(void){char a[4]="abc";return a[0];}').stdout

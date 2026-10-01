@@ -538,6 +538,15 @@ def init_macros():
         define_macro(macros, name, source)
     macros["__FILE__"] = Macro("__FILE__", [], handler=file_macro)
     macros["__LINE__"] = Macro("__LINE__", [], handler=line_macro)
+    counter = 0
+
+    def counter_macro(template):
+        nonlocal counter
+        token = new_num_token(counter, template)
+        counter += 1
+        return token
+
+    macros["__COUNTER__"] = Macro("__COUNTER__", [], handler=counter_macro)
     now = time.localtime()
     months = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")

@@ -1,27 +1,28 @@
-# Lesson 221: Expand compilation date and time macros
+# Lesson 222: Expand the GNU counter macro
 
-Original chibicc commit: [`e27417fcde500f6c01ce0dbee57a1af137510a09`](https://github.com/rui314/chibicc/commit/e27417fcde500f6c01ce0dbee57a1af137510a09).
+Original chibicc commit: [`0e77f3dff8b44547da4639c9609c216c9c896fa5`](https://github.com/rui314/chibicc/commit/0e77f3dff8b44547da4639c9609c216c9c896fa5).
 Earlier explanations are available in Git history.
 
-Predefined __DATE__ and __TIME__ are now string macros initialized from one
-local-time snapshot. The date uses fixed English month abbreviations and a
-space-padded day; time uses zero-padded HH:MM:SS. Repeated expansions within
-one compiler invocation share those replacement tokens.
+__COUNTER__ now expands to 0, 1, 2 and so on as preprocessing requests its
+replacement. It is a dynamic macro handler, so nested macro expansion and
+conditional expressions participate in the same sequence. Skipped branches
+consume no counter values. Expanded numbers then enter the normal PP_NUM
+conversion pass.
 
 ```sh
-printf 'int main(void){return sizeof(__DATE__)+sizeof(__TIME__)+21;}\n' > /tmp/lesson.c
+printf 'int main(void){return __COUNTER__+__COUNTER__+41;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The strings have sizes 12 and 9 including terminators; their sum plus 21 is
-42, emitted through ordinary constant instructions. Tests fix the clock for
-exact date spacing and time padding, verify repeated expansion and command-line
-overrides, check sizes in a real executable and run upstream fixtures. Python's
-stdlib time.localtime replaces C time/localtime; its month index starts at 1
-rather than 0. No locale-dependent month formatting is used.
+Preprocessing replaces the two uses with 0 and 1; normal addition returns
+42. Tests cover the sequence, expansion through another macro, #if consumption,
+skipped branches, two-stage token pasting and original fixtures. Python keeps
+the counter in a closure belonging to its macro dictionary rather than C's
+static process variable. A fresh independent preprocess call restarts at zero;
+within one compilation, includes and macro expansion share the sequence.
 
 ## Tests and attribution
 

@@ -79,6 +79,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_counter_macro(self):
+        self.assertEqual([token.value for token in tokenize('__COUNTER__;__COUNTER__;__COUNTER__') if token.kind == 'NUM'],[0,1,2])
+        self.assertEqual(tokenize('__COUNTER__')[0].value,0)
+        self.assert_program_returns('#define C __COUNTER__\nint main(void){return C+C+41;}',42)
+        source = '#if 0\n__COUNTER__\n#endif\n#if __COUNTER__==0\nint main(void){return __COUNTER__+41;}\n#endif'
+        self.assert_program_returns(source,42)
+        self.assert_program_returns('#define P(a,b) a##b\n#define Q(a,b) P(a,b)\nint main(void){int x0=42;return Q(x,__COUNTER__);}',42)
+
     def test_date_and_time_macros(self):
         fixed = time.struct_time((2020,1,7,3,4,5,1,7,-1))
         with patch('preprocess.time.localtime', return_value=fixed):

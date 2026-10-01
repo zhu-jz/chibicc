@@ -1,6 +1,6 @@
-"""Lesson 221: Expand compilation date and time macros.
+"""Lesson 222: Expand the GNU counter macro.
 
-Based on chibicc commit e27417fcde500f6c01ce0dbee57a1af137510a09.
+Based on chibicc commit 0e77f3dff8b44547da4639c9609c216c9c896fa5.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

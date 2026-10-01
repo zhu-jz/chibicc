@@ -72,6 +72,25 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macros_in_conditions(self):
+        self.assert_program_returns('''#define VALUE NEXT
+#define NEXT 5
+#if VALUE-5
+invalid
+#elif VALUE*2==10
+int main(void){return 42;}
+#else
+invalid
+#endif
+''', 42)
+        self.assert_program_returns('#define EMPTY\n#if 1\nint main(void){return 7;}\n#elif EMPTY\ninvalid\n#endif\n', 7)
+        result = compile_program('#define EMPTY\n#if EMPTY\n#endif\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('no expression', result.stderr)
+        result = compile_program('#if UNKNOWN\n#endif\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('undefined variable', result.stderr)
+
     def test_undef_directives(self):
         self.assert_program_returns('#define VALUE 7\n#define VALUE 11\n#undef VALUE\nint main(void){int VALUE=42;return VALUE;}\n', 42)
         self.assert_program_returns('#undef UNKNOWN\n#define VALUE 7\n#undef VALUE\n#define VALUE 11\nint main(void){return VALUE;}\n', 11)

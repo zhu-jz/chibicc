@@ -67,9 +67,10 @@ def copy_line(tokens, position):
     return line, position
 
 
-def eval_const_expr(tokens, position):
+def eval_const_expr(tokens, position, files, macros, conditions):
     start = tokens[position]
     expression, position = copy_line(tokens, position + 1)
+    preprocess2(expression, files, macros, conditions)
     if expression[0].kind == "EOF":
         raise CompileError(start, "no expression")
     value, rest = const_expr(expression)
@@ -92,12 +93,8 @@ def expand_macro(tokens, position, macros):
     return True
 
 
-def preprocess(tokens, files=None):
-    if files is None:
-        files = []
+def preprocess2(tokens, files, macros, conditions):
     result = []
-    conditions = []
-    macros = {}
     position = 0
     while tokens[position].kind != "EOF":
         if expand_macro(tokens, position, macros):
@@ -138,7 +135,7 @@ def preprocess(tokens, files=None):
                 macros.pop(name.text, None)
                 continue
             if tokens[position].text == "if":
-                value, position = eval_const_expr(tokens, position)
+                value, position = eval_const_expr(tokens, position, files, macros, conditions)
                 conditions.append(CondIncl(token, bool(value)))
                 if not value:
                     position = skip_cond_incl(tokens, position)
@@ -150,7 +147,7 @@ def preprocess(tokens, files=None):
                 if conditions[-1].included:
                     position = skip_cond_incl(tokens, position)
                 else:
-                    value, position = eval_const_expr(tokens, position)
+                    value, position = eval_const_expr(tokens, position, files, macros, conditions)
                     if value:
                         conditions[-1].included = True
                     else:
@@ -176,8 +173,16 @@ def preprocess(tokens, files=None):
         result.append(token)
         position += 1
     result.append(tokens[position])
+    tokens[:] = result
+    return tokens
+
+
+def preprocess(tokens, files=None):
+    if files is None:
+        files = []
+    conditions = []
+    preprocess2(tokens, files, {}, conditions)
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
-    tokens[:] = result
     convert_keywords(tokens)
     return tokens

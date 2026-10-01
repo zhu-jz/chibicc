@@ -1,28 +1,30 @@
-# Lesson 168: Add #undef
+# Lesson 169: Expand macros in conditional expressions
 
-Original chibicc commit: [`9ad60e41d512158d942d1bf3808682ede6ef5118`](https://github.com/rui314/chibicc/commit/9ad60e41d512158d942d1bf3808682ede6ef5118).
+Original chibicc commit: [`2651448084a56dd0b960989798772e71e12e6c30`](https://github.com/rui314/chibicc/commit/2651448084a56dd0b960989798772e71e12e6c30).
 Earlier explanations are available in Git history.
 
-`#undef NAME` makes that identifier cease to be a macro. Undefining an unknown
-name is harmless; a later definition can give it a new body. The name must be
-an identifier and extra tokens use the existing warning behavior.
+Before evaluating a `#if` or eligible `#elif` expression, the preprocessor now
+expands macros in its copied token line. The same macro definitions are shared
+with ordinary source processing. Keyword conversion and the final unmatched
+conditional check remain in the outer entry point.
 
-The C macro list records a deleted entry to hide older definitions. Python's
-dictionary already keeps only the latest definition, so removing its entry has
-the same effect. Definitions in skipped branches remain untouched.
+A small internal preprocessing function accepts the shared dictionaries and
+conditional stack explicitly instead of relying on C global variables. Empty
+expansions produce `no expression`; identifiers that remain undefined still
+produce the parser's undefined-variable diagnostic at this historical step.
 
 ```sh
-printf '#define VALUE 7\n#undef VALUE\nint main(void){int VALUE=42;return VALUE;}\n' > /tmp/lesson.c
+printf '#define VALUE 5\n#if VALUE-5\ninvalid\n#elif VALUE\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-After removal, `VALUE` is a local variable. Assembly stores 42 in its stack
-slot and loads it for the return value in `%rax`. Tests cover overriding then
-undefining, defining again, unknown names, skipped directives and restoring
-keyword spellings. The original fixture now undefines its keyword macros.
+The first expression becomes `5-5`, selecting the second branch. Generated
+assembly loads 42 into `%rax` and returns; macro evaluation adds no runtime
+instructions. Tests cover chained definitions, arithmetic conditions, empty
+expansions and expressions skipped after an earlier successful branch.
 
 ## Tests and attribution
 

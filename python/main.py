@@ -1,6 +1,6 @@
-"""Lesson 168: Add #undef.
+"""Lesson 169: Expand macros in conditional expressions.
 
-Based on chibicc commit 9ad60e41d512158d942d1bf3808682ede6ef5118.
+Based on chibicc commit 2651448084a56dd0b960989798772e71e12e6c30.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

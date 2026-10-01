@@ -1,35 +1,27 @@
-# Lesson 237: Join ordinary and wide string literals
+# Lesson 238: Skip a leading UTF-8 byte-order marker
 
-Original chibicc commit: [`238277714ddc407f966f3c503e13a114d6a91630`](https://github.com/rui314/chibicc/commit/238277714ddc407f966f3c503e13a114d6a91630).
+Original chibicc commit: [`2b2fa25507cdc491d2b5dafb2c4b5e33158b996a`](https://github.com/rui314/chibicc/commit/2b2fa25507cdc491d2b5dafb2c4b5e33158b996a).
 Earlier explanations are available in Git history.
 
-Adjacent ordinary strings now adopt a neighboring L/u/U encoding before
-concatenation. The compiler re-reads each ordinary source spelling in that
-encoding, so literal Unicode characters become wide units, while numeric byte
-escapes retain their individual numeric values. Different non-ordinary kinds
-are rejected with the original diagnostic.
-
-The Python joining loop is generalized to remove whole element terminators
-and compute an element count, matching the original's existing second pass.
-It preserves token metadata while re-reading payloads, rather than overwriting
-C token structs. Early -E output still prints the first source spelling only.
+File and stdin normalization now removes one leading UTF-8 BOM before newline
+canonicalization, continuation removal and universal-escape conversion. This
+also applies to included headers. UTF-8 byte order needs no marker, so the
+leading bytes contribute no token or diagnostic column.
 
 ```sh
-cat > /tmp/lesson.c <<'C'
-int main(void){unsigned short x[]="α" u"β";return x[1]-904;}
-C
+printf '\357\273\277int main(void){return 42;}\r\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Both literals become UTF-16 and one zero terminator remains. Array initialization
-stores those units and x[1] is 946. Tests verify both orders, surrogate values,
-wide/wide joining, initializer use, numeric escape re-reading, incompatible
-prefix errors and original fixtures. The original's exact-spelling u8 kind
-check does not recognize a complete u8 string token; we retain that historical
-classification quirk rather than promising every mixed-prefix extension.
+The generated assembly is identical to ordinary source: main loads 42 and
+returns. Tests check -E stdin output, a real executable, a BOM-marked header,
+normalized File contents, first-token position and original fixtures. Python
+recognizes the decoded U+FEFF character where C skips three UTF-8 bytes.
+Only the leading marker is removed; interior characters and raw tokenize
+calls retain their supplied text.
 
 ## Tests and attribution
 

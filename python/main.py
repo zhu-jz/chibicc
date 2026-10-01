@@ -1,6 +1,6 @@
-"""Lesson 237: Join ordinary and wide string literals.
+"""Lesson 238: Skip a leading UTF-8 byte-order marker.
 
-Based on chibicc commit 238277714ddc407f966f3c503e13a114d6a91630.
+Based on chibicc commit 2b2fa25507cdc491d2b5dafb2c4b5e33158b996a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

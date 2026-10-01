@@ -81,7 +81,10 @@ def convert_universal_chars(source):
 
 def tokenize_file(path, files):
     path = str(path)
-    source = remove_backslash_newline(canonicalize_newline(read_file(path)))
+    source = read_file(path)
+    if source.startswith("\ufeff"):
+        source = source[1:]
+    source = remove_backslash_newline(canonicalize_newline(source))
     file = File(path, len(files) + 1, source)
     files.append(file)
     try:

@@ -80,6 +80,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_utf8_bom(self):
+        result = subprocess.run([sys.executable,str(COMPILER),'-E','-o-','-'],input='\ufeffxyz\n',capture_output=True,text=True)
+        self.assertEqual((result.returncode,result.stdout),(0,'xyz\n'))
+        self.assert_program_returns('\ufeffint main(void){return 42;}\r\n',42)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'value.h'
+            path.write_bytes(b'\xef\xbb\xbf#define VALUE 42\r\n')
+            files=[]
+            tokens=tokenize_file(path,files)
+            self.assertEqual((tokens[0].text,tokens[0].position),('#',0))
+            self.assertFalse(files[0].contents.startswith('\ufeff'))
+            self.assert_program_returns(f'#include "{path}"\nint main(void){{return VALUE;}}',42)
+
     def test_mixed_width_string_concatenation(self):
         for spelling,size,expected in [('"α" u"β"',2,'αβ'.encode('utf-16-le')),('u"α" "β"',2,'αβ'.encode('utf-16-le')),('"🍣" U"β"',4,'🍣β'.encode('utf-32-le')),('L"α" L"β"',4,'αβ'.encode('utf-32-le'))]:
             token = tokenize(spelling)[0]

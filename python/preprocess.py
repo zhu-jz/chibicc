@@ -90,6 +90,7 @@ def eval_const_expr(tokens, position, files, macros, conditions, include_paths):
 
 
 def find_macro(token, macros):
+    # A dictionary provides the name hash table introduced in original lesson 286.
     if token.kind == "IDENT":
         return macros.get(token.text)
     return None
@@ -538,6 +539,7 @@ def timestamp_macro(template):
 
 
 def undef_macro(macros, name):
+    # Delete the entry directly; no linked-list deletion marker is needed.
     macros.pop(name, None)
 
 

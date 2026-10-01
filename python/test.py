@@ -87,6 +87,12 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macro_hash_lookup(self):
+        definitions = ''.join(f'#define KEY_{i} {i}\n' for i in range(1000))
+        source = definitions + '#undef KEY_500\n#define KEY_500 42\n#undef NEVER_DEFINED\nKEY_1 KEY_10 KEY_100 KEY_500 KEY_999\n'
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'], input=source, capture_output=True, text=True)
+        self.assertEqual((result.returncode, result.stdout), (0, '1 10 100 42 999\n'), result.stderr)
+
     def test_hashmap_self_test(self):
         result = subprocess.run([sys.executable, str(COMPILER), '-hashmap-test'], capture_output=True, text=True)
         self.assertEqual((result.returncode, result.stdout, result.stderr), (0, 'OK\n', ''))

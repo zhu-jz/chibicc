@@ -1,31 +1,28 @@
-# Lesson 285: Exercise the string hash map
+# Lesson 286: Look up macro names through a hash map
 
-Original chibicc commit: [`0aad326f3550b3d4c499d4078fcc65cc2dbf7626`](https://github.com/rui314/chibicc/commit/0aad326f3550b3d4c499d4078fcc65cc2dbf7626).
+Original chibicc commit: [`30520e5a7c73a6613cfcef38d72058e7cccde1f4`](https://github.com/rui314/chibicc/commit/30520e5a7c73a6613cfcef38d72058e7cccde1f4).
 Earlier explanations are available in Git history.
 
-The original adds an open-addressing string hash table and a -hashmap-test command.
-It hashes keys into buckets, probes collisions, marks deleted slots with tombstones
-and rehashes crowded tables. Compiler lookup sites are not changed in this commit.
-For the Python port, the built-in dict already provides the required string map;
-hashmap.py exercises insertion, deletion, reinsertion, missing keys and replacement.
+The original preprocessor replaces its linked macro list with a hash map. Defining
+a name replaces its map entry; undefining it deletes the entry. A token's exact
+name is the lookup key, so similarly prefixed names remain distinct. This improves
+lookup cost while preserving macro expansion and redefinition behavior.
 
 ```sh
-python3 python/main.py -hashmap-test  # prints OK
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+printf '#define ANSWER 1\n#undef ANSWER\n#define ANSWER 42\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The self-test checks thousands of keys and exits without requiring a source file.
-The compiler's assembly still returns 42 in rax; this commit adds internal data
-structure testing without changing generated programs. The command is tested
-through the compiler entry point, and hashmap.py is included in packaged builds.
-Python deliberately uses its standard hash table rather than reproducing C's
-bucket allocation, FNV hash, tombstones or memory management. Its self-test also
-checks the actual removed keys and final inserted values; the original repeatedly
-checks a generic missing key and mistakenly reinserts in its final checking loop.
+The preprocessor expands the latest definition before parsing. Assembly moves 42
+to the return register; macro lookup happens entirely during compilation.
+Python already used dict for macros in earlier lessons, so this commit documents
+that correspondence and tests one thousand definitions, exact prefix distinctions,
+delete/redefine and deleting a missing name. Existing macro tests remain enabled.
+Python copies token spelling into a string key instead of C's pointer-plus-length
+hash lookup, and its dictionary manages storage automatically.
 
 ## Tests and attribution
 

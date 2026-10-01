@@ -1,6 +1,6 @@
-"""Lesson 285: Exercise the string hash map.
+"""Lesson 286: Look up macro names through a hash map.
 
-Based on chibicc commit 0aad326f3550b3d4c499d4078fcc65cc2dbf7626.
+Based on chibicc commit 30520e5a7c73a6613cfcef38d72058e7cccde1f4.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

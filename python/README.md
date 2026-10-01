@@ -1,37 +1,39 @@
-# Lesson 161: Warn about extra include tokens
+# Lesson 162: Preprocess-only output with -E
 
-Original chibicc commit: [`ec149f64d2f5c41a2080c0b4e42e4ef64444b382`](https://github.com/rui314/chibicc/commit/ec149f64d2f5c41a2080c0b4e42e4ef64444b382).
+Original chibicc commit: [`d138864a2a99849e43d81ca071b7a799edc0e65a`](https://github.com/rui314/chibicc/commit/d138864a2a99849e43d81ca071b7a799edc0e65a).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The original commit introduces warn_tok and a skip_line helper for tokens after
-an include filename. Warnings display the source line and caret but allow
-compilation to continue. Python shares a diagnostic formatter between errors
-and warnings, preserving the existing filename and line information.
+-E runs tokenization and preprocessing, prints each surviving token's original
+spelling, and stops before parsing. Each token receives a leading space; tokens
+marked at_bol start a new output line after the first token. A final newline is
+always printed, including empty input. Output goes to stdout or the global -o
+path. A single output path is rejected with multiple inputs in stopping modes.
 
-This revision contains an inverted loop: skip_line returns immediately at a
-new line, but its loop also tests at_bol when the current token is not at_bol.
-Therefore it warns without consuming any extra tokens. Python expresses that
-actual behavior directly and records it in tests. Extra text that is valid C
-still reaches the parser; arbitrary junk still causes a parse error. The tests
-preserve that historical behavior.
+The same original commit permits absolute quoted include filenames, rather than
+always adding the including directory. Python builds token text with a list and
+join and uses the existing output writer. Input that is lexically valid but not
+valid C grammar can still be printed with -E, because the parser is not called.
+The include-warning loop behavior from the preceding commit remains in effect.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int answer(void){return 42;}\n' > /tmp/lesson161.h
-printf '#include "lesson161.h" int extra;\nint main(void){return answer();}\n' > /tmp/lesson161.c
-python3 python/main.py -S -o /tmp/lesson161.s /tmp/lesson161.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson161 /tmp/lesson161.s
-/tmp/lesson161
+printf 'int answer(void){return 42;}\n' > /tmp/lesson162.h
+printf '#include "lesson162.h"\nint main(void){return answer();}\n' > /tmp/lesson162.c
+python3 python/main.py -E -o /tmp/lesson162-pp.c /tmp/lesson162.c
+python3 python/main.py -S -o /tmp/lesson162.s /tmp/lesson162-pp.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson162 /tmp/lesson162.s
+/tmp/lesson162
 echo $?
 ```
 
-The compiler warns at int extra, then still emits storage for that global. Main
-calls the included answer function and exits with 42. Tests check the warning's
-file/line and caret, retained extra declaration, failure for junk, absence of a
-warning on a clean include, emitted assembly, execution, and the original fixtures.
+The preprocessing output contains both function definitions with spaced tokens.
+Compiling that text emits an indirect call to answer and returns 42, visible as
+the shell exit status. Tests check exact spacing/newlines, stdout and -o, absolute
+includes, empty and unparsed input, original number spelling, output re-compilation,
+multiple-input rejection, execution, and the original fixtures.
 
 ## Tests and attribution
 

@@ -34,7 +34,7 @@ def preprocess(tokens, files=None):
                 including_file = filename.file.name if filename.file else "-"
                 directory = os.path.dirname(including_file) or "."
                 name = os.fsdecode(filename.str.split(b"\0", 1)[0])
-                path = directory + "/" + name
+                path = name if name.startswith("/") else directory + "/" + name
                 try:
                     included = tokenize_file(path, files)
                 except CompileError as error:

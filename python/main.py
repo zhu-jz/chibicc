@@ -1,6 +1,6 @@
-"""Lesson 161: Warn about extra include tokens.
+"""Lesson 162: Preprocess-only output with -E.
 
-Based on chibicc commit ec149f64d2f5c41a2080c0b4e42e4ef64444b382.
+Based on chibicc commit d138864a2a99849e43d81ca071b7a799edc0e65a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -31,6 +31,7 @@ def parse_args(arguments):
     opt_trace = False
     opt_S = False
     opt_c = False
+    opt_E = False
     position = 0
     while position < len(arguments):
         if arguments[position] in ("-o", "-cc1-input", "-cc1-output"):
@@ -41,6 +42,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-E":
+            opt_E = True
+            position += 1
+            continue
         if argument == "-c":
             opt_c = True
             position += 1
@@ -81,11 +86,11 @@ def parse_args(arguments):
         position += 1
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, base_file, cc1_output
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output
 
 
 def write_output(path, assembly):
-    text = assembly + ("\n" if assembly else "")
+    text = assembly if assembly.endswith("\n") else assembly + ("\n" if assembly else "")
     if path is None or path == "-":
         sys.stdout.write(text)
         return
@@ -96,11 +101,25 @@ def write_output(path, assembly):
         raise CompileError(None, f"cannot open output file: {path}: {error.strerror}") from None
 
 
-def cc1(filename, output_path):
+def print_tokens(tokens, output_path):
+    parts = []
+    for index, token in enumerate(tokens):
+        if token.kind == "EOF":
+            break
+        if index > 0 and token.at_bol:
+            parts.append("\n")
+        parts.append(" " + token.text)
+    write_output(output_path, "".join(parts) + "\n")
+
+
+def cc1(filename, output_path, opt_E=False, opt_o=None):
     files = []
     try:
         tokens = tokenize_file(filename, files)
         tokens = preprocess(tokens, files)
+        if opt_E:
+            print_tokens(tokens, opt_o)
+            return 0
         program = parse(tokens)
         assembly = codegen(program, files)
         write_output(output_path, assembly)
@@ -127,7 +146,9 @@ def run_subprocess(command, trace):
 
 def run_cc1(arguments, input_path, output_path, trace):
     command = [sys.executable, sys.argv[0], *arguments, "-cc1",
-               "-cc1-input", input_path, "-cc1-output", output_path]
+               "-cc1-input", input_path]
+    if output_path is not None:
+        command.extend(("-cc1-output", output_path))
     return run_subprocess(command, trace)
 
 
@@ -171,13 +192,14 @@ def run_linker(inputs, output, trace):
 
 def main():
     try:
-        inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, base_file, cc1_output = parse_args(sys.argv[1:])
+        (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
+         base_file, cc1_output) = parse_args(sys.argv[1:])
         if opt_cc1:
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output)
-        if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S):
-            raise CompileError(None, "cannot specify '-o' with '-c' or '-S' with multiple files")
+            return cc1(base_file, cc1_output, opt_E, opt_o)
+        if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
+            raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []
         with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
             for index, filename in enumerate(inputs):
@@ -193,7 +215,9 @@ def main():
                     continue
                 if not filename.endswith(".c") and filename != "-":
                     raise CompileError(None, f"unknown file extension: {filename}")
-                if opt_S:
+                if opt_E:
+                    status = run_cc1(sys.argv[1:], filename, None, opt_trace)
+                elif opt_S:
                     status = run_cc1(sys.argv[1:], filename, output_path, opt_trace)
                 else:
                     assembly_path = str(Path(directory) / f"{index}.s")

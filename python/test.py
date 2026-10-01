@@ -72,6 +72,33 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_preprocess_only_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / "answer.h"
+            source = Path(directory) / "main.c"
+            output = Path(directory) / "preprocessed.c"
+            header.write_text("int value=42;\n")
+            source.write_text('#include "answer.h"\nint main(void){return value;}\n')
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, " int value = 42 ;\n int main ( void ) { return value ; }\n")
+            self.assert_program_returns(result.stdout, 42)
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), "-"],
+                                    input=f'#include "{header}"\n', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "")
+            self.assertEqual(output.read_text(), " int value = 42 ;\n")
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-o", str(output), str(source), str(source)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("multiple files", result.stderr)
+        for text, expected in (("not_valid_c", " not_valid_c\n"), ("", "\n"), ("0x2a", " 0x2a\n")):
+            result = subprocess.run([sys.executable, str(COMPILER), "-E", "-"],
+                                    input=text, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+
     def test_extra_include_token_warning(self):
         with tempfile.TemporaryDirectory() as directory:
             header = Path(directory) / "answer.h"
@@ -213,7 +240,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(COMPILER), "-c", "-o", str(executable), str(first), str(second)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot specify '-o' with '-c' or '-S' with multiple files", result.stderr)
+            self.assertIn("cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", result.stderr)
         result = subprocess.run([sys.executable, str(COMPILER), "--help", "-o"], capture_output=True, text=True)
         self.assertEqual(result.returncode, 1)
 

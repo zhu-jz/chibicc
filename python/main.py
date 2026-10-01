@@ -1,6 +1,6 @@
-"""Lesson 251: Omit commas before empty GNU variadic arguments.
+"""Lesson 252: Skip pragma directives.
 
-Based on chibicc commit 083c27559e5d8fce9c3b588fc4c01769ca9dd10d.
+Based on chibicc commit 74ec9f6f3964d4beaa3970bd99c8660f958b694e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

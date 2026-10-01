@@ -480,6 +480,9 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
             if tokens[position].kind == "PP_NUM":
                 position = read_line_marker(tokens, position, files, macros, include_paths)
                 continue
+            if tokens[position].text == "pragma":
+                _, position = copy_line(tokens, position + 1)
+                continue
             if tokens[position].at_bol:
                 continue
             raise CompileError(tokens[position], "invalid preprocessor directive")

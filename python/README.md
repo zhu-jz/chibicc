@@ -1,27 +1,26 @@
-# Lesson 251: Omit commas before empty GNU variadic arguments
+# Lesson 252: Skip pragma directives
 
-Original chibicc commit: [`083c27559e5d8fce9c3b588fc4c01769ca9dd10d`](https://github.com/rui314/chibicc/commit/083c27559e5d8fce9c3b588fc4c01769ca9dd10d).
+Original chibicc commit: [`74ec9f6f3964d4beaa3970bd99c8660f958b694e`](https://github.com/rui314/chibicc/commit/74ec9f6f3964d4beaa3970bd99c8660f958b694e).
 Earlier explanations are available in Git history.
 
-The GNU `,##__VA_ARGS__` extension now removes all three tokens when the raw
-variadic argument list is empty. With nonempty arguments it keeps the comma
-and expands the argument normally, bypassing ordinary token pasting.
-The special case applies only to the variadic parameter name.
+Preprocessing now discards `#pragma` and the remainder of its physical line.
+This permits sources containing implementation-specific directives to compile.
+At this historical step every pragma is ignored, including `once` and `pack`.
 
 ```sh
-printf '#define CALL(f,x,...) f(x,##__VA_ARGS__)\nint f(int x){return x;}int main(void){return CALL(f,42);}\n' > /tmp/lesson.c
+printf '#pragma unknown example\nint main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The expansion is `f(42)` with no trailing comma. Assembly passes 42 in the first
-integer argument register, calls f and returns its value. Tests inspect empty,
-explicitly empty and multi-argument expansions, run both call forms, retain
-ordinary named-parameter pasting, and execute the original sprintf fixtures.
-Python advances a token-list index where C advances linked pointers. Like the
-original step, empty detection occurs before argument macro expansion.
+The pragma emits no tokens or assembly. Main loads 42 and returns normally.
+Tests verify arbitrary, empty and end-of-file pragmas, unchanged struct alignment
+under `pack`, and repeated inclusion despite `once`, plus the original fixtures.
+Python stops at EOF as well as the next line; the C loop assumes it can advance
+until a token begins a line. The EOF guard avoids an invalid pointer traversal
+without adding semantics for any particular pragma.
 
 ## Tests and attribution
 

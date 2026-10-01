@@ -81,6 +81,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_ignored_pragmas(self):
+        for pragma in ('once', 'pack(1)', 'unknown "anything" 42', ''):
+            self.assert_program_returns('#pragma ' + pragma + '\nint main(void){return 42;}', 42)
+        self.assert_program_returns('#pragma pack(1)\nint main(void){return sizeof(struct{char a;int b;});}', 8)
+        self.assertEqual(tokenize('#pragma unknown')[0].kind, 'EOF')
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / 'repeat.h'
+            header.write_text('#pragma once\n42;\n')
+            source = Path(directory) / 'repeat.c'
+            source.write_text('#include "repeat.h"\n#include "repeat.h"\n')
+            tokens = preprocess(tokenize_file(source, []))
+            self.assertEqual([t.value for t in tokens if t.kind == 'NUM'], [42, 42])
+
     def test_gnu_variadic_comma(self):
         for call, expected in [('M(1)', ['1']), ('M(1,)', ['1']), ('M(1,2,3)', ['1', ',', '2', ',', '3'])]:
             tokens = tokenize('#define M(x,...) x,##__VA_ARGS__\n' + call + '\n')

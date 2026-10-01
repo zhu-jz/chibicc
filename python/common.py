@@ -124,6 +124,7 @@ class Obj:
     is_definition: bool = False
     is_static: bool = False
     params: list["Obj"] = field(default_factory=list)
+    is_inline: bool = False
     body: Optional["Node"] = None
     locals: list["Obj"] = field(default_factory=list)
     stack_size: int = 0
@@ -148,6 +149,7 @@ class VarAttr:
     is_typedef: bool = False
     is_static: bool = False
     is_extern: bool = False
+    is_inline: bool = False
     align: int = 0
 
 

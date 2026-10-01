@@ -81,6 +81,29 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_inline_function_linkage(self):
+        for prefix, local in [('inline', True), ('static inline', True), ('extern inline', False)]:
+            source = prefix + ' int f(void){return 42;}int main(void){return f();}'
+            self.assert_program_returns(source, 42)
+            function = next(obj for obj in parse(tokenize(source)) if obj.name == 'f')
+            self.assertTrue(function.is_inline)
+            self.assertEqual(function.is_static, local)
+            self.assertEqual('  .globl f\n' in compile_program(source).stdout, not local)
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first.c'
+            second = Path(directory) / 'second.c'
+            executable = Path(directory) / 'program'
+            first.write_text('inline int f(void){return 1;}')
+            second.write_text('inline int f(void){return 42;}int main(void){return f();}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(first), str(second)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            first.write_text('extern inline int f(void){return 42;}')
+            second.write_text('int f(void);int main(void){return f();}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(first), str(second)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_basic_asm_statements(self):
         instructions = 'mov $42, %rax\\nmov %rbp, %rsp\\npop %rbp\\nret'
         for modifiers in ('', 'volatile', 'inline volatile'):
@@ -2713,7 +2736,7 @@ int main(void){return 42;}
         self.assertTrue(prototype.is_static)
         self.assertFalse(prototype.is_definition)
         for source, message in [
-            ("typedef static extern int T;", "typedef may not be used together with static or extern"),
+            ("typedef static extern int T;", "typedef may not be used together with static, extern or inline"),
             ("int f(static int x);", "storage class specifier is not allowed"),
         ]:
             result = compile_program(source)

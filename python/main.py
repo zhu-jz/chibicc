@@ -1,6 +1,6 @@
-"""Lesson 259: Emit basic inline assembly statements.
+"""Lesson 260: Give inline functions internal linkage by default.
 
-Based on chibicc commit a2535163e232cd547b14960bf4232305d239741d.
+Based on chibicc commit 31087f8d4bbc06e5bec44cb14cab3a922b5e4855.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -762,7 +762,7 @@ class Parser:
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
                                               "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
-                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof") or self.find_typedef(position) is not None
+                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn", "float", "double", "typeof", "inline") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -788,17 +788,19 @@ class Parser:
                               "__restrict", "__restrict__", "_Noreturn"):
                 position += 1
                 continue
-            if token.text in ("typedef", "static", "extern"):
+            if token.text in ("typedef", "static", "extern", "inline"):
                 if attr is None:
                     raise CompileError(token, "storage class specifier is not allowed in this context")
                 if token.text == "typedef":
                     attr.is_typedef = True
                 elif token.text == "static":
                     attr.is_static = True
-                else:
+                elif token.text == "extern":
                     attr.is_extern = True
-                if attr.is_typedef and attr.is_static + attr.is_extern > 1:
-                    raise CompileError(token, "typedef may not be used together with static or extern")
+                else:
+                    attr.is_inline = True
+                if attr.is_typedef and attr.is_static + attr.is_extern + attr.is_inline > 1:
+                    raise CompileError(token, "typedef may not be used together with static, extern or inline")
                 position += 1
                 continue
             if token.text == "_Alignas":
@@ -1525,7 +1527,8 @@ class Parser:
         function = self.new_gvar(ty.name.text, ty)
         function.is_function = True
         function.is_definition = False
-        function.is_static = attr.is_static
+        function.is_static = attr.is_static or (attr.is_inline and not attr.is_extern)
+        function.is_inline = attr.is_inline
         if self.tokens[position].text == ";":
             return position + 1
         function.is_definition = True

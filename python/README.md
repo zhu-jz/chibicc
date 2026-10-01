@@ -1,17 +1,16 @@
-# Lesson 229: Transcode u-prefixed strings to UTF-16
+# Lesson 230: Transcode U-prefixed strings to UTF-32
 
-Original chibicc commit: [`9cabe1f204a8a6139e8b072dfd6f0a15275ad25f`](https://github.com/rui314/chibicc/commit/9cabe1f204a8a6139e8b072dfd6f0a15275ad25f).
+Original chibicc commit: [`c467ee665de0c385170850ecc895add04b52b8a3`](https://github.com/rui314/chibicc/commit/c467ee665de0c385170850ecc895add04b52b8a3).
 Earlier explanations are available in Git history.
 
-u-prefixed strings now contain little-endian UTF-16 code units and have an
-unsigned-short array type. Supplementary characters become a surrogate pair,
-followed by one zero unit. Numeric escapes write one truncated sixteen-bit
-unit. Python uses the standard utf-16-le encoder for ordinary characters and
-explicit integer bytes for escapes, replacing the C manual surrogate calculation.
+U-prefixed strings now use one little-endian four-byte unit per code point,
+plus a four-byte zero terminator. Their type is an unsigned-int array. Numeric
+escapes keep their low 32 bits; indexed access scales by four and follows
+unsigned integer rules. Source spelling remains available for stringizing.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return sizeof(u"🍣")+36;}
+int main(void){return U"🍣"[0]-127801;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -19,13 +18,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The emoji uses two units plus zero, so its array size is six bytes. Indexed
-loads scale by two and use unsigned-short extension. Tests inspect empty,
-ASCII, Japanese and emoji payloads, exact surrogate values, escape units,
-stringizing, sizeof and original memcmp fixtures. At this historical step,
-string-based array initialization still reads individual bytes, and adjacent
-string joining still assumes a one-byte terminator. Those paths are not claimed
-as complete UTF-16 support; their original changes are still to come.
+The data section stores code point 127843 as four bytes. Main loads that unit
+and subtracts 127801 to return 42. Tests inspect empty/ASCII/Japanese/emoji
+bytes and sizes, indexed terminators, unsigned escape shifts, stringizing and
+original memcmp fixtures. Python serializes ord values explicitly in little
+endian instead of writing through uint32_t pointers. As in the preceding
+step, array initialization and concatenation have not yet gained full handling
+for wider element sizes.
 
 ## Tests and attribution
 

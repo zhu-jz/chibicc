@@ -1,6 +1,6 @@
-"""Lesson 229: Transcode u-prefixed strings to UTF-16.
+"""Lesson 230: Transcode U-prefixed strings to UTF-32.
 
-Based on chibicc commit 9cabe1f204a8a6139e8b072dfd6f0a15275ad25f.
+Based on chibicc commit c467ee665de0c385170850ecc895add04b52b8a3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -177,6 +177,22 @@ def read_utf16_string_literal(source, start, quote):
                  ty=array_of(ty_ushort, len(data) // 2), str=bytes(data)), end + 1
 
 
+def read_utf32_string_literal(source, start, quote, ty):
+    end = string_literal_end(source, quote + 1)
+    data = bytearray()
+    position = quote + 1
+    while position < end:
+        if source[position] == "\\":
+            value, position = read_escaped_char(source, position + 1)
+        else:
+            value = ord(source[position])
+            position += 1
+        data.extend((value & 0xffffffff).to_bytes(4, 'little'))
+    data.extend(b'\0\0\0\0')
+    return Token('STR', source[start:end + 1], start,
+                 ty=array_of(ty, len(data) // 4), str=bytes(data)), end + 1
+
+
 def read_char_literal(source, start, quote=None, ty=ty_int):
     position = (start if quote is None else quote) + 1
     if position >= len(source) or source[position] == "\0":
@@ -380,6 +396,11 @@ def tokenize(source):
 
         if source.startswith('u"', position):
             token, position = read_utf16_string_literal(source, position, position + 1)
+            append_token(token)
+            continue
+
+        if source.startswith('U"', position):
+            token, position = read_utf32_string_literal(source, position, position + 1, ty_uint)
             append_token(token)
             continue
 

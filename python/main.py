@@ -1,6 +1,6 @@
-"""Lesson 176: Stop recursive function-like expansion.
+"""Lesson 177: Add macro stringizing.
 
-Based on chibicc commit 1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f.
+Based on chibicc commit 8f6f7925a04ca070167a38b8952a1a0bb7b63d23.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

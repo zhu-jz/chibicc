@@ -1,32 +1,33 @@
-# Lesson 176: Stop recursive function-like expansion
+# Lesson 177: Add macro stringizing
 
-Original chibicc commit: [`1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f`](https://github.com/rui314/chibicc/commit/1313fc6d3a77cedbca18fa0ffee1a86d0903ad7f).
+Original chibicc commit: [`8f6f7925a04ca070167a38b8952a1a0bb7b63d23`](https://github.com/rui314/chibicc/commit/8f6f7925a04ca070167a38b8952a1a0bb7b63d23).
 Earlier explanations are available in Git history.
 
-Function-like expansion now attaches a hideset to every substituted token.
-It intersects the invoking name's hideset with the closing parenthesis's set,
-then adds the macro name. Arguments keep their own existing hidesets as well.
-An intersection handles invocations whose name and punctuation came from
-different expansion histories; using a union would suppress too much.
+In a function-like replacement body, `#` followed by a parameter converts its
+actual argument tokens to a string literal. Unlike ordinary substitution, it
+uses the unexpanded argument: a macro name becomes its spelling rather than
+its replacement. Leading and trailing spaces disappear and internal recorded
+spaces collapse to one. Quotes and backslashes are escaped for C literal text.
 
-Python's immutable set intersection and union replace linked-list operations.
-Direct and indirect function-like recursion now stop. A surviving name can
-still refer to a real C function with the same name, just as a recursive
-object-like macro can leave a variable reference.
+The generated quoted text is passed through the existing tokenizer, giving it
+the usual decoded bytes and array type. A small synthetic File preserves the
+template's filename and file number without adding a real input file, matching
+the C approach. Python string operations replace manual buffer sizing/copying.
+A `#` followed by anything other than a parameter is diagnosed.
 
 ```sh
-printf 'int value(int x){return x;}\n#define value(x) value(x)+1\nint main(void){return value(41);}\n' > /tmp/lesson.c
+printf '#define STR(x) #x\nint main(void){return STR(abc)[2];}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 99, the ASCII value of c
 ```
 
-Expansion leaves a real call to `value(41)` followed by `+1`. Assembly passes
-41 in `%rdi`, calls the function through `%rax`, adds one to its result, and
-returns 42. Tests exercise direct and indirect recursion, nested invocation,
-the intersection case, and preprocessing termination within a timeout.
+Assembly stores the string bytes in global data, computes the address of its
+third byte, loads that character, and returns its value in `%rax`. Tests check
+spacing, unexpanded names, escaping, empty strings, array size, diagnostics and
+an executable character load. The original stringizing fixture runs unchanged.
 
 ## Tests and attribution
 

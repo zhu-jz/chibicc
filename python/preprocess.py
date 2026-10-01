@@ -7,8 +7,8 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 import os
 from dataclasses import dataclass, field, replace
 
-from tokenizer import convert_keywords, tokenize_file, warn_tok
-from common import CompileError
+from tokenizer import convert_keywords, tokenize, tokenize_file, warn_tok
+from common import CompileError, File
 from parse import const_expr
 
 
@@ -150,9 +150,43 @@ def read_macro_args(tokens, position, params):
     return args, position + 1
 
 
+def quote_string(text):
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def new_str_token(text, template):
+    source = quote_string(text)
+    tokens = tokenize(source)
+    if template.file is not None:
+        file = File(template.file.name, template.file.file_no, source)
+        for token in tokens:
+            token.file = file
+    return tokens[0]
+
+
+def join_tokens(tokens):
+    parts = []
+    for index, token in enumerate(tokens):
+        if token.kind == "EOF":
+            break
+        if index and token.has_space:
+            parts.append(" ")
+        parts.append(token.text)
+    return "".join(parts)
+
+
 def subst(body, args, files, macros, conditions):
     result = []
-    for token in body[:-1]:
+    position = 0
+    while body[position].kind != "EOF":
+        token = body[position]
+        if token.text == "#":
+            argument = args.get(body[position + 1].text)
+            if argument is None:
+                raise CompileError(body[position + 1], "'#' is not followed by a macro parameter")
+            result.append(new_str_token(join_tokens(argument), token))
+            position += 2
+            continue
         argument = args.get(token.text)
         if argument is not None:
             expanded = [replace(tok) for tok in argument]
@@ -160,6 +194,7 @@ def subst(body, args, files, macros, conditions):
             result.extend(replace(tok) for tok in expanded[:-1])
         else:
             result.append(replace(token))
+        position += 1
     result.append(body[-1])
     return result
 

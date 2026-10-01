@@ -72,6 +72,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macro_stringizing(self):
+        tokens = tokenize('#define STR(x) #x\nSTR( a!b  ' + chr(96) + '""c )\n')
+        self.assertEqual(tokens[0].kind, 'STR')
+        self.assertEqual(tokens[0].str, b'a!b ' + bytes([96]) + b'""c\0')
+        self.assertEqual(tokens[0].ty.size, 9)
+        tokens = tokenize('#define VALUE 42\n#define STR(x) #x\nSTR(VALUE)\n')
+        self.assertEqual(tokens[0].str, b'VALUE\0')
+        tokens = tokenize('#define STR(x) #x\nSTR("a\\\\b")\n')
+        self.assertEqual(tokens[0].str, b'"a\\\\b"\0')
+        tokens = tokenize('#define STR(x) #x\nSTR()\n')
+        self.assertEqual(tokens[0].str, b'\0')
+        self.assert_program_returns('#define STR(x) #x\nint main(void){return STR(abc)[2];}\n', 99)
+        result = compile_program('#define BAD(x) #other\nBAD(42)\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("'#' is not followed by a macro parameter", result.stderr)
+
     def test_recursive_function_macros(self):
         self.assert_program_returns('int value(int x){return x;}\n#define value(x) value(x)+1\nint main(void){return value(41);}\n', 42)
         self.assert_program_returns('int dbl(int x){return x*x;}\n#define dbl(x) OTHER(x)*x\n#define OTHER(x) dbl(x)+3\nint main(void){return dbl(2);}\n', 10)

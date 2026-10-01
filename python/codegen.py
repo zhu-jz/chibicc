@@ -331,6 +331,11 @@ class CodeGenerator:
         if node.kind in ("VAR", "MEMBER"):
             self.gen_addr(node)
             self.load(node.ty)
+            if node.kind == "MEMBER" and node.member.is_bitfield:
+                member = node.member
+                self.assembly.append(f"  shl ${64 - member.bit_width - member.bit_offset}, %rax")
+                shift = "shr" if member.ty.is_unsigned else "sar"
+                self.assembly.append(f"  {shift} ${64 - member.bit_width}, %rax")
             return
         if node.kind == "DEREF":
             self.gen_expr(node.lhs)
@@ -343,6 +348,16 @@ class CodeGenerator:
             self.gen_addr(node.lhs)
             self.push()
             self.gen_expr(node.rhs)
+            if node.lhs.kind == "MEMBER" and node.lhs.member.is_bitfield:
+                member = node.lhs.member
+                mask = ((1 << member.bit_width) - 1) << member.bit_offset
+                self.assembly.extend(("  mov %rax, %rdi",
+                                      f"  and ${(1 << member.bit_width) - 1}, %rdi",
+                                      f"  shl ${member.bit_offset}, %rdi",
+                                      "  mov (%rsp), %rax"))
+                self.load(member.ty)
+                self.assembly.extend((f"  mov ${~mask}, %r9", "  and %r9, %rax",
+                                      "  or %rdi, %rax"))
             self.store(node.ty)
             return
         if node.kind == "FUNCALL":

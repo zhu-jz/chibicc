@@ -1,26 +1,33 @@
-# Lesson 209: Undefine macros from command-line options
+# Lesson 210: Pack named bitfields into storage units
 
-Original chibicc commit: [`be8b6f6d31f0c73c2aabffdf2794f20c69567cdb`](https://github.com/rui314/chibicc/commit/be8b6f6d31f0c73c2aabffdf2794f20c69567cdb).
+Original chibicc commit: [`cc852fe99d0acfc6d547b36c75ff85e90975ad36`](https://github.com/rui314/chibicc/commit/cc852fe99d0acfc6d547b36c75ff85e90975ad36).
 Earlier explanations are available in Git history.
 
--Uname and -U name remove a macro definition, including predefined names.
--D and -U act in their original command-line order. Source directives then
-run normally, so a later #define can restore the name. #undef and -U now
-share one helper. Removing an unknown name is harmless.
+Members now record a bit width and offset. Struct layout counts bits, grouping
+fields into storage units of their declared integer type and moving a crossing
+field to the next unit. Ordinary members still start at their normal alignment.
+A field read shifts its bits into place, then uses arithmetic right shift for
+signed fields or logical right shift for unsigned fields.
+
+Assignments load the current unit, clear the target mask, merge the new low
+bits and store it back. This preserves neighboring fields. Local initializer
+assignments automatically use that path. Python integer masks replace C's
+long shifts; emitted operations still use x86-64 registers.
 
 ```sh
-printf '#ifdef FLAG\n#error flag still defined\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -DFLAG -UFLAG -S -o /tmp/lesson.s /tmp/lesson.c
+printf 'int main(void){struct T{unsigned int a:6,b:3;}x={42,7};return x.a;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The skipped #error contributes no assembly. Main still returns the immediate
-42 through rax. Tests exercise option forms and ordering, repeated removal,
-predefined names, later source definitions and original fixtures. Python removes
-the dictionary entry where C adds a deleted linked-list entry; expansion sees
-the same result. Missing separate -U arguments receive a usage error.
+Masking and merging initialize the shared word; shl/shr extract a and return
+42 in rax. Tests cover signed truncation, unsigned reads, neighbor preservation,
+crossing storage units, mixed ordinary members, layout metadata and the original
+bitfield fixture. This first bitfield commit has no dedicated global initializer
+support, unnamed-field rules or compound-assignment handling. Assignment results
+still contain the merged storage unit, as in the original.
 
 ## Tests and attribution
 

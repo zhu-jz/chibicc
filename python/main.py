@@ -1,6 +1,6 @@
-"""Lesson 209: Undefine macros from command-line options.
+"""Lesson 210: Pack named bitfields into storage units.
 
-Based on chibicc commit be8b6f6d31f0c73c2aabffdf2794f20c69567cdb.
+Based on chibicc commit cc852fe99d0acfc6d547b36c75ff85e90975ad36.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -91,6 +91,9 @@ class Member:
     tok: Optional[Token] = field(default=None, compare=False)
     idx: int = 0
     align: int = field(default=0, compare=False)
+    is_bitfield: bool = False
+    bit_offset: int = 0
+    bit_width: int = 0
 
 
 @dataclass

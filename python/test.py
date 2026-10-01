@@ -77,6 +77,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_bitfield_storage(self):
+        for source, expected in [
+            ('int main(void){struct T{unsigned int a:3,b:5;}x={7,19};x.a=2;return x.a+x.b;}', 21),
+            ('int main(void){struct T{int a:2,b:3,c:3;}x={3,4,5};return x.a+x.b+x.c;}', 248),
+            ('int main(void){return sizeof(struct T{int a:31,b:2;});}', 8),
+            ('int main(void){struct T{short a;char b;unsigned int c:2,d:3,e:3;}x={1,2,3,4,5};return x.a+x.b+x.c+x.d+x.e;}', 15),
+        ]:
+            self.assert_program_returns(source, expected)
+        function = parse_body('struct T{short a;char b;int c:2,d:3,e:3;}x;return 0;')
+        ty = next(var.ty for var in function.locals if var.name == 'x')
+        self.assertEqual([(m.offset,m.bit_offset,m.bit_width) for m in ty.members[-3:]], [(0,24,2),(0,26,3),(0,29,3)])
+        self.assertEqual(ty.size, 4)
+        assembly = compile_program('int main(void){struct T{int a:3;}x={7};return x.a;}').stdout
+        self.assertIn('  sar $61, %rax\n', assembly)
+        self.assertIn('  and %r9, %rax\n  or %rdi, %rax\n', assembly)
+
     def test_command_line_macro_undefinitions(self):
         for arguments, source, expected in [
             (['-Dfoo=bar', '-Ufoo'], 'foo', 'foo\n'),

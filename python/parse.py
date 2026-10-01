@@ -785,7 +785,11 @@ class Parser:
                     position += 1
                 first = False
                 ty, position = self.declarator(position, basety)
-                members.append(Member(ty, ty.name, idx=len(members), align=attr.align or ty.align))
+                member = Member(ty, ty.name, idx=len(members), align=attr.align or ty.align)
+                if self.tokens[position].text == ":":
+                    member.is_bitfield = True
+                    member.bit_width, position = self.const_expr(position + 1)
+                members.append(member)
             position += 1
         ty = struct_type()
         if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
@@ -806,13 +810,21 @@ class Parser:
         ty.kind = "STRUCT"
         if ty.size < 0:
             return ty, position
-        offset = 0
+        bits = 0
         for member in ty.members:
-            offset = align_to(offset, member.align)
-            member.offset = offset
-            offset += member.ty.size
+            if member.is_bitfield:
+                size = member.ty.size
+                if bits // (size * 8) != (bits + member.bit_width - 1) // (size * 8):
+                    bits = align_to(bits, size * 8)
+                member.offset = bits // 8 // size * size
+                member.bit_offset = bits % (size * 8)
+                bits += member.bit_width
+            else:
+                bits = align_to(bits, member.align * 8)
+                member.offset = bits // 8
+                bits += member.ty.size * 8
             ty.align = max(ty.align, member.align)
-        ty.size = align_to(offset, ty.align)
+        ty.size = align_to(bits, ty.align * 8) // 8
         return ty, position
 
     def union_decl(self, position):

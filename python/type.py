@@ -67,6 +67,10 @@ def new_cast(expression, ty):
 def get_common_type(left, right):
     if left.base is not None:
         return pointer_to(left.base)
+    if left.kind == "FUNC":
+        return pointer_to(left)
+    if right.kind == "FUNC":
+        return pointer_to(right)
     if left.kind == "DOUBLE" or right.kind == "DOUBLE":
         return ty_double
     if left.kind == "FLOAT" or right.kind == "FLOAT":

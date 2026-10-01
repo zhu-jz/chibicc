@@ -1,6 +1,6 @@
-"""Lesson 152: Function parameter adjustment.
+"""Lesson 153: Common types for function expressions.
 
-Based on chibicc commit c5953ba1328fa86f906406843eb9f23cd596ef04.
+Based on chibicc commit 53e81033ce18fd94fcdcde9010b7c9d41f30aa2c.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

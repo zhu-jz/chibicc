@@ -1,34 +1,34 @@
-# Lesson 152: Function parameter adjustment
+# Lesson 153: Common types for function expressions
 
-Original chibicc commit: [`c5953ba1328fa86f906406843eb9f23cd596ef04`](https://github.com/rui314/chibicc/commit/c5953ba1328fa86f906406843eb9f23cd596ef04).
+Original chibicc commit: [`53e81033ce18fd94fcdcde9010b7c9d41f30aa2c`](https://github.com/rui314/chibicc/commit/53e81033ce18fd94fcdcde9010b7c9d41f30aa2c).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A parameter declared with function type now becomes a pointer to that function.
-For example, int apply(int fn(int), int x) stores fn as an eight-byte pointer and
-calls it indirectly. This adjustment happens only in the parameter context;
-function declarations themselves keep their function type.
+After its existing pointer rule, the common-type helper now turns a function
+operand into a pointer to that function type. Arithmetic conversions used by
+conditional expressions and comparisons therefore retain a callable type instead
+of losing the function signature when combining a function with zero.
 
-Python extends the existing array-parameter adjustment and preserves both name
-and name_pos. Retaining name_pos gives a readable missing-name error for unnamed
-parameters in definitions instead of a null diagnostic-token failure. Pointer
-argument passing and indirect calls already exist from the preceding lesson.
+Python adds two explicit branches, matching the original rule order. This is the
+historical common-type implementation; its existing first-pointer rule still
+takes priority. Cast nodes retain the chosen signature, and function evaluation
+already produces an address from the preceding lesson.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int x){return x+1;}int apply(int fn(int),int x){return fn(x);}int main(void){return apply(f,41);}\n' > /tmp/lesson152.c
-python3 python/main.py /tmp/lesson152.c > /tmp/lesson152.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson152 /tmp/lesson152.s
-/tmp/lesson152
+printf 'int f(void){return 42;}int main(void){return (1?f:(void*)0)();}\n' > /tmp/lesson153.c
+python3 python/main.py /tmp/lesson153.c > /tmp/lesson153.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson153 /tmp/lesson153.s
+/tmp/lesson153
 echo $?
 ```
 
-Main passes f's address in rdi and 41 in esi. apply saves fn as a pointer, loads
-it into rax, and calls it with 41 in edi. The final return value is 42, visible
-as the shell exit status. Tests cover callbacks, adjusted type size and metadata,
-typedef prototypes, missing names, prologue instructions, execution, and upstream.
+The conditional branch selects f's address in rax, and call *%rax invokes it.
+It returns 42, which the shell displays as the exit status. Tests cover conditional
+calls, function comparisons, global pointer initialization, the selected tree
+type, indirect assembly, execution, and the original usual-conversion example.
 
 ## Tests and attribution
 

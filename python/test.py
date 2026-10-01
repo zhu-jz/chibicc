@@ -61,6 +61,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_pointer_common_type(self):
+        for source, expected in [
+            ("int f(void){return 42;}int main(void){return (1?f:(void*)0)();}", 42),
+            ("int f(void){return 42;}int g(void){return 1;}int main(void){return (0?g:f)();}", 42),
+            ("int f(void){return 42;}int main(void){return f!=(void*)0;}", 1),
+            ("int f(void){return 42;}int(*p)(void)=1?f:(void*)0;int main(void){return p();}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        main = next(fn for fn in parse(tokenize("int f(void);int main(void){return (1?f:(void*)0)();}")) if fn.name == "main")
+        conditional = main.body.body[0].lhs.lhs.lhs
+        self.assertEqual((conditional.kind, conditional.ty.kind, conditional.ty.base.kind),
+                         ("COND", "PTR", "FUNC"))
+        self.assertIn("  call *%rax\n", compile_program("int f(void);int main(void){return (1?f:(void*)0)();}").stdout)
+
     def test_function_parameter_decay(self):
         self.assert_program_returns("int f(int x){return x+1;}int apply(int fn(int),int x){return fn(x);}int main(void){return apply(f,41);}", 42)
         self.assert_program_returns("int f(void){return 42;}int apply(int fn(void)){return fn();}int main(void){return apply(f);}", 42)

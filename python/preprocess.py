@@ -121,9 +121,14 @@ def read_macro_params(tokens, position):
 
 def read_macro_arg_one(tokens, position):
     argument = []
-    while tokens[position].text not in (",", ")"):
+    level = 0
+    while level > 0 or tokens[position].text not in (",", ")"):
         if tokens[position].kind == "EOF":
             raise CompileError(tokens[position], "premature end of input")
+        if tokens[position].text == "(":
+            level += 1
+        elif tokens[position].text == ")":
+            level -= 1
         argument.append(replace(tokens[position]))
         position += 1
     argument.append(replace(tokens[position], kind="EOF", text=""))

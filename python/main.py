@@ -1,6 +1,6 @@
-"""Lesson 174: Test empty macro arguments.
+"""Lesson 175: Allow parenthesized macro arguments.
 
-Based on chibicc commit dd4306cdd8158f76f094fc699530311228536adb.
+Based on chibicc commit c7d7ce0f0cbd5869259a3365211ab92126a27ff6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,26 +1,29 @@
-# Lesson 174: Test empty macro arguments
+# Lesson 175: Allow parenthesized macro arguments
 
-Original chibicc commit: [`dd4306cdd8158f76f094fc699530311228536adb`](https://github.com/rui314/chibicc/commit/dd4306cdd8158f76f094fc699530311228536adb).
+Original chibicc commit: [`c7d7ce0f0cbd5869259a3365211ab92126a27ff6`](https://github.com/rui314/chibicc/commit/c7d7ce0f0cbd5869259a3365211ab92126a27ff6).
 Earlier explanations are available in Git history.
 
-This original commit changes only the macro test program. The existing reader
-already represents an empty argument as an EOF-only token sequence, so
-substituting it contributes no tokens to the replacement body. No compiler
-implementation change is needed in Python either.
+The macro argument reader now keeps a parenthesis depth. It stops at a comma
+or closing parenthesis only at depth zero. Parenthesized arithmetic, comma
+expressions and nested function or macro calls remain complete argument lists.
+
+This is a small change to token collection, not to parsing or evaluation.
+Only parentheses affect this depth, matching the original C implementation.
+End of input inside an incomplete argument still produces a diagnostic.
 
 ```sh
-printf '#define JOIN(x,y) x y\nint main(void){return JOIN(,4+5);}\n' > /tmp/lesson.c
+printf '#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2+3),4);}\n' > /tmp/lesson.c
 python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 9
+echo $?  # 20
 ```
 
-The empty first argument disappears, leaving `4+5`. Assembly adds those values
-and returns 9 in `%rax`. New tests cover an empty first or last argument, two
-empty arguments in an unused parameter list, and a macro that expands to empty
-inside an argument. The original new fixture is copied verbatim and compiled.
+Expansion yields `(2+3)*4`. Assembly adds 2 and 3, multiplies by 4, and returns
+20 in `%rax`. Tests cover nested parentheses, comma expressions, function calls
+with their own arguments, nested macro invocations and incomplete input. The
+previous lesson's nested-argument limitation test is updated for this change.
 
 ## Tests and attribution
 

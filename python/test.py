@@ -72,6 +72,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_parenthesized_macro_arguments(self):
+        self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2+3),4);}\n', 20)
+        self.assert_program_returns('#define PRODUCT(x,y) x*y\nint main(void){return PRODUCT((2,3),4);}\n', 12)
+        self.assert_program_returns('#define PRODUCT(x,y) x*y\nint sum(int x,int y){return x+y;}int main(void){return PRODUCT(sum(3,4),6);}\n', 42)
+        self.assert_program_returns('#define ADD(x,y) (x)+(y)\nint main(void){return ADD(ADD(3,4),35);}\n', 42)
+        result = compile_program('#define ID(x) x\nID((1\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('premature end of input', result.stderr)
+
     def test_empty_macro_arguments(self):
         self.assert_program_returns('#define JOIN(x,y) x y\nint main(void){return JOIN(,4+5);}\n', 9)
         self.assert_program_returns('#define JOIN(x,y) x y\nint main(void){return JOIN(42,);}\n', 42)
@@ -87,8 +96,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                 ('#define F(x,y) x+y\nint main(void){return F(1);}\n', "expected ','"),
                 ('#define F(x) x\nint main(void){return F(1,2);}\n', "expected ')'"),
                 ('#define F(1) 42\n', 'expected an identifier'),
-                ('#define F(x) x\nF(1\n', 'premature end of input'),
-                ('#define F(x,y) x+y\nF((1+2),4)\n', "expected ','")):
+                ('#define F(x) x\nF(1\n', 'premature end of input')):
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertIn(message, result.stderr)

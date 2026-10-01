@@ -29,6 +29,10 @@ def read_file(path):
     return source
 
 
+def canonicalize_newline(source):
+    return source.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def remove_backslash_newline(source):
     result = []
     position = 0
@@ -50,7 +54,7 @@ def remove_backslash_newline(source):
 
 def tokenize_file(path, files):
     path = str(path)
-    source = remove_backslash_newline(read_file(path))
+    source = remove_backslash_newline(canonicalize_newline(read_file(path)))
     file = File(path, len(files) + 1, source)
     files.append(file)
     try:

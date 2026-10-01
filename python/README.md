@@ -1,28 +1,27 @@
-# Lesson 222: Expand the GNU counter macro
+# Lesson 223: Normalize source newlines before tokenizing
 
-Original chibicc commit: [`0e77f3dff8b44547da4639c9609c216c9c896fa5`](https://github.com/rui314/chibicc/commit/0e77f3dff8b44547da4639c9609c216c9c896fa5).
+Original chibicc commit: [`74bcec5b22a601451fac9d0878003d04205abca6`](https://github.com/rui314/chibicc/commit/74bcec5b22a601451fac9d0878003d04205abca6).
 Earlier explanations are available in Git history.
 
-__COUNTER__ now expands to 0, 1, 2 and so on as preprocessing requests its
-replacement. It is a dynamic macro handler, so nested macro expansion and
-conditional expressions participate in the same sequence. Skipped branches
-consume no counter values. Expanded numbers then enter the normal PP_NUM
-conversion pass.
+File and stdin input now convert CRLF and lone CR to LF before removing
+backslash-newline pairs. This gives Windows, old-Mac and Unix line endings
+the same preprocessing and diagnostic behavior. It also lets a backslash at
+the end of a CRLF line continue a macro definition correctly.
 
 ```sh
-printf 'int main(void){return __COUNTER__+__COUNTER__+41;}\n' > /tmp/lesson.c
+printf '#define VALUE \\\r\n42\r\nint main(void){return VALUE;}\r\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Preprocessing replaces the two uses with 0 and 1; normal addition returns
-42. Tests cover the sequence, expansion through another macro, #if consumption,
-skipped branches, two-stage token pasting and original fixtures. Python keeps
-the counter in a closure belonging to its macro dictionary rather than C's
-static process variable. A fresh independent preprocess call restarts at zero;
-within one compilation, includes and macro expansion share the sequence.
+The source becomes the usual VALUE macro definition and main loads 42 into
+rax. Tests cover all three newline forms, continuation, normalized File text,
+preserved line numbers, diagnostics and original fixtures. Python creates
+normalized strings with ordered replacements; C compacts its character buffer
+in place. Raw tokenize still consumes the supplied string directly, while
+all real compiler file/stdin input uses the new normalization pipeline.
 
 ## Tests and attribution
 

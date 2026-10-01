@@ -13,7 +13,7 @@ import time
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
-from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline
+from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_newline, canonicalize_newline
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 from main import add_default_include_paths
@@ -79,6 +79,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_canonical_newlines(self):
+        self.assertEqual(canonicalize_newline('a\r\nb\rc\nd\r\r\n'),'a\nb\nc\nd\n\n')
+        for newline in ('\n','\r\n','\r'):
+            source = newline.join(('#define VALUE \\', '42', 'int main(void){return VALUE;}', ''))
+            self.assert_program_returns(source,42)
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'main.c'
+                path.write_bytes(source.encode())
+                files = []
+                tokens = tokenize_file(path,files)
+                self.assertNotIn('\r', files[0].contents)
+                self.assertEqual(next(t.line_no for t in tokens if t.text == 'int'),3)
+        result = compile_program('int main(void){\rreturn missing;\r}')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('-:2: return missing;',result.stderr)
+
     def test_counter_macro(self):
         self.assertEqual([token.value for token in tokenize('__COUNTER__;__COUNTER__;__COUNTER__') if token.kind == 'NUM'],[0,1,2])
         self.assertEqual(tokenize('__COUNTER__')[0].value,0)

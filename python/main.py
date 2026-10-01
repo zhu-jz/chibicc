@@ -1,6 +1,6 @@
-"""Lesson 222: Expand the GNU counter macro.
+"""Lesson 223: Normalize source newlines before tokenizing.
 
-Based on chibicc commit 0e77f3dff8b44547da4639c9609c216c9c896fa5.
+Based on chibicc commit 74bcec5b22a601451fac9d0878003d04205abca6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,6 +1,6 @@
-"""Lesson 234: Advertise UTF character encodings.
+"""Lesson 235: Recognize C11 Unicode identifiers.
 
-Based on chibicc commit e4491b811510d08f880d0f9c7553ecfd18635469.
+Based on chibicc commit 0e5d250ebfd29845c8c26b0ad63379994a2b8560.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

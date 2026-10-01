@@ -7,6 +7,7 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 import string
 import re
 import sys
+from unicode import is_ident1, is_ident2
 
 from common import CompileError, Token, File, format_diagnostic, to_int32
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong, ty_ushort
@@ -300,14 +301,6 @@ def read_number(source, start):
     if position != len(source):
         raise CompileError(start, "invalid numeric constant")
     return Token("NUM", source[start:position], start, ty=ty, fvalue=value), position
-
-
-def is_ident1(character):
-    return "a" <= character <= "z" or "A" <= character <= "Z" or character == "_"
-
-
-def is_ident2(character):
-    return is_ident1(character) or "0" <= character <= "9"
 
 
 def add_line_numbers(source, tokens):

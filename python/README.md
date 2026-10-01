@@ -1,26 +1,31 @@
-# Lesson 234: Advertise UTF character encodings
+# Lesson 235: Recognize C11 Unicode identifiers
 
-Original chibicc commit: [`e4491b811510d08f880d0f9c7553ecfd18635469`](https://github.com/rui314/chibicc/commit/e4491b811510d08f880d0f9c7553ecfd18635469).
+Original chibicc commit: [`0e5d250ebfd29845c8c26b0ad63379994a2b8560`](https://github.com/rui314/chibicc/commit/0e5d250ebfd29845c8c26b0ad63379994a2b8560).
 Earlier explanations are available in Git history.
 
-Two predefined object-like macros, __STDC_UTF_16__ and __STDC_UTF_32__, now
-expand to 1. They let source and headers select code for the u and U character
-and string encodings introduced in the preceding lessons. Normal command-line
--D/-U and source #define/#undef behavior also applies to these names.
+Identifiers now use the original C11 code-point ranges for starting and
+continuing characters. Greek, Japanese and many other characters are allowed;
+combining marks can continue a name but cannot start it. These rules differ
+from Python's isidentifier, so unicode.py preserves the original range tables
+and the archive build includes that module.
 
 ```sh
-printf 'int main(void){return __STDC_UTF_16__+__STDC_UTF_32__+40;}\n' > /tmp/lesson.c
+cat > /tmp/lesson.c <<'C'
+int π=42;int main(void){return π;}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Preprocessing replaces each macro with 1; the usual arithmetic instructions
-return 42. Tests check values, defined/#if selection, -U removal and original
-fixtures. Python adds two entries to the explicit predefined dictionary where
-C calls define_macro twice. This commit advertises the historical encoding
-support; it changes no parser, payload or assembly-generation algorithm.
+The assembler retains the UTF-8 global symbol π. Main takes its address and
+loads the stored integer. Tests run Unicode locals and globals, a combining
+mark, macro names, universal-escape spelling, allowed ranges and a rejected
+symbol, plus original fixtures and the packaged compiler. Python already walks
+decoded characters, replacing C's byte-length decode_utf8 scan. It performs no
+identifier normalization. Its previously documented Unicode whitespace handling
+is retained, including characters C's byte-oriented whitespace scan differs on.
 
 ## Tests and attribution
 

@@ -17,6 +17,7 @@ from tokenizer import tokenize as tokenize_raw, tokenize_file, remove_backslash_
 from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 from main import add_default_include_paths
+from unicode import is_ident1, is_ident2
 
 
 COMPILER = Path(__file__).with_name("main.py")
@@ -79,6 +80,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unicode_identifiers(self):
+        for name in ('π','あβ0¾','🍣','a\u0300'):
+            self.assert_program_returns('int main(void){int ' + name + '=42;return ' + name + ';}',42)
+        self.assert_program_returns('int π=42;int main(void){return π;}',42)
+        self.assert_program_returns(r'int main(void){int \u03c0=42;return π;}',42)
+        self.assert_program_returns('#define 日本語 42\nint main(void){return 日本語;}',42)
+        self.assertTrue(is_ident1('¾'))
+        self.assertTrue(is_ident2('\u0300'))
+        self.assertFalse(is_ident1('\u0300'))
+        self.assertFalse(is_ident1('⟘'))
+        result = compile_program('int main(void){int ⟘=1;return 0;}')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('invalid token',result.stderr)
+
     def test_utf_encoding_predefined_macros(self):
         self.assertEqual([t.value for t in tokenize('__STDC_UTF_16__;__STDC_UTF_32__') if t.kind=='NUM'],[1,1])
         self.assert_program_returns('#if defined(__STDC_UTF_16__)&&__STDC_UTF_16__&&defined(__STDC_UTF_32__)&&__STDC_UTF_32__\nint main(void){return 42;}\n#else\n#error missing encoding macros\n#endif',42)
@@ -2950,8 +2965,8 @@ int main(void){return 42;}
         self.assertEqual(caught.exception.line_no, 2)
         error = CompileError(3, "lexical error")
         self.assertIsNone(error.line_no)
-        result = compile_program("int main(void){\n Ω\n}")
-        self.assertIn("-:2:  Ω\n", result.stderr)
+        result = compile_program("int main(void){\n ⟘\n}")
+        self.assertIn("-:2:  ⟘\n", result.stderr)
         self.assertIn("^ invalid token", result.stderr)
 
     def test_upstream_c_programs(self):
@@ -4006,7 +4021,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
             ("1/", "1/\n  ^ expected an expression\n"),
             ("(1 2)", "(1 2)\n   ^ expected ')'\n"),
             ("1=1;", "1=1;\n^ not an lvalue\n"),
-            ("é=3;", "é=3;\n^ invalid token\n"),
+            ("⟘=3;", "⟘=3;\n^ invalid token\n"),
             ("1<", "1<\n  ^ expected an expression\n"),
             ("1>=", "1>=\n   ^ expected an expression\n"),
             ("1===1", "1===1\n   ^ expected an expression\n"),

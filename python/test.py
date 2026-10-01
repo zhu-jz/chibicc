@@ -79,6 +79,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_wide_unicode_character_literals(self):
+        for spelling,value in [("L'β'",946),("L'あ'",12354),("L'🍣'",127843),(r"L'\xffffffff'",-1),(r"L'\x80'",128),("'β'",-78)]:
+            token = tokenize(spelling)[0]
+            self.assertEqual((token.value,token.ty.size),(value,4))
+            self.assert_program_returns(f'int main(void){{return {spelling}=={value};}}',1)
+        self.assert_program_returns(r"int main(void){return L'\u03B2'==946;}",1)
+
     def test_universal_character_escapes(self):
         self.assertEqual(convert_universal_chars(r'\u03B1\U0001F32E'), 'α🌮')
         self.assertEqual(convert_universal_chars(r'\\u03B1\u0000\u12xz'), r'\\u03B1\u0000\u12xz')
@@ -490,7 +497,7 @@ int main(void){return first(0,42);}
     def test_wide_character_prefix(self):
         self.assert_program_returns("int main(void){return L'a';}", 97)
         self.assert_program_returns("int main(void){return sizeof(L'\\0');}", 4)
-        self.assert_program_returns("int main(void){return L'\\xff'<0;}", 1)
+        self.assert_program_returns("int main(void){return L'\\xff'<0;}", 0)
         token = tokenize_raw("L'\\n'")[0]
         self.assertEqual((token.kind, token.text, token.value, token.position),
                          ('NUM', "L'\\n'", 10, 0))

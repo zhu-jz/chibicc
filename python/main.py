@@ -1,6 +1,6 @@
-"""Lesson 224: Convert universal character escapes to UTF-8.
+"""Lesson 225: Decode wide character literals as code points.
 
-Based on chibicc commit c31886aa7a52fd8639e09bbdf8ac8ea854c313f6.
+Based on chibicc commit a57c661d46d9523bed01ad1b074f7a78d9e94ca3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

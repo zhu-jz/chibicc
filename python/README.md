@@ -1,17 +1,17 @@
-# Lesson 224: Convert universal character escapes to UTF-8
+# Lesson 225: Decode wide character literals as code points
 
-Original chibicc commit: [`c31886aa7a52fd8639e09bbdf8ac8ea854c313f6`](https://github.com/rui314/chibicc/commit/c31886aa7a52fd8639e09bbdf8ac8ea854c313f6).
+Original chibicc commit: [`a57c661d46d9523bed01ad1b074f7a78d9e94ca3`](https://github.com/rui314/chibicc/commit/a57c661d46d9523bed01ad1b074f7a78d9e94ca3).
 Earlier explanations are available in Git history.
 
-Source normalization now replaces nonzero four-digit backslash-u and eight-digit
-backslash-U sequences with their characters before tokenization. Other escaped
-pairs are copied together, so an escaped backslash does not start a universal
-escape. Malformed and zero-valued sequences retain the original fallback.
-Ordinary string decoding then stores UTF-8 bytes plus a terminator.
+Character decoding now reads a Unicode code point. L-prefixed literals keep
+the signed 32-bit value; ordinary character literals truncate it to a signed
+byte afterward. Escape decoding retains its integer value until that choice
+is made, so a wide hexadecimal escape can represent more than one byte.
+String numeric escapes continue to store only their low byte.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return sizeof("\u03B1\u03B2\u03B3")+35;}
+int main(void){return L'β'-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -19,14 +19,13 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Each Greek letter occupies two UTF-8 bytes, making sizeof 7 including zero;
-adding 35 returns 42. Tests cover Greek, Japanese, a four-byte emoji, escaped
-backslashes, unchanged malformed/zero escapes, invalid code points and original
-fixtures. Python already stores source as Unicode and uses chr plus the existing
-UTF-8 encoder, so no manual unicode.c port is needed. Unlike the C byte encoder,
-Python explicitly rejects surrogates and values beyond Unicode's range with a
-source diagnostic. Wide character semantics and Unicode identifiers are not
-added by this commit.
+Beta's code point is 946; the assembly loads that immediate and subtracts
+904. Tests cover Greek, Japanese, emoji, large hexadecimal escapes, four-byte
+literal types, ordinary signed-byte truncation, universal escapes and original
+fixtures. Python source is already decoded as strict UTF-8, so ord replaces
+manual decode_utf8. It rejects malformed UTF-8 during input decoding; diagnostic
+positions count characters. L'\xff' is now positive 255, intentionally advancing
+beyond the earlier placeholder L-prefix behavior.
 
 ## Tests and attribution
 

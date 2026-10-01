@@ -8,7 +8,7 @@ import string
 import re
 import sys
 
-from common import CompileError, Token, File, format_diagnostic
+from common import CompileError, Token, File, format_diagnostic, to_int32
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
 from type import ty_float, ty_double
 
@@ -111,7 +111,7 @@ def read_escaped_char(source, position):
             value = value * 8 + int(source[position])
             position += 1
             count += 1
-        return bytes([value & 255]), position
+        return value, position
     if character == "x":
         position += 1
         if position >= len(source) or source[position] not in string.hexdigits:
@@ -120,10 +120,10 @@ def read_escaped_char(source, position):
         while position < len(source) and source[position] in string.hexdigits:
             value = value * 16 + int(source[position], 16)
             position += 1
-        return bytes([value & 255]), position
-    escapes = {"a": b"\a", "b": b"\b", "t": b"\t", "n": b"\n",
-               "v": b"\v", "f": b"\f", "r": b"\r", "e": b"\x1b"}
-    return escapes.get(character, character.encode("utf-8")), position + 1
+        return value, position
+    escapes = {"a": 7, "b": 8, "t": 9, "n": 10,
+               "v": 11, "f": 12, "r": 13, "e": 27}
+    return escapes.get(character, ord(character)), position + 1
 
 
 def string_literal_end(source, position):
@@ -145,8 +145,12 @@ def read_string_literal(source, start):
     position = start + 1
     while position < end:
         if source[position] == "\\":
+            escaped = source[position + 1]
             value, position = read_escaped_char(source, position + 1)
-            data.extend(value)
+            if escaped in "01234567x":
+                data.append(value & 255)
+            else:
+                data.extend(chr(value).encode("utf-8"))
         else:
             data.extend(source[position].encode("utf-8"))
             position += 1
@@ -163,15 +167,14 @@ def read_char_literal(source, start, quote=None):
     if source[position] == "\\":
         if position + 1 >= len(source):
             raise CompileError(start, "unclosed char literal")
-        data, position = read_escaped_char(source, position + 1)
+        value, position = read_escaped_char(source, position + 1)
     else:
-        data = source[position].encode("utf-8")
+        value = ord(source[position])
         position += 1
     end = source.find("'", position)
     if end == -1:
         raise CompileError(position, "unclosed char literal")
-    value = data[0] if data[0] < 128 else data[0] - 256
-    return Token("NUM", source[start:end + 1], start, value, ty=ty_int), end + 1
+    return Token("NUM", source[start:end + 1], start, to_int32(value), ty=ty_int), end + 1
 
 
 def read_int_literal(source, start, check_range=True):
@@ -356,6 +359,7 @@ def tokenize(source):
 
         if character == "'":
             token, position = read_char_literal(source, position)
+            token.value = (token.value + 128) % 256 - 128
             append_token(token)
             continue
 

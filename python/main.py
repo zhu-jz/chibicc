@@ -1,6 +1,6 @@
-"""Lesson 124: Do-while loops.
+"""Lesson 125: Stack alignment around calls.
 
-Based on chibicc commit ee252e6ce79d752526504cf034fd41f070191824.
+Based on chibicc commit 6a0ed71107670b404af04bc20a2461165483f390.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

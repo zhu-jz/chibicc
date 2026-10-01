@@ -147,7 +147,11 @@ class CodeGenerator:
             for index in range(len(node.args) - 1, -1, -1):
                 self.pop(ARGREG[index])
             self.assembly.append("  mov $0, %rax")
-            self.assembly.append(f"  call {node.funcname}")
+            if self.depth % 2:
+                self.assembly.extend(("  sub $8, %rsp", f"  call {node.funcname}",
+                                      "  add $8, %rsp"))
+            else:
+                self.assembly.append(f"  call {node.funcname}")
             return
         if node.kind == "STMT_EXPR":
             for statement in node.body:

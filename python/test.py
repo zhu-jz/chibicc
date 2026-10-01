@@ -60,6 +60,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_call_stack_alignment(self):
+        helper = '__attribute__((naked)) int alignment(void){__asm__("mov %rsp, %rax\\nand $15, %eax\\nret");}'
+        for source, expected in [
+            ("int alignment(void);int main(){return alignment();}", 8),
+            ("int alignment(void);int main(){return alignment()+1;}", 9),
+            ("int alignment(void);int main(){int x=alignment();return x;}", 8),
+            ("int alignment(void);int sum(int a,int b){return a+b;}int main(){return sum(alignment(),alignment());}", 16),
+        ]:
+            self.assert_program_returns(source, expected, helper)
+        assembly = compile_program("int alignment(void);int main(){return alignment()+1;}").stdout
+        self.assertIn("  sub $8, %rsp\n  call alignment\n  add $8, %rsp\n", assembly)
+        assembly = compile_program("int alignment(void);int main(){return alignment();}").stdout
+        self.assertNotIn("  sub $8, %rsp\n  call alignment", assembly)
+
     def test_do_while_loops(self):
         for source, expected in [
             ("int main(){int x=0;do{x=42;}while(0);return x;}", 42),

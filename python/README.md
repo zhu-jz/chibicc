@@ -1,34 +1,35 @@
-# Lesson 124: Do-while loops
+# Lesson 125: Stack alignment around calls
 
-Original chibicc commit: [`ee252e6ce79d752526504cf034fd41f070191824`](https://github.com/rui314/chibicc/commit/ee252e6ce79d752526504cf034fd41f070191824).
+Original chibicc commit: [`6a0ed71107670b404af04bc20a2461165483f390`](https://github.com/rui314/chibicc/commit/6a0ed71107670b404af04bc20a2461165483f390).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`do statement while(condition);` becomes a DO node. The parser creates loop
-break/continue labels, parses the body with those active, then restores enclosing
-loop labels before parsing the condition. Code generation emits the body first,
-the continue label and condition second, and a backward jump if nonzero.
+Calls now account for temporary expression pushes. Function stack frames already
+start on a 16-byte boundary; each pushed temporary changes rsp by eight bytes.
+After moving arguments into registers, an odd temporary depth triggers `sub $8`
+before call and `add $8` afterward. An even depth requires no padding.
 
-Python saves the enclosing labels in local variables, matching upstream's C
-locals. Unlike a while loop, this loop always executes its body once. Continue
-checks the condition; break skips it. Existing nested loop and switch handling
-uses the same label infrastructure.
+Python uses the existing integer depth counter as upstream does. The padding is
+not an expression value, so it does not alter that counter. The x86-64 System V
+ABI requires rsp aligned to 16 before call; the pushed return address means the
+callee sees rsp modulo 16 equal to eight on entry.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int x=40;do{++x;}while(x<42);return x;}\n' > /tmp/lesson124.c
-python3 python/main.py /tmp/lesson124.c > /tmp/lesson124.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson124 /tmp/lesson124.s
-/tmp/lesson124
+printf 'int f(void){return 41;}int main(){return f()+1;}\n' > /tmp/lesson125.c
+python3 python/main.py /tmp/lesson125.c > /tmp/lesson125.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson125 /tmp/lesson125.s
+/tmp/lesson125
 echo $?
 ```
 
-After each increment the condition compares x with 42. A `jne .L.begin...` jumps
-back while the comparison result is nonzero. Main exits with 42. Tests cover an
-initially false condition, repeated iterations, continue, break, nested loops,
-emitted backward branch, required semicolon, execution, and upstream control code.
+The emitter evaluates the right operand 1 first and pushes it. It pads the stack
+by eight bytes around call f, restores that padding, pops the operand, and adds.
+Exit status is 42. Tests use a tiny GCC-compiled naked assembly helper to inspect
+actual callee-entry rsp, covering direct calls, odd-depth binary/assignment calls,
+nested argument calls, emitted padding, and all original C examples.
 
 ## Tests and attribution
 

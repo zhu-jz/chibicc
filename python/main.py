@@ -1,6 +1,6 @@
-"""Lesson 147: Variadic floating parameter offsets.
+"""Lesson 148: Floating constant expressions.
 
-Based on chibicc commit e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93.
+Based on chibicc commit ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

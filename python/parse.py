@@ -11,7 +11,9 @@ from dataclasses import replace
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from common import Initializer, InitDesg, Relocation, to_int32
-from constexpr import evaluate_constant, evaluate_initializer
+from constexpr import evaluate_constant, evaluate_initializer, evaluate_float
+import math
+import struct
 from type import ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
 from type import is_numeric
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
@@ -1188,6 +1190,15 @@ class Parser:
             self.write_gvar_data(init.children[0], ty.members[0].ty, buffer, offset, relocations)
             return
         if init.expr is not None:
+            if ty.kind in ("FLOAT", "DOUBLE"):
+                value = evaluate_float(init.expr)
+                format = "<f" if ty.kind == "FLOAT" else "<d"
+                try:
+                    data = struct.pack(format, value)
+                except OverflowError:
+                    data = struct.pack(format, math.copysign(math.inf, value))
+                buffer[offset:offset + ty.size] = data
+                return
             value, label = evaluate_initializer(init.expr)
             if label is not None:
                 relocations.append(Relocation(offset, label, value))

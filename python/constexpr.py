@@ -4,8 +4,10 @@ Based on chibicc commit 79f5de21eb706ea5486fd682a83ffbde7e4d16a9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
+import math
+
 from common import CompileError
-from type import add_type, is_integer
+from type import add_type, is_integer, is_flonum
 
 
 def cast_constant(value, ty):
@@ -24,6 +26,8 @@ def signed64(value):
 def evaluate_initializer(node):
     """Return an integer addend and an optional global symbol name."""
     add_type(node)
+    if is_flonum(node.ty):
+        return evaluate_constant(node), None
     if node.kind in ("+", "-"):
         value, label = evaluate_initializer(node.lhs)
         right = evaluate_constant(node.rhs)
@@ -65,6 +69,11 @@ def evaluate_address(node):
 
 def evaluate_constant(node):
     add_type(node)
+    if is_flonum(node.ty):
+        try:
+            return int(evaluate_float(node))
+        except (ValueError, OverflowError):
+            raise CompileError(node.tok, "non-finite floating constant converted to integer") from None
     kind = node.kind
     if kind == "NUM":
         return node.value
@@ -130,3 +139,40 @@ def evaluate_constant(node):
     if node.lhs.ty.is_unsigned:
         return int((left & ((1 << 64) - 1)) <= (right & ((1 << 64) - 1)))
     return int(left <= right)
+
+
+def evaluate_float(node):
+    """Evaluate the historical floating initializer rules in double precision."""
+    add_type(node)
+    if is_integer(node.ty):
+        value = evaluate_constant(node)
+        if node.ty.is_unsigned:
+            value &= (1 << 64) - 1
+        return float(value)
+    if node.kind == "NUM":
+        return node.fvalue
+    if node.kind == "NEG":
+        return -evaluate_float(node.lhs)
+    if node.kind == "COND":
+        return evaluate_float(node.then if evaluate_float(node.cond) else node.els)
+    if node.kind == "COMMA":
+        return evaluate_float(node.rhs)
+    if node.kind == "CAST":
+        if is_flonum(node.lhs.ty):
+            return evaluate_float(node.lhs)
+        return float(evaluate_constant(node.lhs))
+    if node.kind not in ("+", "-", "*", "/"):
+        raise CompileError(node.tok, "not a compile-time constant")
+    left = evaluate_float(node.lhs)
+    right = evaluate_float(node.rhs)
+    if node.kind == "+":
+        return left + right
+    if node.kind == "-":
+        return left - right
+    if node.kind == "*":
+        return left * right
+    if right == 0.0:
+        if left == 0.0 or math.isnan(left):
+            return math.nan
+        return math.copysign(math.inf, math.copysign(1.0, left) * math.copysign(1.0, right))
+    return left / right

@@ -1,35 +1,37 @@
-# Lesson 147: Variadic floating parameter offsets
+# Lesson 148: Floating constant expressions
 
-Original chibicc commit: [`e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93`](https://github.com/rui314/chibicc/commit/e452cf721511dbf0d7f8c8f469f2dd67d8a5ee93).
+Original chibicc commit: [`ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea`](https://github.com/rui314/chibicc/commit/ffea4219b1f4ebe7c06cecc6c221cb0aab3a03ea).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A variadic function now counts its fixed integer and floating parameters separately.
-Its saved argument header starts gp_offset at eight times the integer count and
-fp_offset at 48 plus eight times the floating count. The first six saved integer
-registers occupy 48 bytes; floating register slots follow them.
+Global float and double initializers now evaluate arithmetic, negation, casts,
+conditionals, and comma expressions. A dedicated syntax-tree walker computes in
+double precision; global float storage rounds to four bytes, and double storage
+uses eight bytes. Integer constant evaluation truncates floating results when it
+needs an integer. Runtime calculations continue to use generated SSE instructions.
 
-Python counts the parameter list directly, matching the original linked-list loop.
-This historical save area uses eight-byte floating slots rather than the full
-sixteen-byte System V slots. The tests check that actual layout and the original
-single-floating-argument forwarding example. This change concerns the callee's
-header; the caller's al bookkeeping remains incomplete in the original commit.
+Python's struct module writes explicitly little-endian IEEE bytes instead of C
+pointer casts into a character buffer. Floating division by zero is handled
+explicitly to produce infinity or NaN, matching the ordinary target environment.
+A non-finite result converted to an integer gets a clear error instead of relying
+on undefined C conversion behavior. The historical evaluator does not round every
+intermediate float cast and retains its signed integer-to-floating cast rules.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'typedef struct V{int gp;int fp;void *overflow;void *regs;} V;int f(double x,...){V *v=(V*)__va_area__;return *(double*)((char*)v->regs+v->fp);}int main(void){return f(1.0,42.0);}\n' > /tmp/lesson147.c
-python3 python/main.py /tmp/lesson147.c > /tmp/lesson147.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson147 /tmp/lesson147.s
-/tmp/lesson147
+printf 'float g=21.5*2-1;int main(void){return g;}\n' > /tmp/lesson148.c
+python3 python/main.py /tmp/lesson148.c > /tmp/lesson148.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson148 /tmp/lesson148.s
+/tmp/lesson148
 echo $?
 ```
 
-The prologue saves xmm0 and xmm1 and writes fp_offset=56. Adding that offset to
-regs finds the first trailing double, 42.0. Conversion to int produces shell exit
-status 42. Tests cover mixed fixed parameters, trailing integers and doubles,
-calls from GCC, header instructions, execution, and original forwarding code.
+The .data bytes 0,0,40,66 encode float 42.0. Main loads them with movss and
+converts xmm0 to integer 42. The shell displays that exit status. Tests cover
+exact bytes, aggregates, casts, conditionals, infinity/NaN, unsupported calls,
+assembly, real execution, and the original constant-expression fixture.
 
 ## Tests and attribution
 

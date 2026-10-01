@@ -60,6 +60,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_floating_constant_initializers(self):
+        for source, expected in [
+            ("float g=21.5*2-1;int main(void){return g;}", 42),
+            ("double g=0.0?55:(0,1+1*5.0/2*(double)2*(int)2.0);int main(void){return g;}", 11),
+            ("double a[]={-1.5,42.0};int main(void){return a[1];}", 42),
+            ("struct T{float a;double b;} g={1.5,42};int main(void){return g.b;}", 42),
+            ("int g=42.9;int main(void){return g;}", 42),
+            ("double g=1.0/0.0;int main(void){return g>0;}", 1),
+            ("float g=0.0/0.0;int main(void){return g!=g;}", 1),
+        ]:
+            self.assert_program_returns(source, expected)
+        self.assertEqual(parse(tokenize("float g=42.0;"))[0].init_data, bytes.fromhex("00002842"))
+        self.assertEqual(parse(tokenize("double g=42.0;"))[0].init_data, bytes.fromhex("0000000000004540"))
+        self.assertIn("not a compile-time constant", compile_program("double f(void);double g=f();").stderr)
+        self.assertIn("non-finite", compile_program("int g=1.0/0.0;").stderr)
+
     def test_variadic_floating_offsets(self):
         prefix = "typedef struct V{int gp_offset;int fp_offset;void *overflow;void *registers;} V;"
         function = "int f(double d,int n,...){V *v=(V*)__va_area__;char *p=v->registers;return *(int*)(p+v->gp_offset)+*(double*)(p+v->fp_offset);}"

@@ -1,6 +1,6 @@
-"""Lesson 256: Select an expression by its type.
+"""Lesson 257: Give function types a GNU sizeof value.
 
-Based on chibicc commit 1faab48ecf83d31a4fd781f10f6f00acb681d2dd.
+Based on chibicc commit aee7891acb3e653dcfb10ec4172ae4d099ebf034.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

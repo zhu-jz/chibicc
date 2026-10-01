@@ -1,28 +1,26 @@
-# Lesson 256: Select an expression by its type
+# Lesson 257: Give function types a GNU sizeof value
 
-Original chibicc commit: [`1faab48ecf83d31a4fd781f10f6f00acb681d2dd`](https://github.com/rui314/chibicc/commit/1faab48ecf83d31a4fd781f10f6f00acb681d2dd).
+Original chibicc commit: [`aee7891acb3e653dcfb10ec4172ae4d099ebf034`](https://github.com/rui314/chibicc/commit/aee7891acb3e653dcfb10ec4172ae4d099ebf034).
 Earlier explanations are available in Git history.
 
-C11 `_Generic` now parses a controlling expression and a list of typed
-associations. It uses the previous lesson's compatibility check to choose one
-expression during parsing; arrays and functions in the control become pointer
-types. Only the selected expression appears in the executable syntax tree.
+Function types now have size and alignment 1. Standard C disallows sizeof on a
+function, but this GNU extension gives it the constant value 1. Function pointers
+remain ordinary eight-byte pointers; executable function code has no such
+one-byte storage limit.
 
 ```sh
-printf 'int main(void){int x=42;return _Generic(x++,int:x,default:x++);}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof(main)+41;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly initializes x and loads it for the return. Neither the controlling
-increment nor the unselected default increment executes. Tests cover numeric,
-array and function controls, default ordering, missing matches, discarded side
-effects and the original generic.c fixture.
-Python keeps the selected Node reference instead of a nullable C pointer. This
-original parser does not reject duplicate compatible associations: the last
-matching one wins. That historical behavior is preserved and tested.
+Parsing replaces sizeof(main) with 1, and the assembly adds 41 before returning.
+Tests cover expression and type-name forms, function alignment, pointer size and
+the original sizeof.c addition. Python initializes the two Type fields directly;
+C uses its new_type constructor. This step changes type metadata, not function
+calling conventions or how emitted machine code is measured.
 
 ## Tests and attribution
 

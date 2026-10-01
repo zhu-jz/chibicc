@@ -71,7 +71,7 @@ def pointer_to(base):
 
 
 def func_type(return_ty):
-    return Type("FUNC", return_ty=return_ty)
+    return Type("FUNC", return_ty=return_ty, size=1, align=1)
 
 
 def array_of(base, length):

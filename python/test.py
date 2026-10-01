@@ -81,6 +81,10 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_sizeof_function_types(self):
+        for expression, expected in [('sizeof(main)', 1), ('sizeof(typeof(main))', 1), ('_Alignof(main)', 1), ('sizeof(&main)', 8)]:
+            self.assert_program_returns('int main(void){return ' + expression + ';}', expected)
+
     def test_generic_selection(self):
         for source, expected in [
             ('int main(void){return _Generic(1.0,double:42,default:0);}', 42),

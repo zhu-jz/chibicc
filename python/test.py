@@ -60,6 +60,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_variadic_register_save_area(self):
+        prefix = "typedef struct V{int gp_offset;int fp_offset;void *overflow;void *registers;} V;"
+        self.assert_program_returns(prefix + "int f(int x,...){V *v=(V*)__va_area__;char *p=v->registers;return *(int*)(p+v->gp_offset);}int main(){return f(1,42);}", 42)
+        self.assert_program_returns(prefix + "int f(int x,int y,...){V *v=(V*)__va_area__;return v->gp_offset;}int main(){return f(1,2,42);}", 16)
+        source = prefix + 'int vsprintf(char *b,char *fmt,V *v);void f(char *b,char *fmt,...){V v=*(V*)__va_area__;vsprintf(b,fmt,&v);}int main(){char b[20];f(b,"%d",42);return b[0]+b[1];}'
+        self.assert_program_returns(source, 102)
+        function = next(var for var in parse(tokenize("int f(int x,...){return x;}")) if var.is_function)
+        self.assertEqual((function.va_area.name, function.va_area.ty.size), ("__va_area__", 136))
+        self.assertEqual(len(function.params), 1)
+        assembly = compile_program("int f(int x,...){return x;}").stdout
+        self.assertIn("  movl $8,", assembly)
+        self.assertIn("  movq %r9,", assembly)
+        self.assertIn("  movsd %xmm7,", assembly)
+
     def test_variadic_function_calls(self):
         helper = "#include <stdarg.h>\nint sum(int n,...){va_list ap;va_start(ap,n);int s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);va_end(ap);return s;}"
         self.assert_program_returns("int sum(int n,...);int main(){char a=-1;return sum(3,20,23,a);}", 42, helper)

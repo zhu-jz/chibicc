@@ -1220,6 +1220,8 @@ class Parser:
         for param in reversed(ty.params):
             self.new_lvar(param.name.text, param)
         function.params = self.locals.copy()
+        if ty.is_variadic:
+            function.va_area = self.new_lvar("__va_area__", array_of(ty_char, 136))
         if self.tokens[position].text != "{":
             raise CompileError(self.tokens[position], "expected '{'")
         function.body, position = self.compound_stmt(position + 1)

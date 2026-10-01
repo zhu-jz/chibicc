@@ -1,36 +1,36 @@
-# Lesson 127: Calling variadic functions
+# Lesson 128: Variadic register save areas
 
-Original chibicc commit: [`58fc86137c23adc3d98be40117087c645a9d7e4e`](https://github.com/rui314/chibicc/commit/58fc86137c23adc3d98be40117087c645a9d7e4e).
+Original chibicc commit: [`754a24fafcea637cab8bc01bb2702069109a0358`](https://github.com/rui314/chibicc/commit/754a24fafcea637cab8bc01bb2702069109a0358).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The tokenizer recognizes `...` and function parameter parsing records a variadic
-flag when an ellipsis ends the list. Calls can now use explicit variadic
-prototypes, including printf and sprintf. Fixed arguments retain declared-type
-conversions; later integer/pointer arguments use the existing call path.
+Variadic definitions now reserve a 136-byte local named __va_area__. Its header
+stores the fixed integer-argument byte count as gp_offset and a pointer to saved
+registers. The prologue saves six general-purpose argument registers and eight
+low floating-register slots before the body runs. A user-declared va-list struct
+can copy that header and forward integer/pointer arguments to libc vsprintf.
 
-Python adds a boolean to Type and consumes the ellipsis directly. This step adds
-calling support, not va_start/va_arg implementation inside Python-compiled function
-bodies. Up to six total integer/pointer arguments are still supported. The emitter
-already writes zero to rax before calls, reporting zero floating-point argument
-registers for the System V variadic calling convention.
+Python loops emit the same saves as upstream's repeated instructions. The helper
+area is a local object separate from fixed parameters. This historical step has
+no builtin va_start or va_arg syntax: examples copy the exposed header manually.
+Overflow stack arguments and a complete floating-point variadic ABI are still
+unsupported; the area preserves upstream's layout and zero fp_offset.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int sprintf(char *b,char *f,...);int main(){char b[20];sprintf(b,"%%d",42);return b[0];}\n' > /tmp/lesson127.c
-python3 python/main.py /tmp/lesson127.c > /tmp/lesson127.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson127 /tmp/lesson127.s
-/tmp/lesson127
+printf 'typedef struct V{int gp,fp;void *overflow;void *regs;} V;int f(int x,...){V *v=(V*)__va_area__;char *p=v->regs;return *(int*)(p+v->gp);}int main(){return f(1,42);}\n' > /tmp/lesson128.c
+python3 python/main.py /tmp/lesson128.c > /tmp/lesson128.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson128 /tmp/lesson128.s
+/tmp/lesson128
 echo $?
 ```
 
-Registers carry b, the format pointer, and 42. The emitter sets rax to zero and
-calls libc sprintf. Buffer byte '4' has value 52, the exit status. Tests check
-variadic type metadata, ellipsis tokenization, malformed declarations, integer
-extras with negative char values, libc formatting, emitted ABI setup, execution,
-and the original function/helper examples.
+The fixed x consumes rdi, so gp is eight. Saved rsi at that offset contains 42,
+which f reads and returns. Tests cover fixed-parameter offsets, reading saved
+extras, forwarding to vsprintf, helper area size, separation from parameters,
+emitted integer and xmm saves, execution, and the updated function program.
 
 ## Tests and attribution
 

@@ -370,6 +370,16 @@ class CodeGenerator:
             self.assembly.extend([f"  {directive} {function.name}", "  .text", f"{function.name}:",
                                   "  push %rbp", "  mov %rsp, %rbp",
                                   f"  sub ${function.stack_size}, %rsp"])
+            if function.va_area is not None:
+                offset = function.va_area.offset
+                self.assembly.extend((f"  movl ${len(function.params) * 8}, {offset}(%rbp)",
+                                      f"  movl $0, {offset + 4}(%rbp)",
+                                      f"  movq %rbp, {offset + 16}(%rbp)",
+                                      f"  addq ${offset + 24}, {offset + 16}(%rbp)"))
+                for index, register in enumerate(ARGREG):
+                    self.assembly.append(f"  movq {register}, {offset + 24 + index * 8}(%rbp)")
+                for index in range(8):
+                    self.assembly.append(f"  movsd %xmm{index}, {offset + 72 + index * 8}(%rbp)")
             if len(function.params) > len(ARGREG):
                 raise CompileError(function.params[6].ty.name,
                                    "at most 6 parameters are supported")

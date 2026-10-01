@@ -1,6 +1,6 @@
-"""Lesson 127: Calling variadic functions.
+"""Lesson 128: Variadic register save areas.
 
-Based on chibicc commit 58fc86137c23adc3d98be40117087c645a9d7e4e.
+Based on chibicc commit 754a24fafcea637cab8bc01bb2702069109a0358.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

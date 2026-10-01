@@ -87,6 +87,7 @@ class Obj:
     init_data: Optional[bytes] = None
     relocations: list[Relocation] = field(default_factory=list)
     align: int = field(default=0, compare=False)
+    va_area: Optional["Obj"] = field(default=None, compare=False)
 
 
 @dataclass

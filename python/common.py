@@ -115,3 +115,5 @@ class Node:
     unique_label: Optional[str] = field(default=None, compare=False)
     brk_label: Optional[str] = field(default=None, compare=False)
     cont_label: Optional[str] = field(default=None, compare=False)
+    cases: list["Node"] = field(default_factory=list, compare=False)
+    default_case: Optional["Node"] = field(default=None, compare=False)

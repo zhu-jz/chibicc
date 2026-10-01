@@ -204,6 +204,6 @@ def tokenize(source):
     tokens.append(Token("EOF", "", position))
     add_line_numbers(source, tokens)
     for token in tokens:
-        if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char", "struct", "union", "short", "long", "void", "typedef", "_Bool", "enum", "static", "goto", "break", "continue"):
+        if token.text in ("return", "if", "else", "for", "while", "int", "sizeof", "char", "struct", "union", "short", "long", "void", "typedef", "_Bool", "enum", "static", "goto", "break", "continue", "switch", "case", "default"):
             token.kind = "KEYWORD"
     return tokens

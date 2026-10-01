@@ -1,41 +1,36 @@
-# Lesson 92: Continue statements
+# Lesson 93: Switch and case statements
 
-Original chibicc commit: [`3c83dfd8af045ae6923d4ccb3a3a5a50f4012346`](https://github.com/rui314/chibicc/commit/3c83dfd8af045ae6923d4ccb3a3a5a50f4012346).
+Original chibicc commit: [`044d9ae07ba700c52d8342e4eee26e07eea11619`](https://github.com/rui314/chibicc/commit/044d9ae07ba700c52d8342e4eee26e07eea11619).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Every for/while loop now has both a break label and a continue label. The emitter
-places continue after the body and before the increment. `continue;` becomes a
-GOTO to that label: a for loop still runs its increment, while a while loop jumps
-back to test its condition. Nested loops save and restore both parser targets,
-and a continue outside a loop reports `stray continue`.
+A switch evaluates its condition once, compares it with each recorded case value,
+and jumps to a case, default, or the switch's exit. Case labels emit sequentially,
+so execution falls through until a break or return. The parser saves/restores its
+current switch and break target for nesting. Continue still targets an enclosing
+loop, since switch does not change the continue target.
 
-Python uses parser attributes and Node fields for these targets, replacing C's
-globals and struct members. Continue uses the existing jump emitter. This remains
-an educational snapshot of this original commit, with the earlier conversion,
-aggregate-passing, and declaration limitations preserved.
+Python lists replace the case linked list. Numeric case tokens are explicitly
+converted to signed 32-bit values to match the original C int field, including
+0xffffffff becoming -1. This commit accepts numeric tokens rather than general
+constant expressions; duplicate-case/default validation is still incomplete.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){int sum=0;for(int i=0;i<10;i++){if(i>5)continue;sum++;}return sum;}\n' > /tmp/lesson92.c
-python3 python/main.py /tmp/lesson92.c > /tmp/lesson92.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson92 /tmp/lesson92.s
-/tmp/lesson92
+printf 'int main(){switch(1){case 0:return 3;case 1:return 42;default:return 7;}}\n' > /tmp/lesson93.c
+python3 python/main.py /tmp/lesson93.c > /tmp/lesson93.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson93 /tmp/lesson93.s
+/tmp/lesson93
 echo $?
 ```
 
-continue emits `jmp .L..N` to the label before i's increment. Only i=0 through 5
-increase sum, so main returns 6. The executable prints nothing; `echo $?` displays
-its exit status. Tests cover for increments, while condition reevaluation, nested
-and restored targets, skipped bodies, stray continue, emitted target positions,
-and all updated upstream programs.
-
-This is the fiftieth lesson in the requested batch (lessons 43–92). Each original
-commit has its own Python commit and its corresponding README explanation in Git
-history. To read a previous explanation, use `git show <python-commit>:python/README.md`.
-The complete regression suite is run at this final step.
+`cmp $1, %eax` and `je .L..N` select the matching label; a long condition uses
+rax instead. The selected return exits with 42, which the shell displays. Tests
+cover matching/default/missing cases, fallthrough, signed case conversion,
+nested switches, loop continue behavior, assembly widths, stray labels, and all
+updated original C programs.
 
 ## Tests and attribution
 

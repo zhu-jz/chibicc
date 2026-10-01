@@ -1,6 +1,6 @@
-"""Lesson 92: Continue statements.
+"""Lesson 93: Switch and case statements.
 
-Based on chibicc commit 3c83dfd8af045ae6923d4ccb3a3a5a50f4012346.
+Based on chibicc commit 044d9ae07ba700c52d8342e4eee26e07eea11619.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

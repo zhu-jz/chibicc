@@ -245,6 +245,21 @@ class CodeGenerator:
             self.assembly.append(f"  jmp .L.begin.{label}")
             self.assembly.append(f"{node.brk_label}:")
             return
+        if node.kind == "SWITCH":
+            self.gen_expr(node.cond)
+            register = "%rax" if node.cond.ty.size == 8 else "%eax"
+            for case in node.cases:
+                self.assembly.extend((f"  cmp ${case.value}, {register}", f"  je {case.label}"))
+            if node.default_case is not None:
+                self.assembly.append(f"  jmp {node.default_case.label}")
+            self.assembly.append(f"  jmp {node.brk_label}")
+            self.gen_stmt(node.then)
+            self.assembly.append(f"{node.brk_label}:")
+            return
+        if node.kind == "CASE":
+            self.assembly.append(f"{node.label}:")
+            self.gen_stmt(node.lhs)
+            return
         if node.kind == "BLOCK":
             for statement in node.body:
                 self.gen_stmt(statement)

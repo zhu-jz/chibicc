@@ -52,6 +52,7 @@ class Parser:
         self.labels = []
         self.brk_label = None
         self.cont_label = None
+        self.current_switch = None
 
     def enter_scope(self):
         self.scopes.append(Scope())
@@ -421,6 +422,42 @@ class Parser:
             if self.tokens[position].text == "else":
                 els, position = self.stmt(position + 1)
             return Node("IF", cond=cond, then=then, els=els, tok=token), position
+        if token.text == "switch":
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            cond, position = self.expr(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            node = Node("SWITCH", cond=cond, tok=token, brk_label=self.new_unique_name())
+            previous_switch = self.current_switch
+            previous_break = self.brk_label
+            self.current_switch = node
+            self.brk_label = node.brk_label
+            node.then, position = self.stmt(position + 1)
+            self.current_switch = previous_switch
+            self.brk_label = previous_break
+            return node, position
+        if token.text in ("case", "default"):
+            if self.current_switch is None:
+                raise CompileError(token, "stray " + token.text)
+            value = 0
+            if token.text == "case":
+                number = self.tokens[position + 1]
+                if number.kind != "NUM":
+                    raise CompileError(number, "expected a number")
+                value = number.value & 0xffffffff
+                if value >= 0x80000000:
+                    value -= 0x100000000
+                position += 1
+            if self.tokens[position + 1].text != ":":
+                raise CompileError(self.tokens[position + 1], "expected ':'")
+            node = Node("CASE", value=value, label=self.new_unique_name(), tok=token)
+            node.lhs, position = self.stmt(position + 2)
+            if token.text == "case":
+                self.current_switch.cases.insert(0, node)
+            else:
+                self.current_switch.default_case = node
+            return node, position
         if self.tokens[position].text == "for":
             position += 1
             if self.tokens[position].text != "(":

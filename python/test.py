@@ -58,6 +58,27 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_switch_cases(self):
+        for source, expected in [
+            ("int main(){switch(1){case 0:return 3;case 1:return 42;}return 7;}", 42),
+            ("int main(){int x=0;switch(1){case 1:x=3;case 2:x+=4;}return x;}", 7),
+            ("int main(){switch(3){case 1:return 7;default:return 42;}}", 42),
+            ("int main(){switch(3){case 1:return 7;}return 42;}", 42),
+            ("int main(){switch(-1){case 0xffffffff:return 42;}return 1;}", 42),
+            ("int main(){switch(1){case 1:switch(2){case 2:break;}return 42;}return 1;}", 42),
+            ("int main(){int x=0;for(int i=0;i<3;i++){switch(i){case 1:continue;default:x++;}}return x;}", 2),
+        ]:
+            self.assert_program_returns(source, expected)
+        for spelling, register in (("1", "%eax"), ("(long)1", "%rax")):
+            assembly = compile_program(f"int main(){{switch({spelling}){{case 1:return 42;}}return 0;}}").stdout
+            self.assertIn(f"  cmp $1, {register}\n", assembly)
+        for source, message in [("int main(){case 1:return 0;}", "stray case"),
+                                ("int main(){default:return 0;}", "stray default"),
+                                ("int main(){switch(0){case -1:return 0;}}", "expected a number")]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_continue_statements(self):
         for source, expected in [
             ("int main(){int s=0;for(int i=0;i<10;i++){if(i>5)continue;s++;}return s;}", 6),

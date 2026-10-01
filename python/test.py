@@ -77,6 +77,12 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_va_copy(self):
+        source = '#include <stdarg.h>\nint f(int n,...){va_list a,b;va_start(a,n);va_copy(b,a);int x=va_arg(a,int);int y=va_arg(a,int);int z=va_arg(b,int);va_end(a);va_end(b);return x+y+z;}int main(void){return f(2,12,18);}'
+        self.assert_program_returns(source, 42)
+        source = '#include <stdarg.h>\nint f(int n,...){va_list a,b;va_start(a,n);for(int i=0;i<6;i++)va_arg(a,int);va_copy(b,a);return va_arg(a,int)+va_arg(b,int);}int main(void){return f(7,1,2,3,4,5,6,21);}'
+        self.assert_program_returns(source, 42)
+
     def test_variadic_stack_arguments(self):
         for spelling in ('int', 'double'):
             source = '#include <stdarg.h>\n' + f'double sum(int n,...){{va_list ap;va_start(ap,n);double s=0;for(int i=0;i<n;i++)s+=va_arg(ap,{spelling});va_end(ap);return s;}}int main(void){{return sum(10,1{ ".0" if spelling == "double" else ""},2,3,4,5,6,7,8,9,10);}}'

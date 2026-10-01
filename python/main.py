@@ -1,6 +1,6 @@
-"""Lesson 204: Read variadic arguments from the stack.
+"""Lesson 205: Copy a variadic argument cursor.
 
-Based on chibicc commit b6d3cd00df7d0496fca2af2c34e72ab3e6af4028.
+Based on chibicc commit 603de502fd8bad750d48aaf9a66c547e5ca04c2a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

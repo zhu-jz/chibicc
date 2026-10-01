@@ -324,6 +324,9 @@ class Parser:
             return Node("ADDR", lhs=operand, tok=token), position
         if operator == "*":
             operand, position = self.cast(position + 1)
+            add_type(operand)
+            if operand.ty.kind == "FUNC":
+                return operand, position
             return Node("DEREF", lhs=operand, tok=token), position
         if operator == "!":
             operand, position = self.cast(position + 1)

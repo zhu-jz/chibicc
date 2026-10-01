@@ -77,6 +77,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_repeated_function_dereference(self):
+        for expression in ('f', '*f', '***f', '**p', '*****p'):
+            self.assert_program_returns('int f(int x){return x+1;}int main(void){int(*p)(int)=f;return (' + expression + ')(41);}', 42)
+        plain = compile_program('int f(void);int main(void){return f();}').stdout
+        repeated = compile_program('int f(void);int main(void){return (***f)();}').stdout
+        self.assertEqual(instruction_assembly(plain), instruction_assembly(repeated))
+
     def test_va_copy(self):
         source = '#include <stdarg.h>\nint f(int n,...){va_list a,b;va_start(a,n);va_copy(b,a);int x=va_arg(a,int);int y=va_arg(a,int);int z=va_arg(b,int);va_end(a);va_end(b);return x+y+z;}int main(void){return f(2,12,18);}'
         self.assert_program_returns(source, 42)

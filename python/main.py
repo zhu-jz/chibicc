@@ -1,6 +1,6 @@
-"""Lesson 205: Copy a variadic argument cursor.
+"""Lesson 206: Treat function dereference as identity.
 
-Based on chibicc commit 603de502fd8bad750d48aaf9a66c547e5ca04c2a.
+Based on chibicc commit e0b5da3b395e46bbc2e377a59d5cba33206288a9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

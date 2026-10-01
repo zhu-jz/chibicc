@@ -60,6 +60,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_flexible_array_member_initializers(self):
+        for source, expected in [
+            ("int main(){struct T{int a;int b[];} x={1,{2,42}};return x.b[1];}", 42),
+            ("int main(){struct T{int a;int b[];} x={1,2,42};return sizeof(x);}", 12),
+            ('struct T{char a;char b[];} g={1,"abc"};int main(){return g.b[2];}', 99),
+            ("typedef struct T{char a;char b[];} T;T x={1,2,3};T y={1,2,3,4,5};int main(){return sizeof(x)+sizeof(y)+sizeof(T);}", 9),
+        ]:
+            self.assert_program_returns(source, expected)
+        program = parse(tokenize("struct T{int a;int b[];} x={1,2,42};struct T y;"))
+        x = next(var for var in program if var.name == "x")
+        y = next(var for var in program if var.name == "y")
+        self.assertEqual((x.ty.size, y.ty.size), (12, 4))
+        self.assertIsNot(x.ty.members[-1], y.ty.members[-1])
+        self.assertEqual(x.init_data[-4:], b"\x2a\x00\x00\x00")
+
     def test_flexible_array_member_size(self):
         for source, expected in [
             ("int main(){return sizeof(struct T{int x;int y[];});}", 4),

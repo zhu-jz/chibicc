@@ -1,34 +1,36 @@
-# Lesson 112: Flexible array member layout
+# Lesson 113: Initializing flexible array members
 
-Original chibicc commit: [`824543bb2f2b2e4f445d8c58b32f53bf1eec63ce`](https://github.com/rui314/chibicc/commit/824543bb2f2b2e4f445d8c58b32f53bf1eec63ce).
+Original chibicc commit: [`cd688a89b8a57e9614f278e29a9267709494d236`](https://github.com/rui314/chibicc/commit/cd688a89b8a57e9614f278e29a9267709494d236).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A trailing incomplete array member, as in `struct T{int x;int y[];}`, is now
-converted to a zero-length array before layout. It contributes alignment and
-an offset but no element storage. sizeof(T) therefore describes only the fixed
-part of the object. Other incomplete members are unchanged by this commit.
+Types now remember that their final member was a flexible array. When a whole
+object is initialized, that member's initializer can infer an element count.
+The parser copies the object's type and member records, completes the last member,
+and adds its storage size. Other objects and the shared struct tag retain their
+original zero-length tail.
 
-Python replaces the last member's Type with array_of(base, 0), following the C
-implementation. This step handles layout only: it neither allocates additional
-space automatically nor initializes a flexible tail. Accessing tail elements
-requires actual additional backing storage. The shared member parser also applies
-this transformation to unions, matching this historical implementation.
+Python dataclasses.replace copies member records; the completed type is returned
+through the initializer rather than a C Type output pointer. This matches the
+original size rule: append the tail size without introducing a new layout or
+alignment policy. Flexible-tail initialization is an extension to standard C.
+Only top-level object initialization enables the flexible child at this step.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return sizeof(struct T{int x;int y[];});}\n' > /tmp/lesson112.c
-python3 python/main.py /tmp/lesson112.c > /tmp/lesson112.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson112 /tmp/lesson112.s
-/tmp/lesson112
+printf 'int main(){struct T{int a;int b[];} x={1,2,42};return x.b[1];}\n' > /tmp/lesson113.c
+python3 python/main.py /tmp/lesson113.c > /tmp/lesson113.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson113 /tmp/lesson113.s
+/tmp/lesson113
 echo $?
 ```
 
-sizeof is compiled to `mov $4, %rax`; no tail memory is accessed. Exit status is
-4. Tests check fixed sizes, alignment, zero-sized member type, member address
-offset, BSS allocation size, actual executables, and upstream sizeof examples.
+This object's completed size is 12 bytes. Assembly clears that storage and writes
+its fixed int plus two tail ints. The final value returns 42. Tests check locals,
+global byte data, string tails, independent completed object sizes, unchanged
+shared tags, member-record copying, actual executables, and upstream examples.
 
 ## Tests and attribution
 

@@ -50,6 +50,7 @@ class Type:
     array_len: int = 0
     members: list["Member"] = field(default_factory=list)
     align: int = 0
+    is_flexible: bool = False
 
 
 @dataclass

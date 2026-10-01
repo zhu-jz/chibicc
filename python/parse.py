@@ -7,6 +7,8 @@ Based on chibicc commit b4e82cf7ce1cbfff8dd30f20fdad73fd3f1d5ccb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
+from dataclasses import replace
+
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from common import Initializer, InitDesg, Relocation, to_int32
 from constexpr import evaluate_constant, evaluate_initializer
@@ -50,7 +52,11 @@ def new_initializer(ty, is_flexible=False):
             return init
         init.children = [new_initializer(ty.base) for _ in range(ty.array_len)]
     elif ty.kind in ("STRUCT", "UNION"):
-        init.children = [new_initializer(member.ty) for member in ty.members]
+        for index, member in enumerate(ty.members):
+            if is_flexible and ty.is_flexible and index == len(ty.members) - 1:
+                init.children.append(Initializer(member.ty, is_flexible=True))
+            else:
+                init.children.append(new_initializer(member.ty))
     return init
 
 
@@ -654,9 +660,10 @@ class Parser:
                 ty, position = self.declarator(position, basety)
                 members.append(Member(ty, ty.name, idx=len(members)))
             position += 1
+        ty = struct_type()
         if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
             members[-1].ty = array_of(members[-1].ty.base, 0)
-        ty = struct_type()
+            ty.is_flexible = True
         ty.members = members
         if tag is not None:
             previous = self.scopes[-1].tags.get(tag.text)
@@ -984,6 +991,13 @@ class Parser:
     def initializer(self, position, ty):
         init = new_initializer(ty, is_flexible=True)
         position = self.initializer2(position, init)
+        if ty.kind in ("STRUCT", "UNION") and ty.is_flexible:
+            complete = copy_type(ty)
+            complete.members = [replace(member) for member in ty.members]
+            member = complete.members[-1]
+            member.ty = init.children[member.idx].ty
+            complete.size += member.ty.size
+            init.ty = complete
         return init, position
 
     def init_desg_expr(self, designation, token):

@@ -1,6 +1,6 @@
-"""Lesson 112: Flexible array member layout.
+"""Lesson 113: Initializing flexible array members.
 
-Based on chibicc commit 824543bb2f2b2e4f445d8c58b32f53bf1eec63ce.
+Based on chibicc commit cd688a89b8a57e9614f278e29a9267709494d236.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

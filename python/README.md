@@ -1,29 +1,27 @@
-# Lesson 273: Add pointer arithmetic for variable-length arrays
+# Lesson 274: Compute sizeof for a fresh VLA type
 
-Original chibicc commit: [`07f901057f5c6aa77c0f15f7a22dc0b88923c227`](https://github.com/rui314/chibicc/commit/07f901057f5c6aa77c0f15f7a22dc0b88923c227).
+Original chibicc commit: [`2fa8f489f3a852bd5bb17e023fdc5ea3a606100d`](https://github.com/rui314/chibicc/commit/2fa8f489f3a852bd5bb17e023fdc5ea3a606100d).
 Earlier explanations are available in Git history.
 
-A VLA variable stores its allocated address in an eight-byte local slot. Reading
-its address now loads that slot; a separate VLA_PTR node addresses the slot when
-initializing it. Array expressions remain addresses rather than loading an element.
-When an element is itself a VLA, pointer addition and subtraction multiply the
-index by its saved runtime byte size. This makes multidimensional indexing work.
+sizeof can now create a runtime-sized array type directly, such as sizeof(int[n]).
+If that type has no saved size yet, the parser builds a comma expression: compute
+and save its dimension sizes, then read the final byte size. Existing VLA types
+continue using their previously computed size. No array storage is allocated just
+to calculate sizeof a type.
 
 ```sh
-printf 'int main(void){int n=3,m=5;int x[n][m];x[2][4]=42;return x[2][4];}\n' > /tmp/lesson.c
+printf 'int main(void){int n=5;return sizeof(int[2][n])+2;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly loads the allocated base address, multiplies row 2 by the saved 20-byte
-row size, and adds column 4 times four bytes. It writes 42 there and loads it back
-for the return value. Tests cover one and two dimensions, reversed addition and
-subtracting a row from a pointer, as well as the original VLA fixture.
-Python uses a string node kind instead of C's enum. The original VLA subtraction
-branch does not distinguish a numeric right operand from another pointer; this
-lesson does not extend pointer-difference semantics beyond that implementation.
+Assembly multiplies n by four bytes and then by two rows, saves and loads 40,
+and adds 2 before returning. Tests also check that a side-effecting bound runs
+once and that sizeof(typeof(existing_array)) retains its declaration-time size.
+Python represents C's linked expression nodes with dataclasses; the runtime
+calculation and saved-size behavior follow the original commit.
 
 ## Tests and attribution
 

@@ -541,7 +541,9 @@ class Parser:
                 raise CompileError(self.tokens[position], "expected ')'")
             if ty.kind == "VLA":
                 if ty.vla_size is None:
-                    raise CompileError(token, "VLA size is not available")
+                    computed = self.compute_vla_size(ty, token)
+                    size = Node("VAR", var=ty.vla_size, tok=token)
+                    return Node("COMMA", computed, size, tok=token), position + 1
                 return Node("VAR", var=ty.vla_size, tok=token), position + 1
             return Node("NUM", value=ty.size, tok=token, ty=ty_ulong), position + 1
 

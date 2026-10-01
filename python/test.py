@@ -87,6 +87,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_sizeof_vla_type(self):
+        for source, expected in [
+            ('int main(void){int n=5;return sizeof(char[2][n]);}', 10),
+            ('int main(void){int n=4;int size=sizeof(int[++n]);return size==20&&n==5?42:0;}', 42),
+            ('int main(void){int n=3,m=4;return sizeof(int[n][m])+sizeof(char[n]);}', 51),
+            ('int main(void){int n=5;int x[n];n=8;return sizeof(typeof(x));}', 20),
+        ]:
+            self.assert_program_returns(source, expected)
+
     def test_vla_indexing(self):
         for source in [
             'int main(void){int n=4;int x[n];x[0]=12;x[3]=30;return x[0]+x[3];}',

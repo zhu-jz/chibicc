@@ -1,6 +1,6 @@
-"""Lesson 273: Add pointer arithmetic for variable-length arrays.
+"""Lesson 274: Compute sizeof for a fresh VLA type.
 
-Based on chibicc commit 07f901057f5c6aa77c0f15f7a22dc0b88923c227.
+Based on chibicc commit 2fa8f489f3a852bd5bb17e023fdc5ea3a606100d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

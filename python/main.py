@@ -1,6 +1,6 @@
-"""Lesson 133: Wide pointer differences and size queries.
+"""Lesson 134: Unsigned pointer comparisons.
 
-Based on chibicc commit 8b8f3de48bba31ccfa84e3573075b2125bc130c3.
+Based on chibicc commit 6880a39d2a5aec8e5ed32c276109936ed503d0bb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

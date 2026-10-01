@@ -60,6 +60,14 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_unsigned_pointer_comparisons(self):
+        self.assert_program_returns("int main(void){return (void*)0xffffffffffffffff>(void*)0;}", 1)
+        self.assert_program_returns("int main(void){return (char*)0<=(char*)0xffffffffffffffff;}", 1)
+        self.assert_program_returns("int main(void){return (char*)0-(char*)1<0;}", 1)
+        node = parse_body("int x;return &x;").body.body[-1].lhs.lhs
+        self.assertTrue(node.ty.is_unsigned)
+        self.assertIn("  setb %al\n", compile_program("int main(void){return (void*)0xffffffffffffffff>(void*)0;}").stdout)
+
     def test_wide_pointer_and_size_expressions(self):
         for source, expected in [
             ("int main(void){return sizeof(sizeof(char));}", 8),

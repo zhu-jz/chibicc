@@ -1,33 +1,32 @@
-# Lesson 133: Wide pointer differences and size queries
+# Lesson 134: Unsigned pointer comparisons
 
-Original chibicc commit: [`8b8f3de48bba31ccfa84e3573075b2125bc130c3`](https://github.com/rui314/chibicc/commit/8b8f3de48bba31ccfa84e3573075b2125bc130c3).
+Original chibicc commit: [`6880a39d2a5aec8e5ed32c276109936ed503d0bb`](https://github.com/rui314/chibicc/commit/6880a39d2a5aec8e5ed32c276109936ed503d0bb).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Pointer subtraction now produces signed long before dividing by element size,
-retaining all 64 address bits. sizeof and _Alignof produce unsigned long numeric
-nodes, for both type and expression forms. Their shifts and arithmetic consequently
-use eight-byte unsigned operations rather than four-byte int operations.
+pointer_to now marks pointer types unsigned. Existing common-type conversion
+preserves that flag, so relational pointer comparisons use unsigned setb/setbe.
+An address with its top bit set no longer compares as a negative signed long.
+Pointer subtraction still has the explicit signed-long result from lesson 133.
 
-Python supplies explicit types on these numeric and subtraction nodes, matching
-upstream new_ulong and long pointer-difference annotations. Type sizes themselves
-remain Python integers; this change describes the generated C expression type.
+Python sets the same single field as upstream. Tests use cast integer addresses
+to check the historical compiler behavior without dereferencing them.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(void){return sizeof(char)<<63>>63;}\n' > /tmp/lesson133.c
-python3 python/main.py /tmp/lesson133.c > /tmp/lesson133.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson133 /tmp/lesson133.s
-/tmp/lesson133
+printf 'int main(void){return (void*)0xffffffffffffffff>(void*)0;}\n' > /tmp/lesson134.c
+python3 python/main.py /tmp/lesson134.c > /tmp/lesson134.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson134 /tmp/lesson134.s
+/tmp/lesson134
 echo $?
 ```
 
-The size one shifts to the top bit with shl on rax, then shr shifts in zeros and
-returns it to one. Exit status is 1. Tests check query result types, nested sizeof,
-64-bit logical shifts, pointer differences beyond 32 bits without dereferencing
-those addresses, signed comparisons, emitted widths, and original C examples.
+The parser represents > by reversing operands for <. Code generation compares
+all 64 bits and uses setb, giving exit status 1. Tests check both relational forms,
+the pointer type flag, signed differences, emitted comparison, execution, and
+the updated original arithmetic program.
 
 ## Tests and attribution
 

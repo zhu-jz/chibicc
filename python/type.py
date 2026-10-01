@@ -30,7 +30,7 @@ def copy_type(ty):
 
 
 def pointer_to(base):
-    return Type("PTR", base, size=8, align=8)
+    return Type("PTR", base, size=8, align=8, is_unsigned=True)
 
 
 def func_type(return_ty):

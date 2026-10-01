@@ -1352,3 +1352,8 @@ class Parser:
 
 def parse(tokens):
     return Parser(tokens).parse()
+
+
+def const_expr(tokens):
+    """Evaluate a standalone conditional expression for preprocessing."""
+    return Parser(tokens).const_expr(0)

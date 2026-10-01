@@ -1,6 +1,6 @@
-"""Lesson 162: Preprocess-only output with -E.
+"""Lesson 163: Add #if and #endif.
 
-Based on chibicc commit d138864a2a99849e43d81ca071b7a799edc0e65a.
+Based on chibicc commit bf6ff928ad17d98d07f68f619e6cbe29829d0a20.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -72,6 +72,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_if_endif_directives(self):
+        source = '#if 0\n#include "/no/such/file"\ninvalid code\n#endif\n#if 2*3==6\nint main(void){return 42;}\n#endif\n'
+        self.assert_program_returns(source, 42)
+        self.assert_program_returns('#if 1\n#if 1\nint main(void){return 7;}\n#endif\n#endif\n', 7)
+        for source, message in (
+                ('#endif\n', 'stray #endif'),
+                ('#if 1\n', 'unterminated conditional directive'),
+                ('#if\n#endif\n', 'no expression'),
+                ('#if 1 2\n#endif\n', 'extra token'),
+                ('#if 0\n#if 1\n#endif\n#endif\n', 'stray #endif')):
+            with self.subTest(source=source):
+                result = compile_program(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stderr)
+
     def test_preprocess_only_option(self):
         with tempfile.TemporaryDirectory() as directory:
             header = Path(directory) / "answer.h"

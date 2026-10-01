@@ -1,6 +1,6 @@
-"""Lesson 95: Conditional expressions.
+"""Lesson 96: Compile-time constant expressions.
 
-Based on chibicc commit 447ee098c51f6f615ef560b35d429f32f0cb5a35.
+Based on chibicc commit 79f5de21eb706ea5486fd682a83ffbde7e4d16a9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

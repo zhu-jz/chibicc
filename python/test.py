@@ -58,6 +58,33 @@ def without_implicit_casts(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_constant_expressions(self):
+        for source, expected in [
+            ("enum{N=3*2};int main(){char a[N+1];return sizeof(a);}", 7),
+            ("enum{N=-1};int main(){switch(N){case -1:return 42;}return 1;}", 42),
+            ("enum{N=(long)-17/6};int main(){return N==-2;}", 1),
+            ("enum{N=(long)-17%6};int main(){return N==-5;}", 1),
+            ("enum{N=(long)9007199254740993/3-3002399751580331};int main(){return N;}", 0),
+            ("int main(){char a[1?3:1/0];return sizeof(a);}", 3),
+            ("int main(){char a[(int)0xfffffffffff+5];return sizeof(a);}", 4),
+            ("enum{N=(char)255};int main(){return N==255;}", 1),
+            ("enum{N=(_Bool)256};int main(){return N;}", 0),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("enum{N=3*2};int main(){char a[N+1];return sizeof(a);}").stdout
+        self.assertIn("  mov $7, %rax\n", assembly)
+        self.assertNotIn("  imul ", assembly)
+        for source, message in [
+            ("int main(){int n=3;int a[n];}", "not a compile-time constant"),
+            ("int f();enum{N=f()};", "not a compile-time constant"),
+            ("enum{N=1/0};", "division by zero in constant expression"),
+            ("enum{N=1<<64};", "invalid shift count in constant expression"),
+        ]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+            self.assertEqual(result.stdout, "")
+
     def test_conditional_operator(self):
         for source, expected in [
             ("int main(){return 0?3:42;}", 42),
@@ -110,8 +137,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             assembly = compile_program(f"int main(){{switch({spelling}){{case 1:return 42;}}return 0;}}").stdout
             self.assertIn(f"  cmp $1, {register}\n", assembly)
         for source, message in [("int main(){case 1:return 0;}", "stray case"),
-                                ("int main(){default:return 0;}", "stray default"),
-                                ("int main(){switch(0){case -1:return 0;}}", "expected a number")]:
+                                ("int main(){default:return 0;}", "stray default")]:
             result = compile_program(source)
             self.assertEqual(result.returncode, 1)
             self.assertIn(message, result.stderr)
@@ -400,7 +426,6 @@ class ExpressionCompilerTests(unittest.TestCase):
         for source, message in [
             ("enum Missing x;", "unknown enum type"),
             ("struct E{int a;};enum E x;", "not an enum tag"),
-            ("enum {a=-1};", "expected a number"),
             ("enum {a,};", "expected a variable name"),
             ("int main(){{enum {a};}return a;}", "undefined variable"),
         ]:

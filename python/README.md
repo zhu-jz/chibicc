@@ -1,37 +1,45 @@
-# Lesson 95: Conditional expressions
+# Lesson 96: Compile-time constant expressions
 
-Original chibicc commit: [`447ee098c51f6f615ef560b35d429f32f0cb5a35`](https://github.com/rui314/chibicc/commit/447ee098c51f6f615ef560b35d429f32f0cb5a35).
+Original chibicc commit: [`79f5de21eb706ea5486fd682a83ffbde7e4d16a9`](https://github.com/rui314/chibicc/commit/79f5de21eb706ea5486fd682a83ffbde7e4d16a9).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-`condition ? true_value : false_value` evaluates its condition once and executes
-only the selected branch. The parser places it below logical || and above
-assignment. Its middle operand accepts a full expression (including comma), and
-its last operand is another conditional expression, giving right associativity.
-Nonvoid branches receive usual arithmetic conversions; if either is void, the
-whole expression is void. Complete C pointer/aggregate conditional rules remain
-outside this historical implementation.
+Array bounds, enumerator initializers, and case labels now parse conditional
+expressions and evaluate their typed syntax trees at compile time. Arithmetic,
+comparisons, bitwise operations, shifts, casts, comma, and conditional/logical
+operators are supported. Short-circuit branches skip unused nodes, and comma
+evaluates only its right operand. Variables and function calls in evaluated
+positions report `not a compile-time constant`.
 
-Python stores the three operands in the existing cond/then/els Node fields.
-The emitter generates branches and merge labels; Python's own conditional
-expression does not evaluate the compiled program.
+Python's explicit evaluate_constant function walks Nodes; it never calls Python
+eval. C's helper lives in parse.c; Python keeps it in constexpr.py. Division and
+remainder use integer-only truncation toward zero, avoiding Python's different
+negative // and % behavior. Int-sized destination fields narrow to signed 32 bits.
+
+This historical evaluator masks casts to 8/16/32 bits as unsigned values, even
+for signed char or _Bool, so its behavior can differ from runtime casts. It also
+computes intermediate arithmetic at host integer width rather than always using
+the expression's runtime width. Python intermediates are unbounded; overflowing
+C int64 intermediates have no portable match. Constant division by zero and
+invalid shift counts produce Python diagnostics instead of host faults or UB.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){return 1?42:3;}\n' > /tmp/lesson95.c
-python3 python/main.py /tmp/lesson95.c > /tmp/lesson95.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson95 /tmp/lesson95.s
-/tmp/lesson95
+printf 'enum{N=3*2};int main(){char a[N+1];return sizeof(a);}\n' > /tmp/lesson96.c
+python3 python/main.py /tmp/lesson96.c > /tmp/lesson96.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson96 /tmp/lesson96.s
+/tmp/lesson96
 echo $?
 ```
 
-The zero comparison jumps to `.L.else.N` for false. The true path loads 42 and
-jumps past the else path to `.L.end.N`; only one result reaches the return.
-The shell displays 42. Tests cover selected/skipped effects, guarded dereferences,
-right associativity, comma parsing, int/long conversion, void branches, assembly,
-malformed input, and the updated original arithmetic programs.
+The compiler computes N=6 and the array length 7 before allocating stack space.
+sizeof becomes `mov $7, %rax`; no runtime multiplication is emitted for the bound.
+The shell displays 7. Tests cover all expression categories through the original
+constexpr fixture, negative/large exact division, enum/case expressions, discarded
+branches, historical cast behavior, narrowed bounds, diagnostic errors, assembly,
+and real executables.
 
 ## Tests and attribution
 

@@ -8,6 +8,8 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
+from common import to_int32
+from constexpr import evaluate_constant
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
 
@@ -118,6 +120,10 @@ class Parser:
             rhs, position = self.expr(position + 1)
             node = Node("COMMA", node, rhs, tok=token)
         return node, position
+
+    def const_expr(self, position):
+        node, position = self.conditional(position)
+        return evaluate_constant(node), position
 
     def to_assign(self, binary):
         """Lower A op= B while evaluating A's address exactly once."""
@@ -462,18 +468,14 @@ class Parser:
             if self.current_switch is None:
                 raise CompileError(token, "stray " + token.text)
             value = 0
+            position += 1
             if token.text == "case":
-                number = self.tokens[position + 1]
-                if number.kind != "NUM":
-                    raise CompileError(number, "expected a number")
-                value = number.value & 0xffffffff
-                if value >= 0x80000000:
-                    value -= 0x100000000
-                position += 1
-            if self.tokens[position + 1].text != ":":
-                raise CompileError(self.tokens[position + 1], "expected ':'")
+                value, position = self.const_expr(position)
+                value = to_int32(value)
+            if self.tokens[position].text != ":":
+                raise CompileError(self.tokens[position], "expected ':'")
             node = Node("CASE", value=value, label=self.new_unique_name(), tok=token)
-            node.lhs, position = self.stmt(position + 2)
+            node.lhs, position = self.stmt(position + 1)
             if token.text == "case":
                 self.current_switch.cases.insert(0, node)
             else:
@@ -699,13 +701,11 @@ class Parser:
         if self.tokens[position].text == "]":
             ty, position = self.type_suffix(position + 1, ty)
             return array_of(ty, -1), position
-        token = self.tokens[position]
-        if token.kind != "NUM":
-            raise CompileError(token, "expected a number")
-        if self.tokens[position + 1].text != "]":
-            raise CompileError(self.tokens[position + 1], "expected ']'")
-        ty, position = self.type_suffix(position + 2, ty)
-        return array_of(ty, token.value), position
+        length, position = self.const_expr(position)
+        if self.tokens[position].text != "]":
+            raise CompileError(self.tokens[position], "expected ']'")
+        ty, position = self.type_suffix(position + 1, ty)
+        return array_of(ty, to_int32(length)), position
 
     # type-suffix = "(" func-params | "[" array-dimensions | empty
     def type_suffix(self, position, ty):
@@ -786,15 +786,12 @@ class Parser:
                 raise CompileError(token, "expected a variable name")
             position += 1
             if self.tokens[position].text == "=":
-                number = self.tokens[position + 1]
-                if number.kind != "NUM":
-                    raise CompileError(number, "expected a number")
-                value = number.value
-                position += 2
+                value, position = self.const_expr(position + 1)
+                value = to_int32(value)
             binding = self.push_scope(token.text)
             binding.enum_ty = ty
             binding.enum_val = value
-            value += 1
+            value = to_int32(value + 1)
         if tag is not None:
             self.scopes[-1].tags[tag.text] = ty
         return ty, position + 1

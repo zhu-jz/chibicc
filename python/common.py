@@ -12,6 +12,11 @@ def align_to(value, alignment):
     return (value + alignment - 1) // alignment * alignment
 
 
+def to_int32(value):
+    value &= 0xffffffff
+    return value - 0x100000000 if value >= 0x80000000 else value
+
+
 @dataclass
 class Token:
     kind: str

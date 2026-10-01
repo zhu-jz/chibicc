@@ -1,6 +1,6 @@
-"""Lesson 225: Decode wide character literals as code points.
+"""Lesson 226: Add u-prefixed character literals.
 
-Based on chibicc commit a57c661d46d9523bed01ad1b074f7a78d9e94ca3.
+Based on chibicc commit 454618cd15c2c87d9f5a6a6727e1b09a8e22a799.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

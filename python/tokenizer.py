@@ -9,7 +9,7 @@ import re
 import sys
 
 from common import CompileError, Token, File, format_diagnostic, to_int32
-from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
+from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong, ty_ushort
 from type import ty_float, ty_double
 
 
@@ -160,7 +160,7 @@ def read_string_literal(source, start):
     return token, end + 1
 
 
-def read_char_literal(source, start, quote=None):
+def read_char_literal(source, start, quote=None, ty=ty_int):
     position = (start if quote is None else quote) + 1
     if position >= len(source) or source[position] == "\0":
         raise CompileError(start, "unclosed char literal")
@@ -174,7 +174,7 @@ def read_char_literal(source, start, quote=None):
     end = source.find("'", position)
     if end == -1:
         raise CompileError(position, "unclosed char literal")
-    return Token("NUM", source[start:end + 1], start, to_int32(value), ty=ty_int), end + 1
+    return Token("NUM", source[start:end + 1], start, to_int32(value), ty=ty), end + 1
 
 
 def read_int_literal(source, start, check_range=True):
@@ -360,6 +360,12 @@ def tokenize(source):
         if character == "'":
             token, position = read_char_literal(source, position)
             token.value = (token.value + 128) % 256 - 128
+            append_token(token)
+            continue
+
+        if source.startswith("u'", position):
+            token, position = read_char_literal(source, position, position + 1, ty_ushort)
+            token.value &= 0xffff
             append_token(token)
             continue
 

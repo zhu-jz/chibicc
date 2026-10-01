@@ -1,17 +1,16 @@
-# Lesson 225: Decode wide character literals as code points
+# Lesson 226: Add u-prefixed character literals
 
-Original chibicc commit: [`a57c661d46d9523bed01ad1b074f7a78d9e94ca3`](https://github.com/rui314/chibicc/commit/a57c661d46d9523bed01ad1b074f7a78d9e94ca3).
+Original chibicc commit: [`454618cd15c2c87d9f5a6a6727e1b09a8e22a799`](https://github.com/rui314/chibicc/commit/454618cd15c2c87d9f5a6a6727e1b09a8e22a799).
 Earlier explanations are available in Git history.
 
-Character decoding now reads a Unicode code point. L-prefixed literals keep
-the signed 32-bit value; ordinary character literals truncate it to a signed
-byte afterward. Escape decoding retains its integer value until that choice
-is made, so a wide hexadecimal escape can represent more than one byte.
-String numeric escapes continue to store only their low byte.
+u-prefixed character literals now carry an unsigned-short type and the low
+sixteen bits of the decoded code point. sizeof(u'a') is 2. The full source
+spelling remains one token, so macro stringizing keeps the prefix. Ordinary
+and L-prefixed literals retain their respective signed-byte and int behavior.
 
 ```sh
 cat > /tmp/lesson.c <<'C'
-int main(void){return L'β'-904;}
+int main(void){return u'β'-904;}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -19,13 +18,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Beta's code point is 946; the assembly loads that immediate and subtracts
-904. Tests cover Greek, Japanese, emoji, large hexadecimal escapes, four-byte
-literal types, ordinary signed-byte truncation, universal escapes and original
-fixtures. Python source is already decoded as strict UTF-8, so ord replaces
-manual decode_utf8. It rejects malformed UTF-8 during input decoding; diagnostic
-positions count characters. L'\xff' is now positive 255, intentionally advancing
-beyond the earlier placeholder L-prefix behavior.
+The unsigned-short value 946 is promoted for subtraction, leaving 42 in rax.
+Tests check ASCII, Greek, Japanese, hexadecimal limits, type size, unsigned
+shift, source stringizing and original fixtures. This historical commit calls
+the syntax UTF-16, but truncates a supplementary code point rather than emitting
+a surrogate pair: u'🍣' is 62307. Python applies the same explicit 0xffff mask;
+it does not silently advance to later wide-string or surrogate handling.
 
 ## Tests and attribution
 

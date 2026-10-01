@@ -1,6 +1,6 @@
-"""Lesson 271: Allocate dynamic stack storage with alloca.
+"""Lesson 272: Compute variable-length array sizes at runtime.
 
-Based on chibicc commit 77275c546a5340f94ad011cd759ef162bc714ba6.
+Based on chibicc commit e8667afd08ecbf7c9b05beb4ff399959d9722ff9.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -11,10 +11,10 @@ from dataclasses import replace
 
 from common import CompileError, Member, Node, Obj, Scope, Type, VarAttr, VarScope, align_to
 from common import Initializer, InitDesg, Relocation, to_int32
-from constexpr import evaluate_constant, evaluate_initializer, evaluate_float
+from constexpr import evaluate_constant, evaluate_initializer, evaluate_float, is_const_expr
 import math
 import struct
-from type import is_compatible, ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
+from type import vla_of, is_compatible, ty_uchar, ty_ushort, ty_uint, ty_ulong, ty_float, ty_double
 from type import is_numeric, is_flonum
 from type import add_type, array_of, copy_type, enum_type, func_type, is_integer, new_cast, pointer_to, struct_type, ty_void, ty_bool, ty_char, ty_short, ty_int, ty_long
 
@@ -532,11 +532,19 @@ class Parser:
             ty, position = self.typename(position + 2)
             if self.tokens[position].text != ")":
                 raise CompileError(self.tokens[position], "expected ')'")
+            if ty.kind == "VLA":
+                if ty.vla_size is None:
+                    raise CompileError(token, "VLA size is not available")
+                return Node("VAR", var=ty.vla_size, tok=token), position + 1
             return Node("NUM", value=ty.size, tok=token, ty=ty_ulong), position + 1
 
         if token.text == "sizeof":
             operand, position = self.unary(position + 1)
             add_type(operand)
+            if operand.ty.kind == "VLA":
+                if operand.ty.vla_size is None:
+                    raise CompileError(token, "VLA size is not available")
+                return Node("VAR", var=operand.ty.vla_size, tok=token), position
             return Node("NUM", value=operand.ty.size, tok=token, ty=ty_ulong), position
 
         if (token.text == "_Alignof" and self.tokens[position + 1].text == "("
@@ -991,11 +999,13 @@ class Parser:
         if self.tokens[position].text == "]":
             ty, position = self.type_suffix(position + 1, ty)
             return array_of(ty, -1), position
-        length, position = self.const_expr(position)
+        length, position = self.conditional(position)
         if self.tokens[position].text != "]":
             raise CompileError(self.tokens[position], "expected ']'")
         ty, position = self.type_suffix(position + 1, ty)
-        return array_of(ty, to_int32(length)), position
+        if ty.kind == "VLA" or not is_const_expr(length):
+            return vla_of(ty, length), position
+        return array_of(ty, to_int32(evaluate_constant(length))), position
 
     # type-suffix = "(" func-params | "[" array-dimensions | empty
     def type_suffix(self, position, ty):
@@ -1117,6 +1127,25 @@ class Parser:
             self.scopes[-1].tags[tag.text] = ty
         return ty, self.consume_end(position)
 
+    def compute_vla_size(self, ty, token):
+        computed = self.compute_vla_size(ty.base, token) if ty.base is not None else None
+        if ty.kind != "VLA":
+            return computed
+        if ty.base.kind == "VLA":
+            base_size = Node("VAR", var=ty.base.vla_size, tok=token)
+        else:
+            base_size = Node("NUM", value=ty.base.size, tok=token)
+        ty.vla_size = self.new_lvar("", ty_ulong)
+        value = Node("*", ty.vla_len, base_size, tok=token)
+        assignment = Node("ASSIGN", Node("VAR", var=ty.vla_size, tok=token), value, tok=token)
+        return Node("COMMA", computed, assignment, tok=token) if computed is not None else assignment
+
+    def new_alloca(self, size):
+        add_type(size)
+        builtin = self.builtin_alloca
+        return Node("FUNCALL", lhs=Node("VAR", var=builtin, tok=size.tok),
+                    args=[size], func_ty=builtin.ty, ty=builtin.ty.return_ty, tok=size.tok)
+
     # declaration = declspec (declarator ("=" assign)?
     #                        ("," declarator ("=" assign)?)*)? ";"
     def declaration(self, position, basety, attr=None):
@@ -1138,6 +1167,17 @@ class Parser:
                 self.push_scope(ty.name.text).var = var
                 if self.tokens[position].text == "=":
                     position = self.gvar_initializer(position + 1, var)
+                continue
+            computed = self.compute_vla_size(ty, self.tokens[position])
+            if computed is not None:
+                statements.append(Node("EXPR_STMT", lhs=computed, tok=self.tokens[position]))
+            if ty.kind == "VLA":
+                if self.tokens[position].text == "=":
+                    raise CompileError(self.tokens[position], "variable-sized object may not be initialized")
+                var = self.new_lvar(ty.name.text, ty)
+                size = Node("VAR", var=ty.vla_size, tok=ty.name)
+                expression = Node("ASSIGN", Node("VAR", var=var, tok=ty.name), self.new_alloca(size), tok=ty.name)
+                statements.append(Node("EXPR_STMT", lhs=expression, tok=ty.name))
                 continue
             var = self.new_lvar(ty.name.text, ty)
             if attr is not None and attr.align:
@@ -1640,6 +1680,7 @@ class Parser:
         builtin_ty.params = [copy_type(ty_int)]
         builtin = self.new_gvar("alloca", builtin_ty)
         builtin.is_definition = False
+        self.builtin_alloca = builtin
         self.globals = []  # Retain the builtin binding without emitting an object.
         position = 0
         while self.tokens[position].kind != "EOF":

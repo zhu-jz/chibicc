@@ -87,6 +87,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_vla_sizes(self):
+        for source, expected in [
+            ('int main(void){int n=5;int x[n];n=9;return sizeof(x);}', 20),
+            ('int main(void){int m=5,n=8;int x[m+1][n*2];return sizeof(x)==384?42:0;}', 42),
+            ('int main(void){char n=10;int (*x)[n][n+2];return sizeof(*x)==480&&sizeof(**x)==48&&sizeof(x)==8?42:0;}', 42),
+            ('int main(void){int n=3;int x[5][n];return sizeof(x)==60&&sizeof(*x)==12?42:0;}', 42),
+            ('int main(void){int n=3;int x[n][5];return sizeof(x)==60&&sizeof(*x)==20?42:0;}', 42),
+            ('int main(void){int n=4;int x[++n];return n==5&&sizeof(x)==20?42:0;}', 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        result = compile_program('int main(void){int n=3;int x[n]={1};return 0;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('variable-sized object may not be initialized', result.stderr)
+
     def test_builtin_alloca(self):
         for source, expected in [
             ('int main(void){char *p=alloca(3);p[0]=12;p[2]=30;return p[0]+p[2];}', 42),
@@ -2586,7 +2600,6 @@ int main(void){return 42;}
         self.assertIn("  mov $7, %rax\n", assembly)
         self.assertNotIn("  imul ", assembly)
         for source, message in [
-            ("int main(void){int n=3;int a[n];}", "not a compile-time constant"),
             ("int f();enum{N=f()};", "not a compile-time constant"),
             ("enum{N=1/0};", "division by zero in constant expression"),
             ("enum{N=1<<64};", "invalid shift count in constant expression"),

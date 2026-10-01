@@ -87,6 +87,8 @@ class Type:
     params: list["Type"] = field(default_factory=list)
     size: int = 0
     array_len: int = 0
+    vla_len: Optional["Node"] = field(default=None, compare=False)
+    vla_size: Optional["Obj"] = field(default=None, compare=False, repr=False)
     members: list["Member"] = field(default_factory=list)
     align: int = 0
     is_flexible: bool = False

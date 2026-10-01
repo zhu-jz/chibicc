@@ -1,35 +1,33 @@
-# Lesson 271: Allocate dynamic stack storage with alloca
+# Lesson 272: Compute variable-length array sizes at runtime
 
-Original chibicc commit: [`77275c546a5340f94ad011cd759ef162bc714ba6`](https://github.com/rui314/chibicc/commit/77275c546a5340f94ad011cd759ef162bc714ba6).
+Original chibicc commit: [`e8667afd08ecbf7c9b05beb4ff399959d9722ff9`](https://github.com/rui314/chibicc/commit/e8667afd08ecbf7c9b05beb4ff399959d9722ff9).
 Earlier explanations are available in Git history.
 
-The parser predeclares alloca(int) returning void*. Every function now keeps a
-bookkeeping pointer in a local named __alloca_size__. A direct
-alloca call generates stack-allocation code instead of a call to a library symbol.
-Requests round up to 16 bytes, preserving stack alignment for subsequent calls.
+Nonconstant array bounds now create VLA types containing a length expression and
+an object holding their computed byte size. Local declarations compute sizes
+from the innermost dimension outward, save them once and allocate storage with
+the previous alloca machinery. A pointer to a VLA computes the pointed-to size
+without allocating that array. sizeof uses the saved size rather than re-reading
+a bound variable that may have changed.
 
 ```sh
-printf 'int main(void){char *p=alloca(3);p[0]=12;p[2]=30;return p[0]+p[2];}\n' > /tmp/lesson.c
+printf 'int main(void){int n=5;int x[n];n=9;return sizeof(x)+22;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The prologue saves the bottom of the fixed frame. Allocation lowers rsp and moves
-any temporary expression bytes to their new stack position, then lowers the
-saved bottom and returns that address in rax. Stores into the allocated memory
-hold 12 and 30; their sum returns 42. The normal epilogue restores rsp from rbp,
-releasing all allocations at function return. Storage does not survive that return.
-Tests cover alignment, repeated allocations, a pending arithmetic temporary,
-alloca inside another call's arguments, single evaluation, separate functions,
-copy-loop assembly and the original alloca.c fixture.
-Python stores the bookkeeping Obj reference explicitly; C uses a pointer field.
-The original int parameter and 32-bit alignment mask are retained, so arbitrary
-64-bit or negative allocation sizes are not promised. Every function's fixed
-frame now includes the bookkeeping slot, even if it never calls alloca.
-Older declaration-focused tests exclude that slot when inspecting source locals;
-frame-size and assembly snapshots include its actual storage and initialization.
+Assembly multiplies 5 by the four-byte int element size, saves 20, allocates the
+array and later loads that saved 20 for sizeof. Adding 22 returns 42 even after
+n becomes 9. Tests cover multidimensional sizes, mixed fixed/runtime dimensions,
+pointers to VLAs, single evaluation and rejected initialization, plus original vla.c.
+Python omits no-op sizing statements for ordinary declarations, while C emits
+NULL_EXPR nodes. VLA types still have an eight-byte local pointer representation.
+This step implements sizeof support; dynamic indexing is not extended ahead.
+The original constant-expression classifier omits remainder and tests only the
+right operand of comma expressions; those historical rules remain. If a fresh
+VLA type has no computed size, Python reports an error instead of C's null access.
 
 ## Tests and attribution
 

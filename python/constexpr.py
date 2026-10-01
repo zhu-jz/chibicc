@@ -67,6 +67,22 @@ def evaluate_address(node):
     raise CompileError(node.tok, "invalid initializer")
 
 
+def is_const_expr(node):
+    add_type(node)
+    if node.kind in ("+", "-", "*", "/", "&", "|", "^", "<<", ">>",
+                     "==", "!=", "<", "<=", "LOGAND", "LOGOR"):
+        return is_const_expr(node.lhs) and is_const_expr(node.rhs)
+    if node.kind == "COND":
+        if not is_const_expr(node.cond):
+            return False
+        return is_const_expr(node.then if evaluate_constant(node.cond) else node.els)
+    if node.kind == "COMMA":
+        return is_const_expr(node.rhs)
+    if node.kind in ("NEG", "NOT", "BITNOT", "CAST"):
+        return is_const_expr(node.lhs)
+    return node.kind == "NUM"
+
+
 def evaluate_constant(node):
     add_type(node)
     if is_flonum(node.ty):

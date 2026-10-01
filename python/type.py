@@ -78,6 +78,10 @@ def array_of(base, length):
     return Type("ARRAY", base, size=base.size * length, array_len=length, align=base.align)
 
 
+def vla_of(base, expression):
+    return Type("VLA", base, size=8, align=8, vla_len=expression)
+
+
 def enum_type():
     return Type("ENUM", size=4, align=4)
 
@@ -146,7 +150,7 @@ def add_type(node):
         node.lhs, node.rhs = usual_arith_conv(node.lhs, node.rhs)
         node.ty = ty_int
     elif node.kind == "FUNCALL":
-        node.ty = ty_long
+        node.ty = node.func_ty.return_ty
     elif node.kind in ("NOT", "LOGAND", "LOGOR"):
         node.ty = ty_int
     elif node.kind in ("BITNOT", "<<", ">>"):

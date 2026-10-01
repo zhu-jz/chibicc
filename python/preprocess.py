@@ -19,6 +19,12 @@ class CondIncl:
     context: str = "THEN"
 
 
+@dataclass
+class Macro:
+    name: str
+    body: list
+
+
 def skip_line(tokens, position):
     if not tokens[position].at_bol:
         warn_tok(tokens[position], "extra token")
@@ -72,13 +78,30 @@ def eval_const_expr(tokens, position):
     return value, position
 
 
+def find_macro(token, macros):
+    if token.kind == "IDENT":
+        return macros.get(token.text)
+    return None
+
+
+def expand_macro(tokens, position, macros):
+    macro = find_macro(tokens[position], macros)
+    if macro is None:
+        return False
+    tokens[position:position + 1] = [replace(token) for token in macro.body[:-1]]
+    return True
+
+
 def preprocess(tokens, files=None):
     if files is None:
         files = []
     result = []
     conditions = []
+    macros = {}
     position = 0
     while tokens[position].kind != "EOF":
+        if expand_macro(tokens, position, macros):
+            continue
         token = tokens[position]
         if is_hash(token):
             position += 1
@@ -99,6 +122,13 @@ def preprocess(tokens, files=None):
                 rest = skip_line(tokens, position + 2)
                 tokens[position - 1:rest] = [replace(tok) for tok in included[:-1]]
                 position -= 1
+                continue
+            if tokens[position].text == "define":
+                name = tokens[position + 1]
+                if name.kind != "IDENT":
+                    raise CompileError(name, "macro name must be an identifier")
+                body, position = copy_line(tokens, position + 2)
+                macros[name.text] = Macro(name.text, body)
                 continue
             if tokens[position].text == "if":
                 value, position = eval_const_expr(tokens, position)

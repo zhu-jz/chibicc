@@ -1,6 +1,6 @@
-"""Lesson 166: Add #elif.
+"""Lesson 167: Add object-like macros.
 
-Based on chibicc commit e7a1857a31fc0c0012773c021639a6297f5b208f.
+Based on chibicc commit 97d33ad3bdc21c26356253046902d4b166bd115b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

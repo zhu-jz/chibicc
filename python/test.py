@@ -72,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_object_like_macros(self):
+        self.assert_program_returns('#define VALUE 3+4\nint main(void){return VALUE*5;}\n', 23)
+        self.assert_program_returns('#define VALUE 3\n#define VALUE 42\nint main(void){return VALUE;}\n', 42)
+        self.assert_program_returns('#define EMPTY\n#define FIRST SECOND\n#define SECOND 7\nint main(void){EMPTY return FIRST;}\n', 7)
+        self.assert_program_returns('#define if 42\nint main(void){return if;}\n', 42)
+        self.assert_program_returns('#define NAME 42\nint main(void){return sizeof("NAME");}\n', 5)
+        self.assert_program_returns('#if 0\n#define VALUE 7\n#endif\nint main(void){int VALUE=11;return VALUE;}\n', 11)
+        result = compile_program('#define 123 42\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('macro name must be an identifier', result.stderr)
+        self.assertEqual([t.text for t in tokenize('#define VALUE 3\nVALUE\n')[:-1]], ['3'])
+        self.assertEqual(tokenize('VALUE\n')[0].text, 'VALUE')
+
     def test_elif_directives(self):
         self.assert_program_returns('''#if 0
 invalid

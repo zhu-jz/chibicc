@@ -1,30 +1,32 @@
-# Lesson 166: Add #elif
+# Lesson 167: Add object-like macros
 
-Original chibicc commit: [`e7a1857a31fc0c0012773c021639a6297f5b208f`](https://github.com/rui314/chibicc/commit/e7a1857a31fc0c0012773c021639a6297f5b208f).
+Original chibicc commit: [`97d33ad3bdc21c26356253046902d4b166bd115b`](https://github.com/rui314/chibicc/commit/97d33ad3bdc21c26356253046902d4b166bd115b).
 Earlier explanations are available in Git history.
 
-`#elif` extends an open conditional with another constant expression. It is
-evaluated only when no earlier branch was included. The first successful
-branch wins; subsequent expressions and bodies are skipped, including invalid
-expressions in those discarded branches. `#elif` after `#else` is an error.
+`#define NAME replacement` stores a line of replacement tokens. Encountering
+that identifier copies its body into the token stream and resumes scanning,
+so replacements can contain other macro names. A dictionary records the most
+recent definition, replacing the original C linked-list search. Definitions
+share state across included files but are reset for each compilation.
 
-The conditional stack now distinguishes its first branch, an `#elif` branch,
-and `#else`. Skipping stops at a sibling `#elif`, `#else`, or `#endif`, while
-nested conditionals are passed completely. Python uses explicit assignments
-and branching in place of the C output-pointer expression.
+Expansion is token substitution: strings are untouched, empty bodies remove
+the name, and operator precedence is determined after substitution. Conversion
+of identifiers to keywords still happens last, allowing a keyword spelling to
+be a macro name. This historical step has no protection against recursive
+macro definitions, and does not expand macros in `#if` expressions yet.
 
 ```sh
-printf '#if 0\n#elif 2+3\nint main(void){return 42;}\n#else\ninvalid\n#endif\n' > /tmp/lesson.c
+printf '#define VALUE 3+4\nint main(void){return VALUE*5;}\n' > /tmp/lesson.c
+python3 python/main.py -E /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 23
 ```
 
-The selected `main` loads 42 into `%rax` and returns through the usual frame
-cleanup. Selection happens before parsing, so discarded code emits no assembly.
-Tests cover a chain of alternatives, skipped expressions, fallback branches,
-diagnostics, and the unchanged original macro fixture.
+After expansion the parser sees `3+4*5`. Assembly multiplies 4 by 5, adds 3,
+leaves 23 in `%rax`, and returns. Tests cover precedence, replacement, chained
+and empty macros, strings, keyword spellings, discarded definitions and errors.
 
 ## Tests and attribution
 

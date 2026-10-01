@@ -1097,9 +1097,9 @@ class Parser:
             index, position = self.array_designator(position, init.ty)
             position = self.designation(position, init.children[index])
             return self.array_initializer_without_braces(position, init, index + 1)
-        if self.tokens[position].text != "=":
-            raise CompileError(self.tokens[position], "expected '='")
-        return self.initializer2(position + 1, init)
+        if self.tokens[position].text == "=":
+            position += 1
+        return self.initializer2(position, init)
 
     def count_array_init_elements(self, position, ty):
         dummy = new_initializer(ty.base, is_flexible=True)

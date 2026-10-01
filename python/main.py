@@ -1,6 +1,6 @@
-"""Lesson 240: Infer array bounds from designated elements.
+"""Lesson 241: Allow GNU designators without an equals sign.
 
-Based on chibicc commit 835cd24b2c4598ee784d8bfd1c0427bfa948b947.
+Based on chibicc commit 691c4fac1529eaf1d825ca6093800912a4df3c91.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

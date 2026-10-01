@@ -1,29 +1,27 @@
-# Lesson 240: Infer array bounds from designated elements
+# Lesson 241: Allow GNU designators without an equals sign
 
-Original chibicc commit: [`835cd24b2c4598ee784d8bfd1c0427bfa948b947`](https://github.com/rui314/chibicc/commit/835cd24b2c4598ee784d8bfd1c0427bfa948b947).
+Original chibicc commit: [`691c4fac1529eaf1d825ca6093800912a4df3c91`](https://github.com/rui314/chibicc/commit/691c4fac1529eaf1d825ca6093800912a4df3c91).
 Earlier explanations are available in Git history.
 
-The array-bound counting pass now tracks the initializer cursor and its
-maximum position. A designator can move backward without shrinking the bound,
-or forward beyond the number of explicit values. Nested initializer parsing
-handles the continuation needed to count rows. The completed array is then
-initialized by the existing designator pass.
+The GNU initializer extension now allows [index] value as well as [index]=value.
+Designation consumes = when present, then uses the existing initializer parser.
+Nested designators and omitted array bounds follow the same cursor rules.
+This changes syntax acceptance; it adds no new initializer tree or codegen path.
 
 ```sh
-printf 'int main(void){int x[]={[0]=12,[3]=30};return x[0]+x[3]+x[1]+x[2];}\n' > /tmp/lesson.c
+printf 'int main(void){return ((int[10]){[3]42})[3];}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The inferred bound is four; zeroing fills the two gaps and indexed stores
-supply 12 and 30. Tests check forward and backward designators, computed
-indices, inferred rows, global size and original fixtures. Python uses a
-dummy initializer plus local index/maximum variables where C uses output
-pointers. The original redundantly repeats its flexible-array check; Python
-keeps one equivalent check. Range syntax is recognized only by this counting
-pass at this step; range assignment has not yet been added.
+The compound literal is zeroed, its element three is assigned 42, and the
+indexed load returns that value. Tests cover compound literals, globals with
+inferred bounds, nested arrays, continuation values and original fixtures.
+Python advances its token index conditionally where C advances a token pointer.
+The optional equals sign follows the original GNU extension rather than strict
+standard C designated-initializer syntax.
 
 ## Tests and attribution
 

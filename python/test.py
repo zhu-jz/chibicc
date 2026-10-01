@@ -80,6 +80,13 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_designators_without_equals(self):
+        for source in ('int main(void){return ((int[10]){[3]42})[3];}',
+                       'int x[]={[3]42};int main(void){return x[3]+x[0];}',
+                       'int main(void){int x[2][3]={[1][2]42};return x[1][2];}',
+                       'int main(void){int x[4]={[1]12,30};return x[1]+x[2];}'):
+            self.assert_program_returns(source,42)
+
     def test_inferred_designated_array_bounds(self):
         for source,expected in [
             ('int main(void){char x[]={[10-3]=1,2,3};return sizeof(x);}',10),

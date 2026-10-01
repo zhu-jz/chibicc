@@ -664,6 +664,8 @@ class CodeGenerator:
                 gp_count = len(function.params) - fp_count
                 self.assembly.extend((f"  movl ${gp_count * 8}, {offset}(%rbp)",
                                       f"  movl ${48 + fp_count * 8}, {offset + 4}(%rbp)",
+                                      f"  movq %rbp, {offset + 8}(%rbp)",
+                                      f"  addq $16, {offset + 8}(%rbp)",
                                       f"  movq %rbp, {offset + 16}(%rbp)",
                                       f"  addq ${offset + 24}, {offset + 16}(%rbp)"))
                 for index, register in enumerate(ARGREG):

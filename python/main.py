@@ -1,6 +1,6 @@
-"""Lesson 203: Define functions returning aggregates.
+"""Lesson 204: Read variadic arguments from the stack.
 
-Based on chibicc commit d7bad961146b9f2fd918f05fd59a50f3f65bf325.
+Based on chibicc commit b6d3cd00df7d0496fca2af2c34e72ab3e6af4028.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

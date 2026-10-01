@@ -77,6 +77,17 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_variadic_stack_arguments(self):
+        for spelling in ('int', 'double'):
+            source = '#include <stdarg.h>\n' + f'double sum(int n,...){{va_list ap;va_start(ap,n);double s=0;for(int i=0;i<n;i++)s+=va_arg(ap,{spelling});va_end(ap);return s;}}int main(void){{return sum(10,1{ ".0" if spelling == "double" else ""},2,3,4,5,6,7,8,9,10);}}'
+            if spelling == 'double':
+                source = source.replace('2,3,4,5,6,7,8,9,10)', '2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0)')
+            self.assert_program_returns(source, 55)
+        source = '#include <stdarg.h>\nstruct T{long a,b,c;};int f(int n,...){va_list ap;va_start(ap,n);struct T x=va_arg(ap,struct T);return x.a+x.b+x.c;}int main(void){struct T x={12,15,15};return f(1,x);}'
+        self.assert_program_returns(source, 42)
+        assembly = compile_program('int f(int n,...){return n;}').stdout
+        self.assertIn('  addq $16, ', assembly)
+
     def test_aggregate_return_definitions(self):
         for declaration, initializer, expression in [
             ('struct T{int a;double b;};', '{12,30}', 'f().a+f().b'),

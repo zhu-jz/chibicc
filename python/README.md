@@ -1,29 +1,28 @@
-# Lesson 203: Define functions returning aggregates
+# Lesson 204: Read variadic arguments from the stack
 
-Original chibicc commit: [`d7bad961146b9f2fd918f05fd59a50f3f65bf325`](https://github.com/rui314/chibicc/commit/d7bad961146b9f2fd918f05fd59a50f3f65bf325).
+Original chibicc commit: [`b6d3cd00df7d0496fca2af2c34e72ab3e6af4028`](https://github.com/rui314/chibicc/commit/b6d3cd00df7d0496fca2af2c34e72ab3e6af4028).
 Earlier explanations are available in Git history.
 
-Return statements now preserve aggregate addresses instead of casting them.
-For small results the compiler packs bytes into rax/rdx and loads floating
-chunks into xmm0/xmm1. For large results the definition gains an anonymous
-first pointer parameter, and the return statement copies bytes to that buffer.
-Python keeps this hidden parameter in the ordinary parameter list.
+Variadic prologues now initialize overflow_arg_area to rbp+16. The bundled
+stdarg.h checks exhausted GP and floating save areas and reads subsequent
+values from that pointer, rounding each advance to eight bytes. Large values
+are read directly from memory. The header is copied verbatim from this commit.
 
 ```sh
-printf 'struct T{int a;double b;};struct T f(void){return (struct T){12,30};}int main(void){return f().a+f().b;}\n' > /tmp/lesson.c
+printf '#include <stdarg.h>\nint sum(int n,...){va_list ap;va_start(ap,n);int s=0;for(int i=0;i<n;i++)s+=va_arg(ap,int);return s;}int main(void){return sum(7,1,2,3,4,5,6,21);}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The function packs the integer into rax and loads the double into xmm0. Main
-copies those return registers into a local result buffer and reads its members.
-Tests cover both mixed orders, floating chunks, tiny and large structs, unions,
-GCC callers, hidden-parameter pressure and the original aggregate fixtures.
-We preserve the original's eight-byte load for a floating second chunk, and
-its large-return rax still points to the source rather than the destination;
-these historical ABI limitations await their original fixes.
+The first five unnamed integers use saved GP registers; the remaining two
+come from the incoming stack. The assembly initializes the pointer with movq
+and addq $16, then the C header's generated code updates it for each va_arg.
+Tests cover ten integers, ten doubles, a stack aggregate, and the original
+mixed twenty-argument example. We retain this commit's compact eight-byte
+floating saves, fixed overflow starting point, and header alignment expression;
+full platform va_list interoperability is not claimed at this historical step.
 
 ## Tests and attribution
 

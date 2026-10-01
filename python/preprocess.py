@@ -26,6 +26,7 @@ class Macro:
     is_objlike: bool = True
     params: list[str] = field(default_factory=list)
     handler: object = None
+    is_variadic: bool = False
 
 
 def skip_line(tokens, position):
@@ -102,10 +103,11 @@ def read_macro_definition(tokens, position, macros):
     position += 1
     is_objlike = tokens[position].has_space or tokens[position].text != "("
     params = []
+    is_variadic = False
     if not is_objlike:
-        params, position = read_macro_params(tokens, position + 1)
+        params, is_variadic, position = read_macro_params(tokens, position + 1)
     body, position = copy_line(tokens, position)
-    macros[name.text] = Macro(name.text, body, is_objlike, params)
+    macros[name.text] = Macro(name.text, body, is_objlike, params, is_variadic=is_variadic)
     return position
 
 
@@ -116,17 +118,26 @@ def read_macro_params(tokens, position):
             if tokens[position].text != ",":
                 raise CompileError(tokens[position], "expected ','")
             position += 1
+        if tokens[position].text == "...":
+            position += 1
+            if tokens[position].text != ")":
+                raise CompileError(tokens[position], "expected ')'")
+            return params, True, position + 1
         if tokens[position].kind != "IDENT":
             raise CompileError(tokens[position], "expected an identifier")
         params.append(tokens[position].text)
         position += 1
-    return params, position + 1
+    return params, False, position + 1
 
 
-def read_macro_arg_one(tokens, position):
+def read_macro_arg_one(tokens, position, read_rest=False):
     argument = []
     level = 0
-    while level > 0 or tokens[position].text not in (",", ")"):
+    while True:
+        if level == 0 and tokens[position].text == ")":
+            break
+        if level == 0 and not read_rest and tokens[position].text == ",":
+            break
         if tokens[position].kind == "EOF":
             raise CompileError(tokens[position], "premature end of input")
         if tokens[position].text == "(":
@@ -139,7 +150,7 @@ def read_macro_arg_one(tokens, position):
     return argument, position
 
 
-def read_macro_args(tokens, position, params):
+def read_macro_args(tokens, position, params, is_variadic=False):
     position += 2
     args = {}
     for index, name in enumerate(params):
@@ -149,6 +160,16 @@ def read_macro_args(tokens, position, params):
             position += 1
         argument, position = read_macro_arg_one(tokens, position)
         args.setdefault(name, argument)
+    if is_variadic:
+        if tokens[position].text == ")":
+            argument = [replace(tokens[position], kind="EOF", text="")]
+        else:
+            if params:
+                if tokens[position].text != ",":
+                    raise CompileError(tokens[position], "expected ','")
+                position += 1
+            argument, position = read_macro_arg_one(tokens, position, read_rest=True)
+        args["__VA_ARGS__"] = argument
     if tokens[position].text != ")":
         raise CompileError(tokens[position], "expected ')'")
     return args, position + 1
@@ -298,7 +319,7 @@ def expand_macro(tokens, position, files, macros, conditions, include_paths):
     if not macro.is_objlike:
         if tokens[position + 1].text != "(":
             return False
-        args, rest = read_macro_args(tokens, position, macro.params)
+        args, rest = read_macro_args(tokens, position, macro.params, macro.is_variadic)
         hideset = (token.hideset & tokens[rest - 1].hideset) | {macro.name}
         body = subst(macro.body, args, files, macros, conditions, include_paths)
         body = add_hideset(body[:-1], hideset)

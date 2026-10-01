@@ -1,6 +1,6 @@
-"""Lesson 189: Add __FILE__ and __LINE__.
+"""Lesson 190: Add variadic macros.
 
-Based on chibicc commit 6f17071885b98ac5dcdcc0b233ff204150a6826c.
+Based on chibicc commit dc01f94900a9cabf40bb6ec2c5be8b4665c30eda.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -1,32 +1,34 @@
-# Lesson 189: Add __FILE__ and __LINE__
+# Lesson 190: Add variadic macros
 
-Original chibicc commit: [`6f17071885b98ac5dcdcc0b233ff204150a6826c`](https://github.com/rui314/chibicc/commit/6f17071885b98ac5dcdcc0b233ff204150a6826c).
+Original chibicc commit: [`dc01f94900a9cabf40bb6ec2c5be8b4665c30eda`](https://github.com/rui314/chibicc/commit/dc01f94900a9cabf40bb6ec2c5be8b4665c30eda).
 Earlier explanations are available in Git history.
 
-Two dynamic predefined macros now create tokens from the source location.
-`__FILE__` becomes a quoted filename and `__LINE__` becomes an integer. Unlike
-fixed replacement bodies, their handlers inspect each invocation separately.
+A function-like macro parameter list can now end in `...`. After its fixed
+arguments, the reader collects the remaining tokens through the invocation's
+closing parenthesis, preserving commas at the outer level. It names that token
+sequence `__VA_ARGS__` for ordinary substitution, stringizing or pasting.
 
-Every ordinary macro replacement token records the invoking token as its
-origin. Dynamic handlers follow that chain to the original call location, so
-`#define LINE() __LINE__` reports where LINE is used, including when defined
-in a header and invoked in its caller. Python uses callable fields and token
-references in place of C function pointers and linked origin pointers. Raw
-in-memory tokenizer tests use '-' when no filename exists.
+Parenthesis depth still protects nested calls. The variadic sequence may be
+empty, including when a fixed parameter is supplied without an additional
+comma. No special comma removal is introduced. Python reuses its argument
+dictionary and adds a boolean field to each macro, matching the original state.
 
 ```sh
-printf '#define LINE() __LINE__\n\nint main(void){return LINE();}\n' > /tmp/lesson.c
-python3 python/main.py -E /tmp/lesson.c
+cat > /tmp/lesson.c <<'C'
+#define CALL(...) sum(__VA_ARGS__)
+int sum(int x,int y){return x+y;}
+int main(void){return CALL(7,35);}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 3
+echo $?  # 42
 ```
 
-Expansion supplies the number 3; assembly loads it into `%rax` and returns.
-Tests check direct and chained expansions, header versus caller filenames and
-line numbers, and executable results. Upstream fixtures run from the Python
-directory with paths such as test/macro.c, matching their filename assertions.
+Expansion leaves a real call to sum. Assembly passes values in `%rdi` and
+`%rsi`, calls through the function address in `%rax`, and returns its result.
+Tests cover empty sequences, variadic-only and mixed parameter lists, forwarding
+commas, nested calls, stringizing and an ellipsis in the wrong position.
 
 ## Tests and attribution
 

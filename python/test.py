@@ -73,6 +73,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_variadic_macros(self):
+        self.assert_program_returns('#define V(...) 42\nint main(void){return V();}\n', 42)
+        self.assert_program_returns('#define V(...) __VA_ARGS__\nint main(void){return V() 42;}\n', 42)
+        self.assert_program_returns('#define V(...) sum(__VA_ARGS__)\nint sum(int x,int y){return x+y;}int main(void){return V(7,35);}\n', 42)
+        self.assert_program_returns('#define V(x,...) sum(x,__VA_ARGS__)\nint sum(int x,int y,int z){return x+y+z;}int main(void){return V(7,11,24);}\n', 42)
+        self.assert_program_returns('#define V(x,...) x\nint main(void){return V(42);}\n', 42)
+        self.assert_program_returns('#define V(...) __VA_ARGS__\n#define ADD(x,y) (x)+(y)\nint main(void){return V(ADD(7,35));}\n', 42)
+        self.assertEqual(tokenize('#define V(...) #__VA_ARGS__\nV(1, 2)\n')[0].str, b'1, 2\0')
+        result = compile_program('#define V(...,x) x\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected ')'", result.stderr)
+
     def test_file_and_line_macros(self):
         self.assert_program_returns('#define LINE __LINE__\n#define NEXT LINE\nint main(void){return NEXT;}\n', 3)
         self.assert_program_returns('#define LINE() __LINE__\n\nint main(void){return LINE();}\n', 3)

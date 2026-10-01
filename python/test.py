@@ -72,6 +72,31 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_extra_include_token_warning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            header = Path(directory) / "answer.h"
+            source = Path(directory) / "main.c"
+            header.write_text("int answer(void){return 42;}\n")
+            source.write_text('#include "answer.h" int extra;\nint main(void){return answer();}\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("^ extra token\n", result.stderr)
+            self.assertTrue(result.stderr.startswith(f"{source}:1:"), result.stderr)
+            self.assertIn("  .globl extra\n", result.stdout)
+            assembly = Path(directory) / "program.s"
+            assembly.write_text(result.stdout)
+            executable = Path(directory) / "program"
+            subprocess.run(["gcc", "-static", "-Wl,-z,noexecstack", "-o", str(executable), str(assembly)], check=True)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            source.write_text('#include "answer.h" junk\nint main(void){return answer();}\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("extra token", result.stderr)
+            source.write_text('#include "answer.h"\nint main(void){return answer();}\n')
+            result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+
     def test_quoted_include_files(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "main.c"

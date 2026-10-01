@@ -24,6 +24,18 @@ class File:
     contents: str
 
 
+def format_diagnostic(file, position, message, line_no=None):
+    source = file.contents
+    line_start = source.rfind("\n", 0, position) + 1
+    line_end = source.find("\n", position)
+    if line_end == -1:
+        line_end = len(source)
+    line_no = line_no or source.count("\n", 0, line_start) + 1
+    prefix = f"{file.name}:{line_no}: "
+    caret = " " * (len(prefix) + position - line_start) + "^ " + message
+    return prefix + source[line_start:line_end] + "\n" + caret
+
+
 @dataclass
 class Token:
     kind: str

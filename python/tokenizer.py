@@ -8,7 +8,7 @@ import string
 import re
 import sys
 
-from common import CompileError, Token, File
+from common import CompileError, Token, File, format_diagnostic
 from type import array_of, ty_char, ty_int, ty_long, ty_uint, ty_ulong
 from type import ty_float, ty_double
 
@@ -42,6 +42,13 @@ def tokenize_file(path, files):
     for token in tokens:
         token.file = file
     return tokens
+
+
+def warn_tok(token, message):
+    if token.file is None:
+        print(message, file=sys.stderr)
+    else:
+        print(format_diagnostic(token.file, token.position, message, token.line_no), file=sys.stderr)
 
 
 def read_escaped_char(source, position):

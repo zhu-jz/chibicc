@@ -1,6 +1,6 @@
-"""Lesson 160: Quoted includes and source files.
+"""Lesson 161: Warn about extra include tokens.
 
-Based on chibicc commit d367510fcc1396fa252c4b87439c2f9fcd0abbe7.
+Based on chibicc commit ec149f64d2f5c41a2080c0b4e42e4ef64444b382.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -11,7 +11,7 @@ import tempfile
 import glob
 
 from codegen import codegen
-from common import CompileError
+from common import CompileError, format_diagnostic
 from parse import parse
 from preprocess import preprocess
 from tokenizer import tokenize_file
@@ -109,18 +109,7 @@ def cc1(filename, output_path):
             print(error, file=sys.stderr)
         else:
             file = error.file or files[0]
-            source = file.contents
-            filename = file.name
-            position = error.position
-            line_start = source.rfind("\n", 0, position) + 1
-            line_end = source.find("\n", position)
-            if line_end == -1:
-                line_end = len(source)
-            line_number = error.line_no or source.count("\n", 0, line_start) + 1
-            prefix = f"{filename}:{line_number}: "
-            print(prefix + source[line_start:line_end], file=sys.stderr)
-            print(" " * (len(prefix) + position - line_start) + "^ " + str(error),
-                  file=sys.stderr)
+            print(format_diagnostic(file, error.position, str(error), error.line_no), file=sys.stderr)
         return 1
 
     return 0

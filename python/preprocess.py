@@ -7,8 +7,15 @@ Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 import os
 from dataclasses import replace
 
-from tokenizer import convert_keywords, tokenize_file
+from tokenizer import convert_keywords, tokenize_file, warn_tok
 from common import CompileError
+
+
+def skip_line(tokens, position):
+    if not tokens[position].at_bol:
+        warn_tok(tokens[position], "extra token")
+    # The original inverted loop never advances after this warning.
+    return position
 
 
 def preprocess(tokens, files=None):
@@ -34,7 +41,8 @@ def preprocess(tokens, files=None):
                     if error.position is None:
                         raise CompileError(filename, str(error)) from None
                     raise
-                tokens[position - 1:position + 2] = [replace(tok) for tok in included[:-1]]
+                rest = skip_line(tokens, position + 2)
+                tokens[position - 1:rest] = [replace(tok) for tok in included[:-1]]
                 position -= 1
                 continue
             if tokens[position].at_bol:

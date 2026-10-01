@@ -61,6 +61,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_parameter_decay(self):
+        self.assert_program_returns("int f(int x){return x+1;}int apply(int fn(int),int x){return fn(x);}int main(void){return apply(f,41);}", 42)
+        self.assert_program_returns("int f(void){return 42;}int apply(int fn(void)){return fn();}int main(void){return apply(f);}", 42)
+        function = parse(tokenize("int apply(int fn(int));"))[0]
+        parameter = function.ty.params[0]
+        self.assertEqual((parameter.kind, parameter.base.kind, parameter.size, parameter.name.text),
+                         ("PTR", "FUNC", 8, "fn"))
+        self.assertIsNotNone(parameter.name_pos)
+        function = parse(tokenize("typedef int F(void);int apply(F);"))[0]
+        self.assertEqual(function.ty.params[0].kind, "PTR")
+        result = compile_program("typedef int F(void);int apply(F){return 0;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("parameter name omitted", result.stderr)
+        self.assertIn("  mov %rdi, -8(%rbp)\n", compile_program("int apply(int fn(void)){return fn();}").stdout)
+
     def test_function_pointer_calls(self):
         for source, expected in [
             ("int f(int x){return x+1;}int main(void){return (f)(41);}", 42),

@@ -824,10 +824,10 @@ class Parser:
                 break
             basety, position = self.declspec(position)
             param, position = self.declarator(position, basety)
-            if param.kind == "ARRAY":
+            if param.kind in ("ARRAY", "FUNC"):
                 name = param.name
                 name_pos = param.name_pos
-                param = pointer_to(param.base)
+                param = pointer_to(param.base if param.kind == "ARRAY" else param)
                 param.name = name
                 param.name_pos = name_pos
             params.append(copy_type(param))

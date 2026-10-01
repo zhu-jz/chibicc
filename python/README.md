@@ -1,37 +1,34 @@
-# Lesson 151: Function pointers and indirect calls
+# Lesson 152: Function parameter adjustment
 
-Original chibicc commit: [`d06a8ac6e6120861c9c79acb15b9a18693e4ee47`](https://github.com/rui314/chibicc/commit/d06a8ac6e6120861c9c79acb15b9a18693e4ee47).
+Original chibicc commit: [`c5953ba1328fa86f906406843eb9f23cd596ef04`](https://github.com/rui314/chibicc/commit/c5953ba1328fa86f906406843eb9f23cd596ef04).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-A call is now a postfix operation on any function or function-pointer expression.
-Its tree stores the callee in lhs rather than storing a function-name string.
-This supports parenthesized function names, address expressions, pointer variables,
-struct members, and functions returning function pointers. Argument conversions
-and register classification still follow the callee's function type.
+A parameter declared with function type now becomes a pointer to that function.
+For example, int apply(int fn(int), int x) stores fn as an eight-byte pointer and
+calls it indirectly. This adjustment happens only in the parameter context;
+function declarations themselves keep their function type.
 
-After saving arguments, the compiler evaluates the callee address and restores
-argument registers, then emits call *%rax. Evaluating a function yields its
-address rather than loading bytes from its code. Defined functions use RIP-relative
-lea; declarations use mov name@GOTPCREL(%rip), letting the linker resolve external
-function addresses. Python uses the same assembly and explicit tree nodes.
+Python extends the existing array-parameter adjustment and preserves both name
+and name_pos. Retaining name_pos gives a readable missing-name error for unnamed
+parameters in definitions instead of a null diagnostic-token failure. Pointer
+argument passing and indirect calls already exist from the preceding lesson.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int add(int x){return x+1;}int main(void){int(*p)(int)=add;return p(41);}\n' > /tmp/lesson151.c
-python3 python/main.py /tmp/lesson151.c > /tmp/lesson151.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson151 /tmp/lesson151.s
-/tmp/lesson151
+printf 'int f(int x){return x+1;}int apply(int fn(int),int x){return fn(x);}int main(void){return apply(f,41);}\n' > /tmp/lesson152.c
+python3 python/main.py /tmp/lesson152.c > /tmp/lesson152.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson152 /tmp/lesson152.s
+/tmp/lesson152
 echo $?
 ```
 
-lea obtains add's address, an assignment stores it in p, and a later load puts
-that address in rax. The argument 41 goes in edi and call *%rax transfers control
-to add. It returns 42; the shell displays that exit status. Tests cover local and
-global pointers, struct members, external functions, address instructions,
-relocations, call alignment, execution, and the original function-pointer examples.
+Main passes f's address in rdi and 41 in esi. apply saves fn as a pointer, loads
+it into rax, and calls it with 41 in edi. The final return value is 42, visible
+as the shell exit status. Tests cover callbacks, adjusted type size and metadata,
+typedef prototypes, missing names, prologue instructions, execution, and upstream.
 
 ## Tests and attribution
 

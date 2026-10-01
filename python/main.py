@@ -1,6 +1,6 @@
-"""Lesson 151: Function pointers and indirect calls.
+"""Lesson 152: Function parameter adjustment.
 
-Based on chibicc commit d06a8ac6e6120861c9c79acb15b9a18693e4ee47.
+Based on chibicc commit c5953ba1328fa86f906406843eb9f23cd596ef04.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

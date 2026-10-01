@@ -1,33 +1,34 @@
-# Lesson 111: Uninitialized globals in BSS
+# Lesson 112: Flexible array member layout
 
-Original chibicc commit: [`3d216e3e06eee7ea3679503867a619c28458e8a7`](https://github.com/rui314/chibicc/commit/3d216e3e06eee7ea3679503867a619c28458e8a7).
+Original chibicc commit: [`824543bb2f2b2e4f445d8c58b32f53bf1eec63ce`](https://github.com/rui314/chibicc/commit/824543bb2f2b2e4f445d8c58b32f53bf1eec63ce).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Uninitialized globals now use the .bss section and .zero directives. The loader
-provides their zero-filled memory without storing all those zero bytes in the
-object file. Globals with explicit initializers use .data, even when their
-initializer evaluates to zero. Linker-resolved pointers still use .data.
+A trailing incomplete array member, as in `struct T{int x;int y[];}`, is now
+converted to a zero-length array before layout. It contributes alignment and
+an offset but no element storage. sizeof(T) therefore describes only the fixed
+part of the object. Other incomplete members are unchanged by this commit.
 
-The Python check uses `init_data is not None`, rather than byte-buffer truthiness,
-matching the distinction between C's null and allocated data pointers. Section
-selection is the only compiler change; expression parsing is unchanged.
+Python replaces the last member's Type with array_of(base, 0), following the C
+implementation. This step handles layout only: it neither allocates additional
+space automatically nor initializes a flexible tail. Accessing tail elements
+requires actual additional backing storage. The shared member parser also applies
+this transformation to unions, matching this historical implementation.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int x;int y=42;int main(){return x+y;}\n' > /tmp/lesson111.c
-python3 python/main.py /tmp/lesson111.c > /tmp/lesson111.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson111 /tmp/lesson111.s
-/tmp/lesson111
+printf 'int main(){return sizeof(struct T{int x;int y[];});}\n' > /tmp/lesson112.c
+python3 python/main.py /tmp/lesson112.c > /tmp/lesson112.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson112 /tmp/lesson112.s
+/tmp/lesson112
 echo $?
 ```
 
-The emitter writes x in .bss with `.zero 4`, and y in .data with four bytes.
-Main loads both and returns 42. Tests check initialized-zero versus uninitialized
-objects, array zeroing, emitted sections, B/D symbol types in the assembled object
-using nm from build-essential, actual execution, and original C examples.
+sizeof is compiled to `mov $4, %rax`; no tail memory is accessed. Exit status is
+4. Tests check fixed sizes, alignment, zero-sized member type, member address
+offset, BSS allocation size, actual executables, and upstream sizeof examples.
 
 ## Tests and attribution
 

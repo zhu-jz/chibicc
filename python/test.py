@@ -60,6 +60,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_flexible_array_member_size(self):
+        for source, expected in [
+            ("int main(){return sizeof(struct T{int x;int y[];});}", 4),
+            ("int main(){return sizeof(struct T{char x;long y[];});}", 8),
+            ("int main(){struct T{int x;int y[];} v;return sizeof(v.y);}", 0),
+            ("int main(){struct T{int x;int y[];} v;char *p=&v;char *q=v.y;return q-p;}", 4),
+        ]:
+            self.assert_program_returns(source, expected)
+        var = parse(tokenize("struct T{int x;int y[];} g;"))[0]
+        self.assertEqual((var.ty.size, var.ty.members[-1].ty.array_len), (4, 0))
+        self.assertIn("g:\n  .zero 4\n", compile_program("struct T{int x;int y[];} g;int main(){return sizeof(g);}").stdout)
+
     def test_uninitialized_globals_in_bss(self):
         source = "int a;int b=0;char c[8];int main(){return a+b+c[7];}"
         self.assert_program_returns(source, 0)

@@ -1,6 +1,6 @@
-"""Lesson 111: Uninitialized globals in BSS.
+"""Lesson 112: Flexible array member layout.
 
-Based on chibicc commit 3d216e3e06eee7ea3679503867a619c28458e8a7.
+Based on chibicc commit 824543bb2f2b2e4f445d8c58b32f53bf1eec63ce.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

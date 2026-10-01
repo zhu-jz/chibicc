@@ -654,6 +654,8 @@ class Parser:
                 ty, position = self.declarator(position, basety)
                 members.append(Member(ty, ty.name, idx=len(members)))
             position += 1
+        if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
+            members[-1].ty = array_of(members[-1].ty.base, 0)
         ty = struct_type()
         ty.members = members
         if tag is not None:

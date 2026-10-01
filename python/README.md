@@ -1,35 +1,36 @@
-# Lesson 104: Local union initializers
+# Lesson 105: Global scalar and string initializers
 
-Original chibicc commit: [`483b194a80e904c11c5c6d855303596145adacee`](https://github.com/rui314/chibicc/commit/483b194a80e904c11c5c6d855303596145adacee).
+Original chibicc commit: [`bbfe3f4369e1dd2266b827c81d7d9078ab1d301f`](https://github.com/rui314/chibicc/commit/bbfe3f4369e1dd2266b827c81d7d9078ab1d301f).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Union initializers now use braces containing one initializer for the first
-member. Every member shares offset zero; the first member's type determines
-which stores are generated. A nested struct or array member uses its existing
-initializer machinery. The entire union is zeroed first, including bytes beyond
-that first member.
+Global declarations now accept initializers. The existing initializer tree is
+serialized at compile time into zero-filled bytes, recursively for arrays and
+strings. Scalar expressions use the existing constant evaluator. The variable's
+completed type is retained, including inferred array lengths.
 
-Children are stored in Python lists as for structs. An empty member list gives
-a diagnostic instead of upstream's null-pointer dereference. This historical
-step requires exactly one initializer: empty braces, extra elements, and union
-copy initializers are not supported. Ordinary union assignment still works.
+Python bytearray and masked int.to_bytes explicitly encode little-endian data;
+upstream writes through integer pointers into allocated memory on its host.
+The generated target remains x86-64 Linux. Runtime function calls cannot supply
+global initial values. Struct/union member serialization and address relocations
+are not implemented by this original commit; brace-initialized global aggregates
+other than arrays still remain zero at this historical step.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int main(){union T{int a;char b[4];} x={0x01020304};return x.b[0];}\n' > /tmp/lesson104.c
-python3 python/main.py /tmp/lesson104.c > /tmp/lesson104.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson104 /tmp/lesson104.s
-/tmp/lesson104
+printf 'int answer=6*7;int main(){return answer;}\n' > /tmp/lesson105.c
+python3 python/main.py /tmp/lesson105.c > /tmp/lesson105.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson105 /tmp/lesson105.s
+/tmp/lesson105
 echo $?
 ```
 
-The emitter zeroes four bytes and stores 0x01020304 at the union address. On
-x86-64's little-endian layout the first byte is 4, the exit status. Tests verify
-byte order, nested struct initialization, wider-union zeroing, member store
-width, unsupported syntax, and the original initializer examples.
+The .data section contains answer followed by `.byte 42` and three zero bytes.
+Main loads its four-byte value; there is no runtime multiplication. Exit status
+is 42. Tests check every scalar width, negative-value truncation, arrays, strings,
+exact byte order, nonconstant rejection, and updated upstream examples.
 
 ## Tests and attribution
 

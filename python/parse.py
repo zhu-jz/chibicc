@@ -980,6 +980,25 @@ class Parser:
         zero = Node("MEMZERO", var=var, tok=token)
         return Node("COMMA", zero, expression, tok=token), position
 
+    def write_gvar_data(self, init, ty, buffer, offset):
+        if ty.kind == "ARRAY":
+            for index, child in enumerate(init.children):
+                self.write_gvar_data(child, ty.base, buffer, offset + ty.base.size * index)
+            return
+        if init.expr is not None:
+            if ty.size not in (1, 2, 4, 8):
+                raise CompileError(init.expr.tok, "unsupported initializer size")
+            value = evaluate_constant(init.expr) & ((1 << (ty.size * 8)) - 1)
+            buffer[offset:offset + ty.size] = value.to_bytes(ty.size, "little")
+
+    def gvar_initializer(self, position, var):
+        init, position = self.initializer(position, var.ty)
+        var.ty = init.ty
+        buffer = bytearray(var.ty.size)
+        self.write_gvar_data(init, var.ty, buffer, 0)
+        var.init_data = bytes(buffer)
+        return position
+
     # compound-stmt = (declaration | stmt)* "}"
     def compound_stmt(self, position):
         token = self.tokens[position]
@@ -1052,7 +1071,9 @@ class Parser:
                 position += 1
             first = False
             ty, position = self.declarator(position, basety)
-            self.new_gvar(ty.name.text, ty)
+            var = self.new_gvar(ty.name.text, ty)
+            if self.tokens[position].text == "=":
+                position = self.gvar_initializer(position + 1, var)
         return position + 1
 
     def is_function(self, position):

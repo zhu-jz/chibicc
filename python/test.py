@@ -60,6 +60,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_global_scalar_initializers(self):
+        for source, expected in [
+            ("char a=1;short b=2;int c=3;long d=36;int main(){return a+b+c+d;}", 42),
+            ("int x=6*7;int main(){return x;}", 42),
+            ('char s[]="abc";int main(){return s[2];}', 99),
+            ("int a[]={1,2,42};int main(){return a[2];}", 42),
+            ("int a[3]={42};int main(){return a[0]+a[2];}", 42),
+            ("char x=-1;short y=-2;int main(){return x+y+45;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        var = parse(tokenize("int x=0x01020304;"))[0]
+        self.assertEqual(var.init_data, b"\x04\x03\x02\x01")
+        assembly = compile_program("int x=0x01020304;int main(){return x;}").stdout
+        self.assertIn("x:\n  .byte 4\n  .byte 3\n  .byte 2\n  .byte 1\n", assembly)
+        result = compile_program("int f();int x=f();int main(){return x;}")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not a compile-time constant", result.stderr)
+
     def test_union_initializers(self):
         for source, expected in [
             ("int main(){union T{int a;char b[4];} x={0x01020304};return x.b[0];}", 4),
@@ -1278,7 +1296,7 @@ class ExpressionCompilerTests(unittest.TestCase):
         assembly = compile_program("int x; int main(){return x;}").stdout
         self.assertIn("  .data\n  .globl x\nx:\n  .zero 4\n", assembly)
         self.assertIn("  lea x(%rip), %rax\n", assembly)
-        self.assertEqual(compile_program("int x=3; int main(){return x;}").returncode, 1)
+        self.assert_program_returns("int x=3; int main(){return x;}", 3)
         self.assertEqual(compile_program("int main(){return x;} int x;").returncode, 1)
 
     def test_unified_objects(self):

@@ -1,6 +1,6 @@
-"""Lesson 104: Local union initializers.
+"""Lesson 105: Global scalar and string initializers.
 
-Based on chibicc commit 483b194a80e904c11c5c6d855303596145adacee.
+Based on chibicc commit bbfe3f4369e1dd2266b827c81d7d9078ab1d301f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

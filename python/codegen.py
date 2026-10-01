@@ -266,6 +266,16 @@ class CodeGenerator:
             self.assembly.append(f"  jmp .L.begin.{label}")
             self.assembly.append(f"{node.brk_label}:")
             return
+        if node.kind == "DO":
+            self.label_count += 1
+            label = self.label_count
+            self.assembly.append(f".L.begin.{label}:")
+            self.gen_stmt(node.then)
+            self.assembly.append(f"{node.cont_label}:")
+            self.gen_expr(node.cond)
+            self.assembly.extend(("  cmp $0, %rax", f"  jne .L.begin.{label}",
+                                  f"{node.brk_label}:"))
+            return
         if node.kind == "SWITCH":
             self.gen_expr(node.cond)
             register = "%rax" if node.cond.ty.size == 8 else "%eax"

@@ -60,6 +60,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_do_while_loops(self):
+        for source, expected in [
+            ("int main(){int x=0;do{x=42;}while(0);return x;}", 42),
+            ("int main(){int x=40;do{++x;}while(x<42);return x;}", 42),
+            ("int main(){int x=0;do{++x;continue;x=100;}while(x<42);return x;}", 42),
+            ("int main(){int x=42;do{break;x=1;}while(1);return x;}", 42),
+            ("int main(){int x=0;do{do{break;}while(1);++x;}while(x<42);return x;}", 42),
+        ]:
+            self.assert_program_returns(source, expected)
+        assembly = compile_program("int main(){do{}while(0);return 42;}").stdout
+        self.assertIn("  jne .L.begin.1\n", assembly)
+        self.assertEqual(compile_program("int main(){do{}while(0)return 42;}").returncode, 1)
+
     def test_static_global_variables(self):
         source = "static int g=42;int main(){return g;}"
         self.assert_program_returns(source, 42, "int g=1;")

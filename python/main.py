@@ -1,6 +1,6 @@
-"""Lesson 123: Static global variable visibility.
+"""Lesson 124: Do-while loops.
 
-Based on chibicc commit eb85527656f77b9532f3a78cefde7a2eb739189e.
+Based on chibicc commit ee252e6ce79d752526504cf034fd41f070191824.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

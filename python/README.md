@@ -1,35 +1,34 @@
-# Lesson 123: Static global variable visibility
+# Lesson 124: Do-while loops
 
-Original chibicc commit: [`eb85527656f77b9532f3a78cefde7a2eb739189e`](https://github.com/rui314/chibicc/commit/eb85527656f77b9532f3a78cefde7a2eb739189e).
+Original chibicc commit: [`ee252e6ce79d752526504cf034fd41f070191824`](https://github.com/rui314/chibicc/commit/ee252e6ce79d752526504cf034fd41f070191824).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-File-scope static variables now emit `.local name`, giving their symbols internal
-visibility. Ordinary global definitions retain `.globl name`. Anonymous globals,
-including string literals, compound literals and static-local storage, default
-to static too. Source-name lookup and byte initialization are unchanged.
+`do statement while(condition);` becomes a DO node. The parser creates loop
+break/continue labels, parses the body with those active, then restores enclosing
+loop labels before parsing the condition. Code generation emits the body first,
+the continue label and condition second, and a backward jump if nonzero.
 
-Python stores the same is_static flag and chooses the assembler directive.
-Function parsing already explicitly set its visibility, so the new anonymous
-global default does not change ordinary function visibility. Tests use nm's
-lowercase d to confirm a local initialized data symbol.
+Python saves the enclosing labels in local variables, matching upstream's C
+locals. Unlike a while loop, this loop always executes its body once. Continue
+checks the condition; break skips it. Existing nested loop and switch handling
+uses the same label infrastructure.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'static int g=42;int main(){return g;}\n' > /tmp/lesson123.c
-printf 'int g=1;\n' > /tmp/lesson123-helper.c
-python3 python/main.py /tmp/lesson123.c > /tmp/lesson123.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson123 /tmp/lesson123.s /tmp/lesson123-helper.c
-/tmp/lesson123
+printf 'int main(){int x=40;do{++x;}while(x<42);return x;}\n' > /tmp/lesson124.c
+python3 python/main.py /tmp/lesson124.c > /tmp/lesson124.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson124 /tmp/lesson124.s
+/tmp/lesson124
 echo $?
 ```
 
-Our assembly's `.local g` permits the helper's separate global g without a symbol
-collision. Main reads its own private value and returns 42. Tests check that link,
-emitted visibility, parsed flags for public/private/anonymous objects, assembled
-symbol visibility, actual execution, and updated original variable examples.
+After each increment the condition compares x with 42. A `jne .L.begin...` jumps
+back while the comparison result is nonzero. Main exits with 42. Tests cover an
+initially false condition, repeated iterations, continue, break, nested loops,
+emitted backward branch, required semicolon, execution, and upstream control code.
 
 ## Tests and attribution
 

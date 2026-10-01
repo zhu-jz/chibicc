@@ -580,6 +580,23 @@ class Parser:
                         cont_label=continue_label), position
         if self.tokens[position].text == "{":
             return self.compound_stmt(position + 1)
+        if token.text == "do":
+            previous_break, previous_continue = self.brk_label, self.cont_label
+            self.brk_label = break_label = self.new_unique_name()
+            self.cont_label = continue_label = self.new_unique_name()
+            body, position = self.stmt(position + 1)
+            self.brk_label, self.cont_label = previous_break, previous_continue
+            if self.tokens[position].text != "while":
+                raise CompileError(self.tokens[position], "expected 'while'")
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            condition, position = self.expr(position + 2)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            if self.tokens[position + 1].text != ";":
+                raise CompileError(self.tokens[position + 1], "expected ';'")
+            return Node("DO", then=body, cond=condition, tok=token,
+                        brk_label=break_label, cont_label=continue_label), position + 2
         if token.text == "goto":
             name = self.tokens[position + 1]
             if name.kind != "IDENT":

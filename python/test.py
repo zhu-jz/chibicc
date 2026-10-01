@@ -81,6 +81,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_common_symbol_flags(self):
+        for flags, common in [([], True), (['-fcommon'], True), (['-fno-common'], False), (['-fno-common','-fcommon'], True), (['-fcommon','-fno-common'], False)]:
+            result = subprocess.run(compiler_command(*flags, '-'), input='int x;int main(void){return x;}', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual('  .comm x, 4, 4\n' in result.stdout, common)
+            self.assertEqual('\nx:\n  .zero 4\n' in result.stdout, not common)
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first.c'
+            second = Path(directory) / 'second.c'
+            executable = Path(directory) / 'program'
+            first.write_text('int x;')
+            second.write_text('int x;int main(void){return x;}')
+            for flag, succeeds in [('-fcommon', True), ('-fno-common', False)]:
+                result = subprocess.run([sys.executable, str(COMPILER), flag, '-o', str(executable), str(first), str(second)], capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, succeeds, result.stderr)
+                if succeeds:
+                    self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 0)
+                else:
+                    self.assertIn('multiple definition', result.stderr)
+
     def test_tentative_definitions(self):
         for source in ('int x;int x=42;int main(void){return x;}', 'int x=42;int x;int main(void){return x;}'):
             self.assert_program_returns(source, 42)

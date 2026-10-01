@@ -67,7 +67,8 @@ def has_flonum(ty, lo, hi, offset=0):
 
 
 class CodeGenerator:
-    def __init__(self):
+    def __init__(self, fcommon=True):
+        self.fcommon = fcommon
         self.assembly = []
         self.depth = 0
         self.label_count = 0
@@ -629,7 +630,7 @@ class CodeGenerator:
                 section = ".data" if var.init_data is not None else ".bss"
                 visibility = ".local" if var.is_static else ".globl"
                 self.assembly.extend([f"  {visibility} {var.name}", f"  .align {alignment}"])
-                if var.is_tentative:
+                if self.fcommon and var.is_tentative:
                     self.assembly.append(f"  .comm {var.name}, {var.ty.size}, {alignment}")
                     continue
                 self.assembly.extend([f"  {section}", f"{var.name}:"])
@@ -740,5 +741,5 @@ class CodeGenerator:
         return "\n".join(self.assembly)
 
 
-def codegen(program, files=()):
-    return CodeGenerator().generate(program, files)
+def codegen(program, files=(), fcommon=True):
+    return CodeGenerator(fcommon).generate(program, files)

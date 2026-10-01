@@ -1,6 +1,6 @@
-"""Lesson 265: Emit common symbols for tentative globals.
+"""Lesson 266: Choose common or BSS global definitions.
 
-Based on chibicc commit 85e46b1071b54649740b35df939f32ed188c0e13.
+Based on chibicc commit 6d344ed9459bd0328de53a58505a397d92cb0c8a.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -44,6 +44,7 @@ def parse_args(arguments):
     opt_S = False
     opt_c = False
     opt_E = False
+    opt_fcommon = True
     position = 0
     while position < len(arguments):
         if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-cc1-input", "-cc1-output"):
@@ -57,6 +58,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument in ("-fcommon", "-fno-common"):
+            opt_fcommon = argument == "-fcommon"
+            position += 1
+            continue
         if argument == "-idirafter":
             # This original patch stores the option itself, not its argument.
             idirafter.append(argument)
@@ -131,7 +136,7 @@ def parse_args(arguments):
     include_paths.extend(idirafter)
     if not input_paths:
         raise CompileError(None, "no input files")
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon
 
 
 def write_output(path, assembly):
@@ -159,7 +164,7 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True):
     files = []
     try:
         tokens = tokenize_file(filename, files)
@@ -169,7 +174,7 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
             return 0
         program = parse(tokens)
         # Finish all code generation in memory before opening the destination.
-        assembly = codegen(program, files)
+        assembly = codegen(program, files, fcommon)
         write_output(output_path, assembly)
     except CompileError as error:
         if error.position is None:
@@ -241,12 +246,12 @@ def run_linker(inputs, output, trace):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon) = parse_args(sys.argv[1:])
         if opt_cc1:
             add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

@@ -160,6 +160,8 @@ def add_type(node):
         node.ty = node.lhs.ty
     elif node.kind in ("VAR", "VLA_PTR"):
         node.ty = node.var.ty
+    elif node.kind == "LABEL_VAL":
+        node.ty = pointer_to(ty_void)
     elif node.kind == "COND":
         if node.then.ty.kind == "VOID" or node.els.ty.kind == "VOID":
             node.ty = ty_void

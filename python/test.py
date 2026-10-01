@@ -87,6 +87,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_labels_as_values(self):
+        for source in [
+            'int main(void){void *p=&&answer;goto *p;return 1;answer:return 42;}',
+            'int main(void){void *labels[]={&&a,&&b};goto *labels[1];a:return 1;b:return 42;}',
+            'int main(void){goto *(1?&&a:&&b);a:return 42;b:return 1;}',
+        ]:
+            self.assert_program_returns(source, 42)
+        assembly = compile_program('int main(void){goto *&&answer;answer:return 42;}').stdout
+        self.assertIn('  jmp *%rax', assembly)
+        self.assertRegex(assembly, r'  lea \.L\.\.\d+\(%rip\), %rax')
+        result = compile_program('int main(void){void *p=&&missing;return 0;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('use of undeclared label', result.stderr)
+
     def test_array_range_designators(self):
         for source, expected in [
             ('int main(void){int x[]={[2 ... 4]=7,9};return sizeof(x)==24&&x[2]==7&&x[4]==7&&x[5]==9?42:0;}', 42),

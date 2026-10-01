@@ -1,6 +1,6 @@
-"""Lesson 282: Support GNU array range designators.
+"""Lesson 283: Use label addresses and computed goto.
 
-Based on chibicc commit 3d5550e29a92708613c3a351c0857aea90e147a5.
+Based on chibicc commit 4f165ec60baa74f244d0a7c9b64c4bb3cbb76173.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

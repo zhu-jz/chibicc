@@ -395,6 +395,9 @@ class CodeGenerator:
             self.assembly.append(f"  .loc {file_no} {node.tok.line_no}")
         if node.kind == "NULL_EXPR":
             return
+        if node.kind == "LABEL_VAL":
+            self.assembly.append(f"  lea {node.unique_label}(%rip), %rax")
+            return
         if node.kind == "MEMZERO":
             self.assembly.extend((f"  mov ${node.var.ty.size}, %rcx",
                                   f"  lea {node.var.offset}(%rbp), %rdi",
@@ -733,6 +736,10 @@ class CodeGenerator:
                     else:
                         self.copy_struct_mem()
             self.assembly.append(f"  jmp .L.return.{self.current_fn.name}")
+            return
+        if node.kind == "GOTO_EXPR":
+            self.gen_expr(node.lhs)
+            self.assembly.append("  jmp *%rax")
             return
         if node.kind == "GOTO":
             self.assembly.append(f"  jmp {node.unique_label}")

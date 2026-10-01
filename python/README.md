@@ -1,29 +1,26 @@
-# Lesson 282: Support GNU array range designators
+# Lesson 283: Use label addresses and computed goto
 
-Original chibicc commit: [`3d5550e29a92708613c3a351c0857aea90e147a5`](https://github.com/rui314/chibicc/commit/3d5550e29a92708613c3a351c0857aea90e147a5).
+Original chibicc commit: [`4f165ec60baa74f244d0a7c9b64c4bb3cbb76173`](https://github.com/rui314/chibicc/commit/4f165ec60baa74f244d0a7c9b64c4bb3cbb76173).
 Earlier explanations are available in Git history.
 
-An initializer can now select an inclusive array range with [2 ... 4]=7. The parser
-reads both bounds, applies the following initializer to each selected child and
-continues after the range. The existing inferred-bound scan already recognizes
-the final range endpoint, so unsized arrays receive sufficient storage.
+GNU &&label expressions produce a void pointer to a label in the current function.
+The parser records unresolved label references alongside ordinary gotos, then
+matches them after parsing the body. goto *expression evaluates a pointer and
+jumps to it, allowing a local table of destinations.
 
 ```sh
-printf 'int main(void){int x[]={[2 ... 4]=7,21};return x[2]+x[3]+x[4]+x[5];}\n' > /tmp/lesson.c
+printf 'int main(void){void *p=&&answer;goto *p;return 1;answer:return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly zeroes the local array, writes 7 into elements 2 through 4 and 21 into
-element 5, then adds them. Tests cover inferred bounds, overwrites, global arrays,
-member designators, range errors and the original initializer fixture.
-This original implementation reparses the value for each element, so a local
-side effect such as ++i runs once per selected element; GNU's usual single-evaluation
-rule is not implemented yet. Nested designation resumes at begin+1 as in C.
-Python retains its explicit negative-index rejection instead of indexing before
-C's children array; its diagnostics point at the opening bracket.
+Assembly obtains the label address with lea label(%rip), stores it in p and later
+uses jmp *%rax. That jump reaches the return of 42. Tests cover forward references,
+local destination arrays, conditional destinations and unresolved labels, plus
+the original control fixture. Python keeps references in a list rather than C's
+linked goto chain. Static/global label-address initializers are not added yet.
 
 ## Tests and attribution
 

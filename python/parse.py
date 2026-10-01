@@ -338,6 +338,14 @@ class Parser:
 
     # unary = ("+" | "-" | "*" | "&") cast | postfix
     def unary(self, position):
+        if self.tokens[position].text == "&&":
+            token = self.tokens[position]
+            label = self.tokens[position + 1]
+            if label.kind != "IDENT":
+                raise CompileError(label, "expected an identifier")
+            node = Node("LABEL_VAL", label=label.text, tok=token)
+            self.gotos.append((node, label))
+            return node, position + 2
         token = self.tokens[position]
         operator = self.tokens[position].text
         if operator == "+":
@@ -743,6 +751,11 @@ class Parser:
             return Node("DO", then=body, cond=condition, tok=token,
                         brk_label=break_label, cont_label=continue_label), position + 2
         if token.text == "goto":
+            if self.tokens[position + 1].text == "*":
+                expression, rest = self.expr(position + 2)
+                if self.tokens[rest].text != ";":
+                    raise CompileError(self.tokens[rest], "expected ';'")
+                return Node("GOTO_EXPR", lhs=expression, tok=token), rest + 1
             name = self.tokens[position + 1]
             if name.kind != "IDENT":
                 raise CompileError(name, "expected a variable name")

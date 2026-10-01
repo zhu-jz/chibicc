@@ -146,7 +146,6 @@ class Obj:
 
 @dataclass
 class VarScope:
-    name: str
     var: Optional[Obj] = None
     type_def: Optional[Type] = None
     enum_ty: Optional[Type] = None
@@ -165,7 +164,7 @@ class VarAttr:
 
 @dataclass
 class Scope:
-    vars: list[VarScope] = field(default_factory=list)
+    vars: dict[str, VarScope] = field(default_factory=dict)
     tags: dict[str, Type] = field(default_factory=dict)
 
 

@@ -1,28 +1,28 @@
-# Lesson 286: Look up macro names through a hash map
+# Lesson 287: Use hash maps for block-scope names
 
-Original chibicc commit: [`30520e5a7c73a6613cfcef38d72058e7cccde1f4`](https://github.com/rui314/chibicc/commit/30520e5a7c73a6613cfcef38d72058e7cccde1f4).
+Original chibicc commit: [`655954e301621737988a4fa0a2c72ffc24285c8d`](https://github.com/rui314/chibicc/commit/655954e301621737988a4fa0a2c72ffc24285c8d).
 Earlier explanations are available in Git history.
 
-The original preprocessor replaces its linked macro list with a hash map. Defining
-a name replaces its map entry; undefining it deletes the entry. A token's exact
-name is the lookup key, so similarly prefixed names remain distinct. This improves
-lookup cost while preserving macro expansion and redefinition behavior.
+Each block now stores its ordinary names in a dictionary, alongside the existing
+tag dictionary. Lookup searches blocks from innermost to outermost and performs
+one map lookup per block. Adding a name replaces that block's binding; leaving a
+block exposes the outer binding again. Global function lookup also uses the map.
 
 ```sh
-printf '#define ANSWER 1\n#undef ANSWER\n#define ANSWER 42\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
+printf 'int main(void){int answer=42;{int answer=1;}return answer;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The preprocessor expands the latest definition before parsing. Assembly moves 42
-to the return register; macro lookup happens entirely during compilation.
-Python already used dict for macros in earlier lessons, so this commit documents
-that correspondence and tests one thousand definitions, exact prefix distinctions,
-delete/redefine and deleting a missing name. Existing macro tests remain enabled.
-Python copies token spelling into a string key instead of C's pointer-plus-length
-hash lookup, and its dictionary manages storage automatically.
+Assembly gives the two declarations separate stack slots and loads the outer
+answer for the final return. The map affects parsing, not runtime storage.
+Tests cover five hundred local names, nested shadowing, separate ordinary/tag
+namespaces, typedef shadowing and existing inline-function liveness.
+Python removes the redundant VarScope name field and uses standard dictionaries
+where C uses HashMap. Tag maps were already dictionaries in this port. Object
+references remain shared so completing a struct updates earlier declarations.
 
 ## Tests and attribution
 

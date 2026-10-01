@@ -1,6 +1,6 @@
-"""Lesson 286: Look up macro names through a hash map.
+"""Lesson 287: Use hash maps for block-scope names.
 
-Based on chibicc commit 30520e5a7c73a6613cfcef38d72058e7cccde1f4.
+Based on chibicc commit 655954e301621737988a4fa0a2c72ffc24285c8d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -97,8 +97,8 @@ class Parser:
         self.scopes.pop()
 
     def push_scope(self, name):
-        binding = VarScope(name)
-        self.scopes[-1].vars.insert(0, binding)
+        binding = VarScope()
+        self.scopes[-1].vars[name] = binding
         return binding
 
     def new_lvar(self, name, ty):
@@ -121,9 +121,9 @@ class Parser:
 
     def find_var(self, name):
         for scope in reversed(self.scopes):
-            for binding in scope.vars:
-                if binding.name == name:
-                    return binding
+            binding = scope.vars.get(name)
+            if binding is not None:
+                return binding
         return None
 
     def find_tag(self, name):
@@ -1690,9 +1690,9 @@ class Parser:
         return position + 1
 
     def find_func(self, name):
-        for binding in self.scopes[0].vars:
-            if binding.name == name and binding.var is not None and binding.var.is_function:
-                return binding.var
+        binding = self.scopes[0].vars.get(name)
+        if binding is not None and binding.var is not None and binding.var.is_function:
+            return binding.var
         return None
 
     def mark_live(self, function):

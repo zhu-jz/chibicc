@@ -1,6 +1,6 @@
-"""Lesson 215: Buffer assembly before writing output.
+"""Lesson 216: Accept historical compatibility flags.
 
-Based on chibicc commit 2bdc6b800c1dbe6db584b91046785d4c48c41fb2.
+Based on chibicc commit b1fdddff1523d2ca7bab4050434499d3a5ac39a1.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -109,6 +109,11 @@ def parse_args(arguments):
             output_path = argument[2:]
         elif argument.startswith("-I"):
             include_paths.append(argument[2:])
+        elif (argument.startswith(("-O", "-W", "-g", "-std=")) or
+              argument in ("-ffreestanding", "-fno-builtin", "-fno-omit-frame-pointer",
+                           "-fno-stack-protector", "-fno-strict-aliasing", "-m64",
+                           "-mno-red-zone", "-w")):
+            pass  # Compatibility flags accepted by this original driver step.
         elif argument.startswith("-") and argument != "-":
             raise CompileError(None, f"unknown argument: {argument}")
         else:

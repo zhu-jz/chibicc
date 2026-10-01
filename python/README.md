@@ -1,28 +1,27 @@
-# Lesson 215: Buffer assembly before writing output
+# Lesson 216: Accept historical compatibility flags
 
-Original chibicc commit: [`2bdc6b800c1dbe6db584b91046785d4c48c41fb2`](https://github.com/rui314/chibicc/commit/2bdc6b800c1dbe6db584b91046785d4c48c41fb2).
+Original chibicc commit: [`b1fdddff1523d2ca7bab4050434499d3a5ac39a1`](https://github.com/rui314/chibicc/commit/b1fdddff1523d2ca7bab4050434499d3a5ac39a1).
 Earlier explanations are available in Git history.
 
-This original commit prevents code-generation errors from leaving partial
-assembly files. The Python port already accumulates instructions in a list
-and returns a complete string before write_output opens the destination, so
-we retain that design and add explicit regression coverage for the guarantee.
-A comment marks the boundary in cc1; no second buffering abstraction is needed.
+The driver now ignores -O*, -W*, -g*, -std=* and the original commit's explicit
+set of freestanding, builtin, frame-pointer, stack-protector, aliasing, target
+and warning flags. This lets ordinary build commands run, but these accepted
+flags do not enable optimization or change the language or target behavior.
+Unrecognized flags outside that set still receive an error.
 
 ```sh
 printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+python3 python/main.py -O2 -Wall -g -std=c11 -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The completed buffer contains main's mov $42 and return instructions. For
-invalid code such as return &1, generation raises not an lvalue before the
-output is opened. Tests verify an existing output stays intact, an absent one
-stays absent, stdout has no partial assembly and a successful output is complete.
-As in the original, the final file write is not an atomic rename: failure during
-that write itself can still leave partial data. -E behavior is unchanged.
+The assembly remains identical to a compile without these flags: mov $42
+and the regular main epilogue. Tests compare full emitted output, check an
+unknown option and run the original C fixtures. Python uses startswith and
+a tuple of exact spellings in place of the original strcmp/strncmp chain.
+Options are forwarded to cc1 as before and ignored there as well.
 
 ## Tests and attribution
 

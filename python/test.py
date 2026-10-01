@@ -77,6 +77,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_ignored_driver_flags(self):
+        options = ['-O','-O2','-Wall','-Werror','-g','-g3','-std=c11',
+                   '-ffreestanding','-fno-builtin','-fno-omit-frame-pointer',
+                   '-fno-stack-protector','-fno-strict-aliasing','-m64','-mno-red-zone','-w']
+        source = 'int main(void){return 42;}'
+        result = subprocess.run(compiler_command(*options, '-'), input=source, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, compile_program(source).stdout)
+        result = subprocess.run(compiler_command('-funrecognized', '-'), input=source, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unknown argument: -funrecognized', result.stderr)
+
     def test_buffered_assembly_output(self):
         with tempfile.TemporaryDirectory() as directory:
             source, output = Path(directory) / 'main.c', Path(directory) / 'main.s'

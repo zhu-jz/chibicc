@@ -77,6 +77,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_adjacent_string_literals(self):
+        self.assert_program_returns('int main(void){return sizeof("abc" "def");}', 7)
+        self.assert_program_returns('int main(void){return "ab" /*gap*/\n"cd"[2];}', 99)
+        self.assert_program_returns('char s[]="a\\0" "b";int main(void){return sizeof(s)+s[2];}', 102)
+        self.assert_program_returns('#define TAIL "def"\nint main(void){return "abc" TAIL[5];}\n', 102)
+        tokens = tokenize('"\\x9" "0"\n')
+        self.assertEqual(tokens[0].str, b'\t0\0')
+        self.assertEqual(tokens[0].ty.array_len, 3)
+        self.assertEqual(len(tokens), 2)
+        self.assertEqual(tokens[0].text, '"\\x9"')
+        result = subprocess.run([sys.executable, str(COMPILER), '-E', '-'],
+                                input='"abc" "def"\n', capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '"abc"\n')
+
     def test_function_identifier(self):
         self.assert_program_returns('int main(void){return sizeof(__FUNCTION__);}', 5)
         self.assert_program_returns('char *answer(void){return __FUNCTION__;}int main(void){return answer()[5];}', 114)

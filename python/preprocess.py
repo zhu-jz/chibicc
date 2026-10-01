@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from tokenizer import convert_keywords, tokenize, tokenize_file, warn_tok
 from common import CompileError, File
 from parse import const_expr
+from type import array_of
 
 
 @dataclass
@@ -530,6 +531,23 @@ def init_macros():
     return macros
 
 
+def join_adjacent_string_literals(tokens):
+    position = 0
+    while tokens[position].kind != "EOF":
+        first = tokens[position]
+        if first.kind != "STR" or tokens[position + 1].kind != "STR":
+            position += 1
+            continue
+        end = position + 1
+        while tokens[end].kind == "STR":
+            end += 1
+        data = b"".join(token.str[:-1] for token in tokens[position:end]) + b"\0"
+        first.ty = array_of(first.ty.base, len(data))
+        first.str = data
+        del tokens[position + 1:end]
+        position += 1
+
+
 def preprocess(tokens, files=None, include_paths=()):
     if files is None:
         files = []
@@ -538,4 +556,5 @@ def preprocess(tokens, files=None, include_paths=()):
     if conditions:
         raise CompileError(conditions[-1].tok, "unterminated conditional directive")
     convert_keywords(tokens)
+    join_adjacent_string_literals(tokens)
     return tokens

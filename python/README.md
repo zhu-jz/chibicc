@@ -1,37 +1,32 @@
-# Lesson 192: Add the GNU __FUNCTION__ identifier
+# Lesson 193: Concatenate adjacent string literals
 
-Original chibicc commit: [`82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f`](https://github.com/rui314/chibicc/commit/82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f).
+Original chibicc commit: [`ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28`](https://github.com/rui314/chibicc/commit/ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28).
 Earlier explanations are available in Git history.
 
-Every function definition now also binds `__FUNCTION__` to a static character
-array containing the current function name. It is GNU's alternate name for the
-same information supplied by `__func__`, and is introduced by the parser rather
-than by macro expansion.
+After macro expansion and keyword conversion, each consecutive run of string
+tokens becomes one character array. Their already-decoded bytes are joined,
+removing the intermediate terminating zeros and retaining one final zero.
+Embedded zeros remain part of the data. Whitespace and comments do not stop
+a run, and strings produced by macros participate too.
 
-This original commit creates a separate string object for each binding, even
-when neither is used. Their bytes and sizes match but their addresses differ
-in this compiler. Python preserves both objects and their function-scope
-bindings. Anonymous label numbers shift once more; tests inspect strings and
-select functions by name rather than assuming every global object is a function.
+Python bytes concatenation replaces the C buffer allocation and memcpy loop.
+The first token retains its source spelling and location, matching this original
+commit. Consequently, its early `-E` printer displays only the first spelling
+of a joined run; compilation uses the complete decoded data and array type.
+This historical output limitation is tested rather than silently changed.
 
 ```sh
-printf 'int main(void){return sizeof(__FUNCTION__);}\n' > /tmp/lesson.c
+printf 'int main(void){return sizeof("abc" "def");}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 5 for main plus its terminating zero
+echo $?  # 7, six characters plus the terminating zero
 ```
 
-Assembly emits two static strings with the bytes of main and a zero. sizeof
-becomes a constant, so the function loads 5 into `%rax` and returns through
-its frame cleanup. A character reference instead loads from the selected
-string's address. Tests cover size, returning the string, distinct addresses,
-shadowing and rejection outside a function; the original function fixture runs
-unchanged. Both complete source and packaged compiler suites are checked.
-
-This completes the requested batch of fifty consecutive lessons, 143–192.
-The README describes this current lesson; earlier explanations remain in each
-Python Git commit, which records its corresponding full original commit hash.
+sizeof becomes an integer constant, so assembly loads 7 into `%rax` and returns.
+A string subscript instead computes an address and loads a character from static
+data. Tests check array size, indexing, embedded zeros, comments, macro-produced
+strings, separately decoded hexadecimal escapes and the original output behavior.
 
 ## Tests and attribution
 

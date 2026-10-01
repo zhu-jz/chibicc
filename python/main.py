@@ -1,6 +1,6 @@
-"""Lesson 192: Add the GNU __FUNCTION__ identifier.
+"""Lesson 193: Concatenate adjacent string literals.
 
-Based on chibicc commit 82ba010c764d3dc4d0f72a9ee5a6d6f72780e75f.
+Based on chibicc commit ab4f1e1e197ecae40299b99dc00b1c92a4a3cb28.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -60,6 +60,18 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_ignored_qualifiers(self):
+        for source in [
+            "int main(void){const int x=42;return x;}",
+            "int main(void){volatile int x=42;int *const volatile restrict p=&x;return *p;}",
+            "int main(void){auto register int x=42;return *(const int *const)&x;}",
+            "int main(void){const int x=1;x=42;return x;}",
+        ]:
+            self.assert_program_returns(source, 42)
+        plain = instruction_assembly(compile_program("int main(void){int x=42;return x;}").stdout)
+        qualified = instruction_assembly(compile_program("int main(void){const volatile int x=42;return x;}").stdout)
+        self.assertEqual(plain, qualified)
+
     def test_unsigned_constant_expressions(self):
         for source, expected in [
             ("enum{N=(char)255};int main(void){return N==-1;}", 1),

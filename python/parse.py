@@ -634,7 +634,8 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
+                                              "const", "volatile", "auto", "register", "restrict", "__restrict", "__restrict__", "_Noreturn") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -654,6 +655,10 @@ class Parser:
         unsigned_types = {"CHAR": ty_uchar, "SHORT": ty_ushort, "INT": ty_uint, "LONG": ty_ulong}
         while self.is_typename(position):
             token = self.tokens[position]
+            if token.text in ("const", "volatile", "auto", "register", "restrict",
+                              "__restrict", "__restrict__", "_Noreturn"):
+                position += 1
+                continue
             if token.text in ("typedef", "static", "extern"):
                 if attr is None:
                     raise CompileError(token, "storage class specifier is not allowed in this context")
@@ -839,10 +844,16 @@ class Parser:
         return ty, position
 
     # declarator = "*"* (identifier | "(" declarator ")") type-suffix
-    def declarator(self, position, ty):
+    def pointers(self, position, ty):
         while self.tokens[position].text == "*":
             ty = pointer_to(ty)
             position += 1
+            while self.tokens[position].text in ("const", "volatile", "restrict", "__restrict", "__restrict__"):
+                position += 1
+        return ty, position
+
+    def declarator(self, position, ty):
+        ty, position = self.pointers(position, ty)
         if self.tokens[position].text == "(":
             start = position + 1
             _, end = self.declarator(start, Type("DUMMY"))
@@ -863,9 +874,7 @@ class Parser:
 
     # abstract-declarator = "*"* ("(" abstract-declarator ")")? type-suffix
     def abstract_declarator(self, position, ty):
-        while self.tokens[position].text == "*":
-            ty = pointer_to(ty)
-            position += 1
+        ty, position = self.pointers(position, ty)
         if self.tokens[position].text == "(":
             start = position + 1
             _, end = self.abstract_declarator(start, Type("DUMMY"))

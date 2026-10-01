@@ -1,6 +1,6 @@
-"""Lesson 157: Link executables unless -c is given.
+"""Lesson 158: Introduce the preprocessing stage.
 
-Based on chibicc commit 8b726b54893e11427533fcceb7206b97c25f50a6.
+Based on chibicc commit 1e1ea39dadd0035443f1d15c651deaf979341879.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -13,6 +13,7 @@ import glob
 from codegen import codegen
 from common import CompileError
 from parse import parse
+from preprocess import preprocess
 from tokenizer import read_file, tokenize
 
 
@@ -99,6 +100,7 @@ def cc1(filename, output_path):
     try:
         source = read_file(filename)
         tokens = tokenize(source)
+        tokens = preprocess(tokens)
         program = parse(tokens)
         assembly = codegen(program)
         escaped_filename = filename.replace("\\", "\\\\").replace('"', '\\"')

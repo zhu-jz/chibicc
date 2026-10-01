@@ -1,5 +1,5 @@
 PYTHON ?= python3
-SOURCES = main.py common.py tokenizer.py parse.py type.py constexpr.py codegen.py LICENSE
+SOURCES = main.py common.py tokenizer.py preprocess.py parse.py type.py constexpr.py codegen.py LICENSE
 ARCHIVE = build/chibicc.pyz
 
 all: $(ARCHIVE)

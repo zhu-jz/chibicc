@@ -1,40 +1,34 @@
-# Lesson 157: Link executables unless -c is given
+# Lesson 158: Introduce the preprocessing stage
 
-Original chibicc commit: [`8b726b54893e11427533fcceb7206b97c25f50a6`](https://github.com/rui314/chibicc/commit/8b726b54893e11427533fcceb7206b97c25f50a6).
+Original chibicc commit: [`1e1ea39dadd0035443f1d15c651deaf979341879`](https://github.com/rui314/chibicc/commit/1e1ea39dadd0035443f1d15c651deaf979341879).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-The driver now compiles and assembles C inputs into temporary objects, then runs
-GNU ld to create an executable. -c stops at object files; -S stops at assembly.
-Normal linking accepts multiple sources and existing .o inputs, with a single -o
-for the final executable or a.out by default. The driver rejects unknown suffixes.
+Raw tokenization now leaves keyword spellings as IDENT tokens. The new preprocess
+entry point converts those spellings to KEYWORD and returns the same token list.
+cc1 runs this stage between tokenization and parsing. No directives or macros
+are added in this commit; the compiler's accepted programs and assembly stay the same.
 
-The linker command supplies x86-64 startup objects, the dynamic loader, library
-search paths, libc, and GCC runtime libraries. Python uses glob and Path to find
-them with the original search order; it invokes ld directly and never asks GCC
-to compile C. Temporary objects live until linking completes and are then removed.
-The historical .s branch assembles a file but does not add it to the link inputs;
-.o inputs retain the original branch behavior even with stopping flags.
+Python moves the existing keyword loop into a named tokenizer helper and adds a
+small preprocess.py module. The packaging source list includes that new module.
+Tests that inspect parser-ready tokens use the complete pipeline, while the new
+stage test checks raw identifiers, conversion, preserved token identities and
+numeric values. This corresponds to the original linked-list pass.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(void);int main(void){return f();}\n' > /tmp/lesson157-main.c
-printf 'int f(void){return 42;}\n' > /tmp/lesson157-answer.c
-python3 python/main.py -### -o /tmp/lesson157 /tmp/lesson157-main.c /tmp/lesson157-answer.c
-/tmp/lesson157
-echo $?
-python3 python/main.py -S -o /tmp/lesson157.s /tmp/lesson157-main.c
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson157-gcc /tmp/lesson157.s /tmp/lesson157-answer.c
-/tmp/lesson157-gcc
+printf 'int main(void){return 42;}\n' > /tmp/lesson158.c
+python3 python/main.py -S -o /tmp/lesson158.s /tmp/lesson158.c
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson158 /tmp/lesson158.s
+/tmp/lesson158
 echo $?
 ```
 
-The trace shows the compiler children, as, and ld. Linking resolves f's function
-address; main calls it and exits with 42. The later commands demonstrate linking
-the emitted assembly with GCC as well. Tests check executable/object ELF types, multiple sources,
-existing objects, a.out, dynamic libc calls, suffix errors, assembly, and upstream.
+int and return become keywords before parsing. The generated mov $42, %rax and
+main epilogue give shell exit status 42. Tests cover the stage boundary, existing
+token snapshots, emitted assembly, packaged execution, and the original C fixtures.
 
 ## Tests and attribution
 

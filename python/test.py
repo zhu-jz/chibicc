@@ -11,13 +11,19 @@ import unittest
 from codegen import CodeGenerator
 from common import CompileError, Node, Obj, Token
 from parse import parse
-from tokenizer import tokenize
+from tokenizer import tokenize as tokenize_raw
+from preprocess import preprocess
 from type import ty_int, ty_long, ty_short, ty_void
 
 
 COMPILER = Path(__file__).with_name("main.py")
 PROLOGUE = "  .globl main\n  .text\nmain:\n  push %rbp\n  mov %rsp, %rbp\n"
 EPILOGUE = ".L.return.main:\n  mov %rbp, %rsp\n  pop %rbp\n  ret\n"
+
+
+def tokenize(source):
+    """Run the current token pipeline for parser tests and token snapshots."""
+    return preprocess(tokenize_raw(source))
 
 
 def compiler_command(*arguments):
@@ -66,6 +72,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_initial_preprocessing_stage(self):
+        tokens = tokenize_raw("int ifx=42;return ifx;")
+        self.assertEqual([token.kind for token in tokens[:2]], ["IDENT", "IDENT"])
+        original_ids = [id(token) for token in tokens]
+        result = preprocess(tokens)
+        self.assertIs(result, tokens)
+        self.assertEqual([id(token) for token in result], original_ids)
+        self.assertEqual([token.kind for token in result[:2]], ["KEYWORD", "IDENT"])
+        self.assertEqual(result[5].kind, "KEYWORD")
+        self.assertEqual(result[3].value, 42)
+        self.assert_program_returns("int main(void){return 42;}", 42)
+        self.assertIn("  mov $42, %rax\n", compile_program("int main(void){return 42;}").stdout)
+
     def test_linker_driver_stage(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / "main.c"

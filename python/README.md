@@ -1,35 +1,32 @@
-# Lesson 129: Checking function argument counts
+# Lesson 130: Signed integer type spellings
 
-Original chibicc commit: [`197689a22b38df2ced90e03117914a2248238c20`](https://github.com/rui314/chibicc/commit/197689a22b38df2ced90e03117914a2248238c20).
+Original chibicc commit: [`3f59ce79554fcbccd15d42ff4b4ddb91812c7045`](https://github.com/rui314/chibicc/commit/3f59ce79554fcbccd15d42ff4b4ddb91812c7045).
 Earlier explanations are available in Git history.
 
 ## What changed
 
-Calls now reject too few fixed arguments and too many arguments for nonvariadic
-functions. Variadic calls require all fixed arguments but allow extras. `f(void)`
-has zero fixed arguments and is nonvariadic. Old-style `f()` is represented as
-variadic, retaining its unspecified-parameter calling behavior; its definitions
-therefore also receive the register-save area introduced in lesson 128.
+`signed` now qualifies char, short, int, long, or long long. Used alone it means
+int. These types already had signed arithmetic and loads, so the change adds
+spellings rather than new code-generation behavior. Keyword order remains
+flexible; repeated signed is accepted because upstream tracks it as a flag.
 
-Python compares list lengths where upstream advances a parameter pointer.
-Tests that intend a zero-parameter function now spell `(void)`, keeping their
-stack and syntax-tree expectations precise. The original C fixtures retain their
-historical source verbatim. The new tests separately check old-style `()` behavior.
+Python keeps a boolean alongside the readable type-specifier combination table,
+rather than C's bitmask counter. Invalid combinations such as signed void and
+signed _Bool still fail. Long long remains the same eight-byte type as long.
 
 ## Assembly and WSL example
 
 ```sh
-printf 'int f(int x){return x;}int main(void){return f(42);}\n' > /tmp/lesson129.c
-python3 python/main.py /tmp/lesson129.c > /tmp/lesson129.s
-gcc -static -Wl,-z,noexecstack -o /tmp/lesson129 /tmp/lesson129.s
-/tmp/lesson129
+printf 'int main(void){signed char x=255;return x<0;}\n' > /tmp/lesson130.c
+python3 python/main.py /tmp/lesson130.c > /tmp/lesson130.s
+gcc -static -Wl,-z,noexecstack -o /tmp/lesson130 /tmp/lesson130.s
+/tmp/lesson130
 echo $?
 ```
 
-The valid call passes 42 in edi and exits with 42. Changing it to f() or f(1,2)
-now reports an argument-count error before emitting assembly. Tests cover both
-errors, void and variadic prototypes, unspecified old-style calls, variadic
-save-area flags, zero-argument fixtures, execution, and all original C programs.
+The store keeps low byte ff; `movsbl` loads it as -1. The comparison returns true,
+giving exit status 1. Tests cover aliases, keyword order, repeated signed, sizes,
+signed-char execution and assembly, rejected types, and original sizeof examples.
 
 ## Tests and attribution
 

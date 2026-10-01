@@ -633,7 +633,7 @@ class Parser:
 
     def is_typename(self, position):
         return self.tokens[position].text in ("void", "_Bool", "char", "short", "int", "long",
-                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas") or self.find_typedef(position) is not None
+                                              "struct", "union", "typedef", "enum", "static", "extern", "_Alignas", "signed") or self.find_typedef(position) is not None
 
     # declspec = ("void" | "char" | "short" | "int" | "long"
     #             | struct-decl | union-decl)*
@@ -648,6 +648,7 @@ class Parser:
         }
         ty = ty_int
         specifiers = []
+        has_signed = False
         while self.is_typename(position):
             token = self.tokens[position]
             if token.text in ("typedef", "static", "extern"):
@@ -679,9 +680,15 @@ class Parser:
                     raise CompileError(self.tokens[position], "expected ')'")
                 position += 1
                 continue
+            if token.text == "signed":
+                has_signed = True
+                if "other" in specifiers or ty.kind not in ("CHAR", "SHORT", "INT", "LONG"):
+                    raise CompileError(token, "invalid type")
+                position += 1
+                continue
             type_def = self.find_typedef(position)
             if token.text in ("struct", "union", "enum") or type_def is not None:
-                if specifiers:
+                if specifiers or has_signed:
                     break
                 if token.text == "struct":
                     ty, position = self.struct_decl(position + 1)
@@ -697,6 +704,8 @@ class Parser:
             specifiers.append(token.text)
             ty = combinations.get(tuple(sorted(specifiers)))
             if ty is None:
+                raise CompileError(token, "invalid type")
+            if has_signed and ty.kind not in ("CHAR", "SHORT", "INT", "LONG"):
                 raise CompileError(token, "invalid type")
             position += 1
         return ty, position

@@ -1,6 +1,6 @@
-"""Lesson 129: Checking function argument counts.
+"""Lesson 130: Signed integer type spellings.
 
-Based on chibicc commit 197689a22b38df2ced90e03117914a2248238c20.
+Based on chibicc commit 3f59ce79554fcbccd15d42ff4b4ddb91812c7045.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

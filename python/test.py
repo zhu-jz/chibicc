@@ -60,6 +60,15 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_signed_type_specifiers(self):
+        for spelling, size in (("signed", 4), ("signed signed", 4), ("signed char signed", 1),
+                               ("int short signed", 2), ("signed long long int", 8)):
+            self.assert_program_returns(f"int main(void){{return sizeof({spelling});}}", size)
+        self.assert_program_returns("int main(void){signed char x=255;return x<0;}", 1)
+        self.assertIn("  movsbl (%rax), %eax\n", compile_program("int main(void){signed char x=42;return x;}").stdout)
+        for spelling in ("signed void", "signed _Bool", "signed char int"):
+            self.assertEqual(compile_program(f"int main(void){{{spelling} x;}}").returncode, 1)
+
     def test_function_argument_counts(self):
         for source, message in [
             ("int f(int x);int main(void){return f();}", "too few arguments"),

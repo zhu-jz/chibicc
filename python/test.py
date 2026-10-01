@@ -72,6 +72,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_elif_directives(self):
+        self.assert_program_returns('''#if 0
+invalid
+#elif 0
+invalid
+#elif 2+3
+int main(void){return 42;}
+#elif unknown_expression
+invalid
+#else
+invalid
+#endif
+''', 42)
+        self.assert_program_returns('#if 1\nint main(void){return 7;}\n#elif\ninvalid\n#endif\n', 7)
+        self.assert_program_returns('#if 0\n#elif 0\n#else\nint main(void){return 11;}\n#endif\n', 11)
+        for source in ('#elif 1\n', '#if 0\n#else\n#elif 1\n#endif\n'):
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('stray #elif', result.stderr)
+
     def test_else_directives(self):
         self.assert_program_returns('#if 0\ninvalid C\n#else\nint main(void){return 42;}\n#endif\n', 42)
         self.assert_program_returns('#if 1\nint main(void){return 7;}\n#else\n#include "/missing"\n#endif\n', 7)

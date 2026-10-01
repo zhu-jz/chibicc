@@ -1,30 +1,30 @@
-# Lesson 165: Add #else
+# Lesson 166: Add #elif
 
-Original chibicc commit: [`c6e81d22f8189cd7bfcfcc33e4ac462529418192`](https://github.com/rui314/chibicc/commit/c6e81d22f8189cd7bfcfcc33e4ac462529418192).
+Original chibicc commit: [`e7a1857a31fc0c0012773c021639a6297f5b208f`](https://github.com/rui314/chibicc/commit/e7a1857a31fc0c0012773c021639a6297f5b208f).
 Earlier explanations are available in Git history.
 
-`#else` selects the second branch when its `#if` expression was zero. Each
-conditional now records its opening token, whether the first branch was
-included, and whether an `#else` has appeared. A Python dataclass replaces the
-C linked stack entry; a list supplies the stack.
+`#elif` extends an open conditional with another constant expression. It is
+evaluated only when no earlier branch was included. The first successful
+branch wins; subsequent expressions and bodies are skipped, including invalid
+expressions in those discarded branches. `#elif` after `#else` is an error.
 
-Skipping nested blocks uses a second helper that passes their entire matching
-`#endif`, so inner `#else` directives cannot stop an outer skip. Stray and
-repeated `#else` directives are errors. The prior extra-token warning behavior
-is retained.
+The conditional stack now distinguishes its first branch, an `#elif` branch,
+and `#else`. Skipping stops at a sibling `#elif`, `#else`, or `#endif`, while
+nested conditionals are passed completely. Python uses explicit assignments
+and branching in place of the C output-pointer expression.
 
 ```sh
-printf '#if 0\ninvalid\n#else\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#if 0\n#elif 2+3\nint main(void){return 42;}\n#else\ninvalid\n#endif\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The chosen branch produces ordinary function assembly: load 42 into `%rax`,
-restore the stack frame and return. Neither the discarded branch nor the
-conditional directives produce instructions. Tests run both branch choices,
-nested alternatives, missing includes in discarded branches and diagnostics.
+The selected `main` loads 42 into `%rax` and returns through the usual frame
+cleanup. Selection happens before parsing, so discarded code emits no assembly.
+Tests cover a chain of alternatives, skipped expressions, fallback branches,
+diagnostics, and the unchanged original macro fixture.
 
 ## Tests and attribution
 

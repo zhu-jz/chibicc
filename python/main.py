@@ -1,6 +1,6 @@
-"""Lesson 165: Add #else.
+"""Lesson 166: Add #elif.
 
-Based on chibicc commit c6e81d22f8189cd7bfcfcc33e4ac462529418192.
+Based on chibicc commit e7a1857a31fc0c0012773c021639a6297f5b208f.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

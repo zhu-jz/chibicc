@@ -46,7 +46,7 @@ def skip_cond_incl(tokens, position):
         if is_hash(tokens[position]) and tokens[position + 1].text == "if":
             position = skip_cond_incl2(tokens, position + 2)
             continue
-        if is_hash(tokens[position]) and tokens[position + 1].text in ("else", "endif"):
+        if is_hash(tokens[position]) and tokens[position + 1].text in ("elif", "else", "endif"):
             break
         position += 1
     return position
@@ -105,6 +105,19 @@ def preprocess(tokens, files=None):
                 conditions.append(CondIncl(token, bool(value)))
                 if not value:
                     position = skip_cond_incl(tokens, position)
+                continue
+            if tokens[position].text == "elif":
+                if not conditions or conditions[-1].context == "ELSE":
+                    raise CompileError(token, "stray #elif")
+                conditions[-1].context = "ELIF"
+                if conditions[-1].included:
+                    position = skip_cond_incl(tokens, position)
+                else:
+                    value, position = eval_const_expr(tokens, position)
+                    if value:
+                        conditions[-1].included = True
+                    else:
+                        position = skip_cond_incl(tokens, position)
                 continue
             if tokens[position].text == "else":
                 if not conditions or conditions[-1].context == "ELSE":

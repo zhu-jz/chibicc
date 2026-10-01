@@ -1,6 +1,6 @@
-"""Lesson 163: Add #if and #endif.
+"""Lesson 164: Skip nested conditionals in false branches.
 
-Based on chibicc commit bf6ff928ad17d98d07f68f619e6cbe29829d0a20.
+Based on chibicc commit aa570f3086ce3e2c5ac8bf6107c051fed5aabf89.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

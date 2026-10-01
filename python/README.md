@@ -1,31 +1,27 @@
-# Lesson 163: Add #if and #endif
+# Lesson 164: Skip nested conditionals in false branches
 
-Original chibicc commit: [`bf6ff928ad17d98d07f68f619e6cbe29829d0a20`](https://github.com/rui314/chibicc/commit/bf6ff928ad17d98d07f68f619e6cbe29829d0a20).
+Original chibicc commit: [`aa570f3086ce3e2c5ac8bf6107c051fed5aabf89`](https://github.com/rui314/chibicc/commit/aa570f3086ce3e2c5ac8bf6107c051fed5aabf89).
 Earlier explanations are available in Git history.
 
-`#if` evaluates a constant expression before parsing the program. A zero
-result discards tokens through the next `#endif`; a nonzero result retains
-them. A Python list records open directives and diagnoses unmatched endings.
-The existing expression parser and constant evaluator perform the calculation.
-No Python `eval()` is involved.
-
-This original commit does not correctly skip nested conditionals in a false
-branch: it stops at the first `#endif`. Tests preserve that historical behavior.
-True nested branches work. Empty expressions, extra tokens, stray endings and
-unterminated conditionals produce diagnostics. Python already handles a final
-source line without a newline when displaying diagnostics, matching the C fix.
+Skipping a false `#if` now recognizes nested `#if` blocks and recursively skips
+them through their matching `#endif`. Expressions and includes inside skipped
+blocks are never processed. The recursion follows the original implementation.
+Python returns safely at end of input so an incomplete nested block reports an
+unterminated directive instead of following a null C token pointer.
 
 ```sh
-printf '#if 1\nint main(void){return 42;}\n#endif\n' > /tmp/lesson.c
+printf '#if 0\n#if unknown\ninvalid C\n#endif\n#endif\nint main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The selected return expression loads 42 into `%rax` and jumps to the function
-return label; the epilogue restores `%rbp` and returns. Preprocessor directives
-produce no assembly. `-E` lets you inspect the selected tokens directly.
+Only the `main` function reaches the parser. Its assembly loads the return
+value into `%rax`, restores the stack frame and returns. Tests exercise nested
+skips, ignored expressions and missing includes, executable exit status, and
+an incomplete nested directive. The original macro fixture also runs directly
+through the Python preprocessor.
 
 ## Tests and attribution
 

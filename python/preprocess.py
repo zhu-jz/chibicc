@@ -25,6 +25,12 @@ def is_hash(token):
 
 def skip_cond_incl(tokens, position):
     while tokens[position].kind != "EOF":
+        if is_hash(tokens[position]) and tokens[position + 1].text == "if":
+            position = skip_cond_incl(tokens, position + 2)
+            if tokens[position].kind == "EOF":
+                return position
+            position += 1
+            continue
         if is_hash(tokens[position]) and tokens[position + 1].text == "endif":
             break
         position += 1

@@ -72,6 +72,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_skip_nested_if(self):
+        self.assert_program_returns('''#if 0
+#if unknown_expression
+#include "/does/not/exist"
+#if also_unknown
+invalid C
+#endif
+#endif
+#endif
+int main(void){return 42;}
+''', 42)
+        result = compile_program('#if 0\n#if missing_end\n')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('unterminated conditional directive', result.stderr)
+
     def test_if_endif_directives(self):
         source = '#if 0\n#include "/no/such/file"\ninvalid code\n#endif\n#if 2*3==6\nint main(void){return 42;}\n#endif\n'
         self.assert_program_returns(source, 42)
@@ -80,8 +95,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                 ('#endif\n', 'stray #endif'),
                 ('#if 1\n', 'unterminated conditional directive'),
                 ('#if\n#endif\n', 'no expression'),
-                ('#if 1 2\n#endif\n', 'extra token'),
-                ('#if 0\n#if 1\n#endif\n#endif\n', 'stray #endif')):
+                ('#if 1 2\n#endif\n', 'extra token')):
             with self.subTest(source=source):
                 result = compile_program(source)
                 self.assertEqual(result.returncode, 1)

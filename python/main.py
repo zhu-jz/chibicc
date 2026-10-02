@@ -1,6 +1,6 @@
-"""Lesson 294: Quote Make dependency targets with -MQ.
+"""Lesson 295: Exclude include-path headers from dependencies with -MMD.
 
-Based on chibicc commit 7aa72e41e6b2703b3f357507252008ebe25dc08d.
+Based on chibicc commit c3edffbbb06be9d586ee4f1cf678049b7d81369d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -30,6 +30,7 @@ def add_default_include_paths(argv0, include_paths):
         "/usr/include/x86_64-linux-gnu",
         "/usr/include",
     ])
+    return tuple(include_paths)
 
 
 def quote_makefile(text):
@@ -65,6 +66,7 @@ def parse_args(arguments):
     opt_E = False
     opt_M = False
     opt_MD = False
+    opt_MMD = False
     opt_MF = None
     opt_MP = False
     opt_MT = None
@@ -84,6 +86,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-MMD":
+            opt_MD = opt_MMD = True
+            position += 1
+            continue
         if argument == "-MD":
             opt_MD = True
             position += 1
@@ -211,7 +217,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD
 
 
 def parse_opt_x(language):
@@ -261,18 +267,22 @@ def print_tokens(tokens, output_path):
     write_output(output_path, "".join(parts) + "\n")
 
 
-def print_dependencies(filename, files, output_path, phony=False, target=None):
+def print_dependencies(filename, files, output_path, phony=False, target=None, excluded_paths=()):
     text = (target if target is not None else quote_makefile(replace_extension(filename, ".o"))) + ":"
     for file in files:
+        if any(file.name.startswith(directory + "/") for directory in excluded_paths):
+            continue
         text += " \\\n  " + file.name
     text += "\n\n"
     if phony:
         for file in files[1:]:
+            if any(file.name.startswith(directory + "/") for directory in excluded_paths):
+                continue
             text += quote_makefile(file.name) + ":\n\n"
     write_output(output_path, text)
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False, opt_MF=None, opt_MP=False, opt_MT=None, opt_MD=False):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False, opt_MF=None, opt_MP=False, opt_MT=None, opt_MD=False, opt_MMD=False, std_include_paths=()):
     files = []
     try:
         tokens = []
@@ -292,7 +302,7 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
                 dependency_path = replace_extension(opt_o if opt_o is not None else filename, ".d")
             else:
                 dependency_path = opt_o
-            print_dependencies(filename, files, dependency_path, opt_MP, opt_MT)
+            print_dependencies(filename, files, dependency_path, opt_MP, opt_MT, std_include_paths if opt_MMD else ())
             if opt_M:
                 return 0
         if opt_E:
@@ -372,12 +382,12 @@ def run_linker(inputs, output, trace, extra_args=()):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD) = parse_args(sys.argv[1:])
         if opt_cc1:
-            add_default_include_paths(sys.argv[0], include_paths)
+            std_include_paths = add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M, opt_MF, opt_MP, opt_MT, opt_MD)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, std_include_paths)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

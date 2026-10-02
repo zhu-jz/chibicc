@@ -87,6 +87,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependencies_excluding_include_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            includes = root/'user-includes'
+            includes.mkdir()
+            (includes/'user.h').write_text('#define USER 2\n')
+            local, source, deps = root/'local.h', root/'main.c', root/'main.d'
+            local.write_text('#define ANSWER 40\n')
+            source.write_text('#include "local.h"\n#include <user.h>\n#include <stddef.h>\nint main(void){return ANSWER+USER;}')
+            assembly = root/'main.s'
+            for option in ('-MD', '-MMD'):
+                result = subprocess.run([sys.executable, str(COMPILER), '-S', option, '-MP', '-I'+str(includes), '-MF', str(deps), '-o', str(assembly), str(source)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                text = deps.read_text()
+                self.assertIn(str(local), text)
+                self.assertIn(str(source), text)
+                self.assertEqual('user.h' in text, option=='-MD')
+                self.assertEqual('stddef.h' in text, option=='-MD')
+                self.assertIn('main:', assembly.read_text())
+
     def test_quoted_dependency_targets(self):
         from main import quote_makefile
         self.assertEqual(quote_makefile('cash$ #\t'), 'cash$$\\ \\#\\\t')

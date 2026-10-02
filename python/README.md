@@ -1,28 +1,29 @@
-# Lesson 294: Quote Make dependency targets with -MQ
+# Lesson 295: Exclude include-path headers from dependencies with -MMD
 
-Original chibicc commit: [`7aa72e41e6b2703b3f357507252008ebe25dc08d`](https://github.com/rui314/chibicc/commit/7aa72e41e6b2703b3f357507252008ebe25dc08d).
+Original chibicc commit: [`c3edffbbb06be9d586ee4f1cf678049b7d81369d`](https://github.com/rui314/chibicc/commit/c3edffbbb06be9d586ee4f1cf678049b7d81369d).
 Earlier explanations are available in Git history.
 
--MQ selects a dependency target like -MT, but quotes characters significant to Make.
-Dollar signs become $$, # becomes \#, and spaces/tabs gain a backslash. Backslashes
-immediately before whitespace are duplicated so Make preserves them. Repeated -MQ
-and -MT arguments share the target list. Default targets and -MP dummy targets are
-also quoted; prerequisite paths are still printed literally in this original step.
+-MMD enables dependency generation during compilation, like -MD, and filters files
+whose paths begin with a recorded include-directory prefix followed by '/'. The
+same filter applies to -MP dummy rules. The driver records its include-path list
+after adding the default directories.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -M -MQ 'build file$#.o' -MF /tmp/lesson.d /tmp/lesson.c
+printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
+printf '#include "lesson-answer.h"\n#include <stddef.h>\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
+python3 python/main.py -S -MMD -MF /tmp/lesson.d -o /tmp/lesson.s /tmp/lesson.c
 cat /tmp/lesson.d
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The rule starts with build\ file$$\#.o:. The assembly is unaffected and returns 42.
-Tests check quoting, preceding backslashes, mixed target options and a real Make
-parse of the quoted target. Python builds a string list instead of C's allocated
-buffer. It also checks for a missing -MQ argument instead of C's unchecked access.
+The rule lists the source and its local quoted header, but omits the bundled
+stddef.h. Assembly still returns 42. Tests compare -MD and -MMD and check both
+prerequisites and dummy rules. This original copies the entire include list,
+including user -I directories, so their headers are also omitted; that historical
+behavior remains. Python returns a tuple of recorded paths instead of filling a
+C global array, and uses string-prefix checks without resolving filesystem paths.
 
 ## Tests and attribution
 

@@ -87,6 +87,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_function_redeclarations(self):
+        source = ('int answer(void);int answer(void);'
+                  'int answer(void){return 42;}int answer(void);'
+                  'int main(void){return answer();}')
+        self.assert_program_returns(source, 42)
+        functions = [obj for obj in parse(tokenize(source)) if obj.name == 'answer']
+        self.assertEqual(len(functions), 1)
+        self.assertTrue(functions[0].is_definition)
+        result = compile_program(source)
+        self.assertEqual(result.stdout.count('\nanswer:\n'), 1)
+        self.assert_program_returns('static int answer(void);'
+                                    'int answer(void){return 42;}'
+                                    'int main(void){return answer();}', 42)
+        for source, message in [
+            ('int f(void){return 1;}int f(void){return 2;}', 'redefinition of f'),
+            ('int f(void);static int f(void);', 'static declaration follows a non-static declaration')]:
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(message, result.stderr)
+
     def test_cpython_workflow(self):
         import thirdparty
         with tempfile.TemporaryDirectory() as directory:
@@ -3775,8 +3795,12 @@ int main(void){return 42;}
         self.assert_program_returns("int ret42();int main(void){return ret42();}", 42,
                                     "int ret42(void){return 42;}")
         program = parse(tokenize("int f(int x);int f(int x){return x;}"))
-        self.assertEqual([obj.is_definition for obj in program if obj.is_function], [True, False])
-        prototype = next(obj for obj in program if obj.is_function and not obj.is_definition)
+        functions = [obj for obj in program if obj.is_function]
+        self.assertEqual([obj.is_definition for obj in functions], [True])
+        self.assertIsNotNone(functions[0].body)
+        program = parse(tokenize("int f(int x);"))
+        prototype = next(obj for obj in program if obj.is_function)
+        self.assertFalse(prototype.is_definition)
         self.assertIsNone(prototype.body)
         self.assertEqual(declared_locals(prototype), [])
         assembly = compile_program("int f(int x);int f(int x){return x;}").stdout

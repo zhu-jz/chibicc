@@ -1,24 +1,26 @@
-# Lesson 311: Add the pinned CPython workflow
+# Lesson 312: Reuse function declarations and diagnose redefinitions
 
-Original chibicc commit: [`2ed3fdafa3d2f60bd1bcdb2bc5df6c1e58c357f7`](https://github.com/rui314/chibicc/commit/2ed3fdafa3d2f60bd1bcdb2bc5df6c1e58c357f7).
+Original chibicc commit: [`395308c77b94fc16b146c01cc1316b9a07635686`](https://github.com/rui314/chibicc/commit/395308c77b94fc16b146c01cc1316b9a07635686).
 Earlier explanations are available in Git history.
 
-The original commit adds an optional CPython build-and-test script pinned to
-`c75330605d4795850ec74fdc4d69aa5d92f76c00`. Its configure script mistakes
-`chibicc` for Intel's `icc` because of substring matching, so it deletes lines
-1996–2011 of `configure.ac`, runs `autoreconf`, and builds/tests with chibicc.
+Function declarations now reuse an existing global function object. A prototype,
+a later definition, and a subsequent prototype all refer to one object, so a
+prototype after a definition no longer hides the emitted function. A second
+body is rejected with `redefinition of name`; an explicitly static declaration
+after a non-static function declaration also receives a diagnostic.
 
-The Python runner now provides the same workflow. It uses an isolated checkout,
-HTTPS instead of requiring GitHub SSH credentials, and a marker to avoid
-repeating the configure edit on subsequent runs. The original shell fixture is
-preserved byte for byte. Running the real optional workflow needs network access,
-Autoconf and CPython's build dependencies; its full external test suite has not
-been run as part of this lesson. Dry-run and patch tests validate its commands.
+The first declaration supplies the stored type and linkage. This commit does
+not add general signature-compatibility checks. The existing `find_func` filters
+out non-function objects, so the new different-kind error branch remains
+unreachable for a previous variable, just as in the original helper.
+Python reports errors with `CompileError` rather than C's formatted error call.
 
 ```sh
-python3 python/thirdparty.py cpython --dry-run --jobs 2
 cat >/tmp/lesson.c <<'C'
-int main(void) { return 42; }
+int answer(void);
+int answer(void) { return 42; }
+int answer(void);
+int main(void) { return answer(); }
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -26,11 +28,9 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Drop `--dry-run` to fetch the pin, build the Python compiler archive and attempt
-the external workflow. Compiler syntax and assembly are unchanged: this example
-still places the result in the accumulator and returns through `main`'s epilogue.
-Tests check the exact line removal, repeat-run behavior, pin, command order,
-and existing third-party workflows.
+The output contains one `answer:` body. `main` calls its address, receives 42 in
+the accumulator, and returns it. Tests check object reuse, exactly one assembly
+body, a prototype following a body, retained static linkage, and both diagnostics.
 
 ## Tests and attribution
 

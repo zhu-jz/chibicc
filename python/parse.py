@@ -1684,15 +1684,25 @@ class Parser:
         ty, position = self.declarator(position, basety)
         if ty.name is None:
             raise CompileError(ty.name_pos, "function name omitted")
-        function = self.new_gvar(ty.name.text, ty)
-        function.is_function = True
-        function.is_definition = False
-        function.is_static = attr.is_static or (attr.is_inline and not attr.is_extern)
-        function.is_inline = attr.is_inline
+        function = self.find_func(ty.name.text)
+        is_definition = self.tokens[position].text == "{"
+        if function is not None:
+            if not function.is_function:
+                raise CompileError(self.tokens[position], "redeclared as a different kind of symbol")
+            if function.is_definition and is_definition:
+                raise CompileError(self.tokens[position], "redefinition of " + ty.name.text)
+            if not function.is_static and attr.is_static:
+                raise CompileError(self.tokens[position], "static declaration follows a non-static declaration")
+            function.is_definition = function.is_definition or is_definition
+        else:
+            function = self.new_gvar(ty.name.text, ty)
+            function.is_function = True
+            function.is_definition = is_definition
+            function.is_static = attr.is_static or (attr.is_inline and not attr.is_extern)
+            function.is_inline = attr.is_inline
         function.is_root = not (function.is_static and function.is_inline)
         if self.tokens[position].text == ";":
             return position + 1
-        function.is_definition = True
         self.current_fn = function
         self.locals = []
         self.enter_scope()

@@ -1,6 +1,6 @@
-"""Lesson 311: Add the pinned CPython workflow.
+"""Lesson 312: Reuse function declarations and diagnose redefinitions.
 
-Based on chibicc commit 2ed3fdafa3d2f60bd1bcdb2bc5df6c1e58c357f7.
+Based on chibicc commit 395308c77b94fc16b146c01cc1316b9a07635686.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

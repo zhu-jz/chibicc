@@ -1,36 +1,40 @@
-# Lesson 306: Add pinned third-party application test runners
+# Lesson 307: Atomic compare-and-swap
 
-Original chibicc commit: [`fb4937024db2ee06fd60ea3bb2cfc6c898646a7d`](https://github.com/rui314/chibicc/commit/fb4937024db2ee06fd60ea3bb2cfc6c898646a7d).
+Original chibicc commit: [`ca27455b92be2ffbfe58c7ffda623cf6ec112632`](https://github.com/rui314/chibicc/commit/ca27455b92be2ffbfe58c7ffda623cf6ec112632).
 Earlier explanations are available in Git history.
 
-The original adds optional build/test scripts for Git, libpng, SQLite and TinyCC.
-Their exact scripts are preserved under test/thirdparty; thirdparty.py adapts the
-workflows to our executable Python compiler archive. It fetches each pinned
-revision into an ignored project-and-revision directory, builds with that compiler,
-and runs the same application test commands. Use --dry-run to inspect a workflow.
+The new builtin takes an object pointer, an expected-value pointer, and a
+replacement value. Success stores the replacement and returns `_Bool` true.
+Failure leaves the object alone, writes its observed value into `*expected`,
+and returns false. Both header macros use this same instruction in this lesson.
+
+The parser stores three operands in a `CAS` node. Type checking requires the
+first two to be pointers. Assembly evaluates address, replacement, then expected
+pointer, once each. `lock cmpxchg` compares memory with the accumulator and
+atomically replaces it with `%dl`, `%dx`, `%edx`, or `%rdx` for 1/2/4/8 bytes.
+`sete` captures success; the failure path copies the accumulator back through
+`expected`. This step does not yet introduce the `_Atomic` type qualifier.
+Python reports unsupported operand sizes instead of C's internal assertion.
 
 ```sh
-python3 python/thirdparty.py git --dry-run --jobs 1
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+cat >/tmp/lesson.c <<'C'
+#include <stdatomic.h>
+int main(void) {
+  int value = 7, expected = 7;
+  atomic_compare_exchange_strong(&value, &expected, 42);
+  return value;
+}
+C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42
+echo $?  # 42; main returns the value, it does not print it
 ```
 
-This commit changes development tooling rather than assembly; main still returns
-42 in rax. To run a real application workflow, omit --dry-run, for example:
-python3 python/thirdparty.py git --jobs 4. It needs Git, Make, network access and
-the selected application's build dependencies. Its original pinned versions and
-libtool wl/PIC adjustments are retained; TinyCC's final tests use native cc as in C.
-
-Tests check all four dry-run workflows, shell syntax of the preserved scripts,
-libtool edits, and a real local Git fetch/build/test using the packaged Python
-compiler. The full external application suites are optional and have not been
-run by those tests. Python uses HTTPS and shallow pinned fetches rather than SSH
-clones, and reuses revision-specific checkouts without hard-resetting edited files.
-The runner is a development tool, not part of the compiler archive. MIT attribution
-is preserved; downloaded third-party projects retain their own licenses.
+Tests cover success, failure and expected-value updates at every supported
+width, boolean size, operand evaluation, pointer diagnostics, and assembly.
+The unchanged original pthread test increments a shared counter three million
+times using a compare-and-swap retry loop.
 
 ## Tests and attribution
 

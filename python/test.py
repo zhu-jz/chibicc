@@ -87,6 +87,31 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_atomic_compare_exchange(self):
+        for ty, register in [("char", "%dl"), ("short", "%dx"),
+                             ("int", "%edx"), ("long", "%rdx")]:
+            source = ('#include <stdatomic.h>\nint main(void){'
+                      + ty + ' x=7,old=7;'
+                      'if(!atomic_compare_exchange_strong(&x,&old,42))return 1;'
+                      'if(x!=42||old!=7)return 2;'
+                      'if(atomic_compare_exchange_weak(&x,&old,99))return 3;'
+                      'if(x!=42||old!=42)return 4;'
+                      'if(sizeof(__builtin_compare_and_swap(&x,&old,0))!=1)return 5;'
+                      'return x;}')
+            self.assert_program_returns(source, 42)
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('lock cmpxchg '+register+', (%rdi)', result.stdout)
+        self.assert_program_returns('int main(void){int x=7,old=7,n=0;'
+                                    '__builtin_compare_and_swap((n=n*10+1,&x),'
+                                    '(n=n*10+3,&old),(n=n*10+2,42));'
+                                    'return n==123&&x==42?42:1;}', 42)
+        for operands in ['1,&x,42', '&x,1,42']:
+            result = compile_program('int main(void){int x=7;return '
+                                     '__builtin_compare_and_swap('+operands+');}')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('pointer expected', result.stderr)
+
     def test_third_party_workflows(self):
         import thirdparty
         from build import build

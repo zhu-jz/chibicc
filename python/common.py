@@ -199,6 +199,9 @@ class Node:
     default_case: Optional["Node"] = field(default=None, compare=False)
     fvalue: float = 0.0
     asm_str: str = ""
+    cas_addr: Optional["Node"] = None
+    cas_old: Optional["Node"] = None
+    cas_new: Optional["Node"] = None
 
 
 @dataclass

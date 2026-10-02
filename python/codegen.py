@@ -19,6 +19,14 @@ GP_MAX = 6
 FP_MAX = 8
 
 
+def reg_dx(size):
+    return {1: "%dl", 2: "%dx", 4: "%edx", 8: "%rdx"}[size]
+
+
+def reg_ax(size):
+    return {1: "%al", 2: "%ax", 4: "%eax", 8: "%rax"}[size]
+
+
 I8 = "movsbl %al, %eax"
 U8 = "movzbl %al, %eax"
 I16 = "movswl %ax, %eax"
@@ -404,6 +412,24 @@ class CodeGenerator:
             return
         if node.kind == "LABEL_VAL":
             self.assembly.append(f"  lea {node.unique_label}(%rip), %rax")
+            return
+        if node.kind == "CAS":
+            size = node.cas_addr.ty.base.size
+            if size not in (1, 2, 4, 8):
+                raise CompileError(node.tok, "unsupported atomic operand size")
+            self.gen_expr(node.cas_addr)
+            self.push()
+            self.gen_expr(node.cas_new)
+            self.push()
+            self.gen_expr(node.cas_old)
+            self.assembly.append("  mov %rax, %r8")
+            self.load(node.cas_old.ty.base)
+            self.pop("%rdx")
+            self.pop("%rdi")
+            self.assembly.extend((f"  lock cmpxchg {reg_dx(size)}, (%rdi)",
+                                  "  sete %cl", "  je 1f",
+                                  f"  mov {reg_ax(size)}, (%r8)", "1:",
+                                  "  movzbl %cl, %eax"))
             return
         if node.kind == "MEMZERO":
             self.assembly.extend((f"  mov ${node.var.ty.size}, %rcx",

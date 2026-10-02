@@ -1,6 +1,6 @@
-"""Lesson 306: Add pinned third-party application test runners.
+"""Lesson 307: Atomic compare-and-swap.
 
-Based on chibicc commit fb4937024db2ee06fd60ea3bb2cfc6c898646a7d.
+Based on chibicc commit ca27455b92be2ffbfe58c7ffda623cf6ec112632.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -162,6 +162,13 @@ def add_type(node):
         node.ty = node.var.ty
     elif node.kind == "LABEL_VAL":
         node.ty = pointer_to(ty_void)
+    elif node.kind == "CAS":
+        for operand in (node.cas_addr, node.cas_old, node.cas_new):
+            add_type(operand)
+        node.ty = ty_bool
+        for operand in (node.cas_addr, node.cas_old):
+            if operand.ty.kind != "PTR":
+                raise CompileError(operand.tok, "pointer expected")
     elif node.kind == "COND":
         if node.then.ty.kind == "VOID" or node.els.ty.kind == "VOID":
             node.ty = ty_void

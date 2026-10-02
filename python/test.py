@@ -87,6 +87,25 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_include_search_cache(self):
+        from preprocess import search_include_paths
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root/'first', root/'second'
+            first.mkdir()
+            second.mkdir()
+            (first/'cache.h').write_text('')
+            (second/'cache.h').write_text('')
+            with patch('preprocess.os.path.exists', wraps=os.path.exists) as exists:
+                self.assertEqual(search_include_paths('cache.h', [str(first)]), str(first/'cache.h'))
+                count = exists.call_count
+                self.assertEqual(search_include_paths('cache.h', [str(first)]), str(first/'cache.h'))
+                self.assertEqual(exists.call_count, count)
+                self.assertEqual(search_include_paths('cache.h', [str(second)]), str(second/'cache.h'))
+                self.assertIsNone(search_include_paths('later.h', [str(first)]))
+                (first/'later.h').write_text('')
+                self.assertEqual(search_include_paths('later.h', [str(first)]), str(first/'later.h'))
+
     def test_position_independent_code(self):
         for flag in ('-fpic', '-fPIC'):
             with tempfile.TemporaryDirectory() as directory:

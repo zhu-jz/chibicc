@@ -368,12 +368,19 @@ def expand_macro(tokens, position, files, macros, conditions, include_paths):
     return True
 
 
+include_search_cache = {}
+
+
 def search_include_paths(filename, include_paths):
     if filename.startswith("/"):
         return filename
+    key = (filename, tuple(include_paths))
+    if key in include_search_cache:
+        return include_search_cache[key]
     for directory in include_paths:
         path = directory + "/" + filename
         if os.path.exists(path):
+            include_search_cache[key] = path
             return path
     return None
 

@@ -1,6 +1,6 @@
-"""Lesson 296: Generate position-independent code with -fPIC.
+"""Lesson 297: Cache successful include-file searches.
 
-Based on chibicc commit 86785fceb169bc754efe3f29a9b63137f5c9a106.
+Based on chibicc commit c0f0614e6b7647fd4703abf4c455024c2ade8cd7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

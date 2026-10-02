@@ -1,28 +1,29 @@
-# Lesson 296: Generate position-independent code with -fPIC
+# Lesson 297: Cache successful include-file searches
 
-Original chibicc commit: [`86785fceb169bc754efe3f29a9b63137f5c9a106`](https://github.com/rui314/chibicc/commit/86785fceb169bc754efe3f29a9b63137f5c9a106).
+Original chibicc commit: [`c0f0614e6b7647fd4703abf4c455024c2ade8cd7`](https://github.com/rui314/chibicc/commit/c0f0614e6b7647fd4703abf4c455024c2ade8cd7).
 Earlier explanations are available in Git history.
 
--fpic and -fPIC enable position-independent addresses for functions and globals.
-The compiler loads their addresses through GOTPCREL entries. Thread-local addresses
-use the general-dynamic TLS sequence, calling __tls_get_addr through the PLT.
-Local variables and allocated VLAs still use their normal frame-relative storage.
+Include-path searches now remember successful filename resolutions. Repeating a
+search can return the saved path without testing each directory again. Absolute
+paths still bypass the search, and missing files are not cached, so a later search
+can find a newly created file.
 
 ```sh
-printf 'int answer=42;int main(void){return answer;}\n' > /tmp/lesson.c
-python3 python/main.py -fPIC -S -o /tmp/lesson.s /tmp/lesson.c
+printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
+printf '#include <lesson-answer.h>\n#include <lesson-answer.h>\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
+python3 python/main.py -I/tmp -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly loads answer's address with mov answer@GOTPCREL(%rip),%rax, then reads
-its value. GOT entries let the loader choose addresses without rewriting this
-instruction's text. Tests assemble genuine shared libraries containing a global
-reference and TLS, link them with a GCC-built caller, and run them for both flags.
-Python passes a boolean into the code generator instead of using C's global
-opt_fpic. The TLS prefixes and linker relocation spelling follow the original.
-This step adds PIC generation; a compiler-driver -shared option is not added yet.
+The second include reuses the successful search; it still reads and preprocesses
+the header again. This is path-search caching, not an include guard. Assembly
+still returns 42. Tests count filesystem probes, verify cache hits, and confirm
+that misses are retried. Python keys the cache by filename plus the include-path
+tuple, so separate in-process compilations with different search lists remain
+independent; C's process-local cache keys only by filename. Positive results remain
+cached if the file later disappears, following the original caching behavior.
 
 ## Tests and attribution
 

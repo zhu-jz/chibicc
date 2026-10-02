@@ -1,6 +1,6 @@
-"""Lesson 305: Pass individual linker arguments with -Xlinker.
+"""Lesson 306: Add pinned third-party application test runners.
 
-Based on chibicc commit 469f159bb1adebb92ca2c9a7841466a98e6ad956.
+Based on chibicc commit fb4937024db2ee06fd60ea3bb2cfc6c898646a7d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

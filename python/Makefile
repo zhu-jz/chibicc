@@ -6,7 +6,7 @@ HEADERS = $(wildcard include/*.h)
 all: check $(ARCHIVE)
 
 check:
-	$(PYTHON) -W error -m py_compile $(filter %.py,$(SOURCES)) build.py test.py
+	$(PYTHON) -W error -m py_compile $(filter %.py,$(SOURCES)) build.py thirdparty.py test.py
 
 $(ARCHIVE): build.py $(SOURCES) $(HEADERS)
 	$(PYTHON) build.py -o $@

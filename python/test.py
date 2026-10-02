@@ -87,6 +87,36 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_third_party_workflows(self):
+        import thirdparty
+        from build import build
+        runner = Path(__file__).with_name('thirdparty.py')
+        for project, (_, revision) in thirdparty.PROJECTS.items():
+            result = subprocess.run([sys.executable, str(runner), project, '--dry-run', '--jobs', '1'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(revision, result.stdout)
+            self.assertIn('chibicc.pyz', result.stdout)
+        fixtures = Path(__file__).with_name('test')/'thirdparty'
+        for script in fixtures.iterdir():
+            subprocess.run(['bash', '-n', str(script)], check=True, capture_output=True)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repository = root/'repository'
+            repository.mkdir()
+            subprocess.run(['git', 'init', str(repository)], check=True, capture_output=True)
+            (repository/'main.c').write_text('int main(void){return 42;}')
+            (repository/'Makefile').write_text('clean:\n\trm -f program\ntest:\n\t$(CC) -o program main.c\n\t./program; test $$? -eq 42\n')
+            subprocess.run(['git', '-C', str(repository), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(repository), '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'fixture'], check=True, capture_output=True)
+            revision = subprocess.check_output(['git', '-C', str(repository), 'rev-parse', 'HEAD'], text=True).strip()
+            compiler = build(root/'compiler'/'chibicc.pyz')
+            with patch.dict(thirdparty.PROJECTS, {'git': (str(repository), revision)}):
+                thirdparty.run_project('git', root/'checkouts', compiler)
+            self.assertTrue((root/'checkouts'/('git-'+revision[:12])/'program').exists())
+            (root/'libtool').write_text('wl=old\npic_flag=old\nother=value\n')
+            thirdparty.patch_libtool(root)
+            self.assertEqual((root/'libtool').read_text(), 'wl=-Wl,\npic_flag=-fPIC\nother=value\n')
+
     def test_single_linker_arguments(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,27 +1,36 @@
-# Lesson 305: Pass individual linker arguments with -Xlinker
+# Lesson 306: Add pinned third-party application test runners
 
-Original chibicc commit: [`469f159bb1adebb92ca2c9a7841466a98e6ad956`](https://github.com/rui314/chibicc/commit/469f159bb1adebb92ca2c9a7841466a98e6ad956).
+Original chibicc commit: [`fb4937024db2ee06fd60ea3bb2cfc6c898646a7d`](https://github.com/rui314/chibicc/commit/fb4937024db2ee06fd60ea3bb2cfc6c898646a7d).
 Earlier explanations are available in Git history.
 
--Xlinker ARG passes one argument unchanged to ld through the extra-linker-argument
-list. Repeat it for options needing a separate value, such as -Xlinker -Map
--Xlinker report.txt. Spaces and commas inside an argument remain part of that
-argument. A missing argument is detected before file processing.
+The original adds optional build/test scripts for Git, libpng, SQLite and TinyCC.
+Their exact scripts are preserved under test/thirdparty; thirdparty.py adapts the
+workflows to our executable Python compiler archive. It fetches each pinned
+revision into an ignored project-and-revision directory, builds with that compiler,
+and runs the same application test commands. Use --dry-run to inspect a workflow.
 
 ```sh
+python3 python/thirdparty.py git --dry-run --jobs 1
 printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -Xlinker --gc-sections -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -Xlinker --gc-sections -o /tmp/lesson /tmp/lesson.c
 ```
 
-The assembly still returns 42. The driver passes --gc-sections to the linker as
-one argument. Tests generate a real link map at a filename containing both a
-space and comma, run the executable and check a missing argument. Python appends
-the string directly to a subprocess list, corresponding to C's StringArray.
-The original driver fixture uses native cc; the Python tests exercise our driver.
+This commit changes development tooling rather than assembly; main still returns
+42 in rax. To run a real application workflow, omit --dry-run, for example:
+python3 python/thirdparty.py git --jobs 4. It needs Git, Make, network access and
+the selected application's build dependencies. Its original pinned versions and
+libtool wl/PIC adjustments are retained; TinyCC's final tests use native cc as in C.
+
+Tests check all four dry-run workflows, shell syntax of the preserved scripts,
+libtool edits, and a real local Git fetch/build/test using the packaged Python
+compiler. The full external application suites are optional and have not been
+run by those tests. Python uses HTTPS and shallow pinned fetches rather than SSH
+clones, and reuses revision-specific checkouts without hard-resetting edited files.
+The runner is a development tool, not part of the compiler archive. MIT attribution
+is preserved; downloaded third-party projects retain their own licenses.
 
 ## Tests and attribution
 

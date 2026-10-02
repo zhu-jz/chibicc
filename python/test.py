@@ -87,6 +87,27 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_dependencies_during_compilation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header = root/'answer.h'
+            header.write_text('#define ANSWER 42\n')
+            for name in ('one', 'two'):
+                (root/(name+'.c')).write_text('#include "answer.h"\nint answer(void){return ANSWER;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-c', '-MD', 'one.c', 'two.c'], cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for name in ('one', 'two'):
+                self.assertTrue((root/(name+'.o')).read_bytes().startswith(b'\x7fELF'))
+                self.assertTrue((root/(name+'.d')).read_text().startswith(name+'.o:'))
+                self.assertIn('answer.h', (root/(name+'.d')).read_text())
+            source = root/'main.c'
+            source.write_text('#include "answer.h"\nint main(void){return ANSWER;}')
+            assembly, deps = root/'main.s', root/'chosen.d'
+            result = subprocess.run([sys.executable, str(COMPILER), '-S', '-MD', '-MF', str(deps), '-o', str(assembly), str(source)], cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('main:', assembly.read_text())
+            self.assertIn(str(source), deps.read_text())
+
     def test_dependency_target_options(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory)/'main.c'

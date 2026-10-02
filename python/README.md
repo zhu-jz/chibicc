@@ -1,31 +1,28 @@
-# Lesson 292: Choose dependency targets with -MT
+# Lesson 293: Write dependencies during compilation with -MD
 
-Original chibicc commit: [`db850f37a2a284bf18cea427e4676a22d83d04b8`](https://github.com/rui314/chibicc/commit/db850f37a2a284bf18cea427e4676a22d83d04b8).
+Original chibicc commit: [`fb5cfe5d17fd0c0cbc0d17789c065b9bb86ba3c4`](https://github.com/rui314/chibicc/commit/fb5cfe5d17fd0c0cbc0d17789c065b9bb86ba3c4).
 Earlier explanations are available in Git history.
 
--MT TARGET replaces the default basename.o target in a -M dependency rule. Repeating
--MT joins the target strings with spaces, producing a rule for several targets.
-The supplied strings are written literally; this commit does not escape Make
-syntax. -MF selects the output file and -MP still adds dummy header rules.
+-MD writes a dependency rule after preprocessing, then continues parsing and
+compiling. -M still stops after dependency output. -MF takes precedence when
+choosing a dependency file; otherwise -MD replaces the output name or source name
+with a .d suffix. Existing -MT and -MP options also apply to the generated rule.
 
 ```sh
-printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
-printf '#include "lesson-answer.h"\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
-python3 python/main.py -M -MP -MF /tmp/lesson.d -MT build/lesson.o -MT lesson-copy.o /tmp/lesson.c
+printf '#include <stddef.h>\nint main(void){return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -S -MD -MF /tmp/lesson.d -o /tmp/lesson.s /tmp/lesson.c
 cat /tmp/lesson.d
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The dependency rule begins build/lesson.o lesson-copy.o: and lists the source and
-header. The header also gets an empty rule. These options affect build metadata;
-normal assembly loads 42 into rax and returns, and echo $? displays the exit status.
-Tests check single and repeated targets, an empty literal target and missing -MT
-arguments, alongside -M, -MF and -MP behavior. Python uses None for an absent target
-and immutable string concatenation instead of C's allocated formatted strings.
-Earlier lesson explanations remain in Git history; README describes this lesson.
+Assembly still defines main and returns 42 in rax. The extra .d file lists its
+source and included header for Make. Tests compile two files with -c -MD, check
+their real ELF objects and separate dependency files, and combine -S with -MF.
+As in C, the default .d name uses only the basename and is written in the current
+working directory. Python uses explicit option arguments rather than C globals.
+Dependencies are written before parsing, so a later syntax error can leave a .d file.
 
 ## Tests and attribution
 

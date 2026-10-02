@@ -87,6 +87,20 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_static_linking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, executable = root/'main.c', root/'main'
+            source.write_text('int puts(char*);int main(void){puts("static");return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-static', '-###', '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('--start-group -lgcc -lgcc_eh -lc --end-group', result.stderr)
+            self.assertNotIn('-dynamic-linker', result.stderr)
+            executed = subprocess.run([str(executable)], capture_output=True, text=True, timeout=5)
+            self.assertEqual((executed.returncode, executed.stdout), (42, 'static\n'))
+            headers = subprocess.run(['readelf', '-l', str(executable)], check=True, capture_output=True, text=True).stdout
+            self.assertNotIn('INTERP', headers)
+
     def test_include_next(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

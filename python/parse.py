@@ -1269,7 +1269,11 @@ class Parser:
         return ty, self.consume_end(position)
 
     def compute_vla_size(self, ty, token):
-        computed = self.compute_vla_size(ty.base, token) if ty.base is not None else None
+        # Even ordinary types retain the C compiler's empty expression nodes:
+        # they emit no instructions, but each contributes a debug .loc entry.
+        computed = Node("NULL_EXPR", tok=token)
+        if ty.base is not None:
+            computed = Node("COMMA", computed, self.compute_vla_size(ty.base, token), tok=token)
         if ty.kind != "VLA":
             return computed
         if ty.base.kind == "VLA":
@@ -1279,7 +1283,7 @@ class Parser:
         ty.vla_size = self.new_lvar("", ty_ulong)
         value = Node("*", ty.vla_len, base_size, tok=token)
         assignment = Node("ASSIGN", Node("VAR", var=ty.vla_size, tok=token), value, tok=token)
-        return Node("COMMA", computed, assignment, tok=token) if computed is not None else assignment
+        return Node("COMMA", computed, assignment, tok=token)
 
     def new_alloca(self, size):
         add_type(size)
@@ -1310,8 +1314,7 @@ class Parser:
                     position = self.gvar_initializer(position + 1, var)
                 continue
             computed = self.compute_vla_size(ty, self.tokens[position])
-            if computed is not None:
-                statements.append(Node("EXPR_STMT", lhs=computed, tok=self.tokens[position]))
+            statements.append(Node("EXPR_STMT", lhs=computed, tok=self.tokens[position]))
             if ty.kind == "VLA":
                 if self.tokens[position].text == "=":
                     raise CompileError(self.tokens[position], "variable-sized object may not be initialized")

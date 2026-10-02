@@ -6,7 +6,7 @@ HEADERS = $(wildcard include/*.h)
 all: check $(ARCHIVE)
 
 check:
-	$(PYTHON) -W error -m py_compile $(filter %.py,$(SOURCES)) build.py thirdparty.py test.py
+	$(PYTHON) -W error -m py_compile $(filter %.py,$(SOURCES)) build.py bootstrap.py thirdparty.py test.py
 
 $(ARCHIVE): build.py $(SOURCES) $(HEADERS)
 	$(PYTHON) build.py -o $@
@@ -19,4 +19,7 @@ test-stage2: $(ARCHIVE)
 
 test-all: check test test-stage2
 
-.PHONY: all check test test-stage2 test-all
+test-bootstrap: check $(ARCHIVE)
+	$(PYTHON) bootstrap.py --compiler main.py --compiler $(ARCHIVE)
+
+.PHONY: all check test test-stage2 test-all test-bootstrap

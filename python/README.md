@@ -51,6 +51,46 @@ third-party workflows are available through `thirdparty.py`; their full external
 application suites have not been run for this port. Earlier explanations live
 in Git history, with one Python commit recording each original commit.
 
+## Matching the original compiler binary
+
+The Python compiler can compile the original nine C source files into the same
+complete executable as the C compiler, including assertions, debug information,
+symbols and the linker build ID. Run the comparison on x86-64 Linux/WSL:
+
+```sh
+make -C python test-bootstrap
+cmp python/build/bootstrap/reference/chibicc python/build/bootstrap/python-1/chibicc
+cmp python/build/bootstrap/reference/chibicc python/build/bootstrap/python-2/chibicc
+```
+
+`bootstrap.py` first builds the original compiler with GCC, then uses that C
+compiler and both the Python source and packaged compiler to compile the same
+original C files. It reuses identical assembly, object and linker paths and
+compares every complete object file and the linked executable. It checks debug
+line directives, retained debug sections and assertion references, runs the
+compiled compiler's hash-map test, and compiles a program that exits with 42.
+Artifacts and the JSON report stay in `python/build/bootstrap/`. To compare an
+existing reference too, add `--existing /path/to/chibicc` when invoking
+`python3 python/bootstrap.py` from the repository root.
+
+Two implementation details matter for byte identity. The original C
+preprocessor reuses argument tokens: expanding an ordinary parameter can
+rewrite links visible to a later `#parameter`. For example, with `VALUE` defined
+as `7`, `BOTH(x)` defined as `x, #x` produces `1 + 7, "1 + 7"` for
+`BOTH(1 + VALUE)`, but `7, "VALUE"` for `BOTH(VALUE)`. Python now preserves this
+historical quirk with a small map of argument-token links. This intentionally
+differs from the usual C rule that `#` uses the unexpanded argument spelling.
+The parser also retains the original empty VLA-size expression nodes for
+ordinary local declarations and pointer types. They generate no instructions,
+but their `.loc` directives affect debug information.
+
+No assertions or debug data are removed. Byte identity requires the same source
+paths, working directory, headers, assembler, linker and flags for both builds;
+different toolchains or paths can change the resulting bytes. Assembly text can
+still differ in harmless formatting, such as signed versus unsigned `.byte`
+values, while producing identical objects. This check is a post-history fidelity
+fix; the current original lesson remains 316.
+
 ## Tests and attribution
 
 Run from the repository root on x86-64 Linux/WSL with Python 3 and GCC

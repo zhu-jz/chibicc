@@ -323,8 +323,8 @@ def subst(body, args, files, macros, conditions, include_paths, va_args_name=Non
                 position += 1
             continue
         if argument is not None:
-            expanded = [replace(tok) for tok in argument]
-            preprocess2(expanded, files, macros, conditions, include_paths)
+            expanded = list(argument)
+            preprocess2(expanded, files, macros, conditions, include_paths, argument=argument)
             expanded[0].at_bol = token.at_bol
             expanded[0].has_space = token.has_space
             result.extend(replace(tok) for tok in expanded[:-1])
@@ -455,7 +455,13 @@ def include_file(path, filename, files, macros):
     return included
 
 
-def preprocess2(tokens, files, macros, conditions, include_paths):
+def preprocess2(tokens, files, macros, conditions, include_paths, argument=None):
+    # C preprocesses macro arguments in place. Passing a token through rewrites
+    # the previous output token's next pointer, which can change a later #arg.
+    # Keep those links only for arguments; the rest of this port still uses lists.
+    if argument is not None:
+        argument_head = argument[0]
+        next_tokens = {id(lhs): rhs for lhs, rhs in zip(argument, argument[1:])}
     result = []
     position = 0
     while tokens[position].kind != "EOF":
@@ -556,8 +562,19 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
         if token.file is not None:
             token.line_delta = token.file.line_delta
             token.filename = token.file.display_name
+        if argument is not None and result:
+            next_tokens[id(result[-1])] = token
         result.append(token)
         position += 1
+    if argument is not None:
+        if result:
+            next_tokens[id(result[-1])] = tokens[position]
+        argument[:] = []
+        token = argument_head
+        while token.kind != "EOF":
+            argument.append(token)
+            token = next_tokens[id(token)]
+        argument.append(token)
     result.append(tokens[position])
     tokens[:] = result
     return tokens

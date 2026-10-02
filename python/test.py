@@ -70,9 +70,11 @@ def declared_locals(function):
 
 
 def grammar_tree(node):
-    """Compare syntax trees without generated casts or initialization zeroing."""
+    """Compare syntax without casts, initialization zeroing or empty size checks."""
     if isinstance(node, list):
-        return [grammar_tree(child) for child in node]
+        return [grammar_tree(child) for child in node
+                if not (isinstance(child, Node) and child.kind == "EXPR_STMT"
+                        and empty_size_check(child.lhs))]
     if isinstance(node, Obj):
         return replace(node, body=grammar_tree(node.body), locals=declared_locals(node))
     if not isinstance(node, Node):
@@ -86,7 +88,44 @@ def grammar_tree(node):
     return replace(node, **children)
 
 
+def empty_size_check(node):
+    if node is None:
+        return False
+    return node.kind == "NULL_EXPR" or (node.kind == "COMMA"
+            and empty_size_check(node.lhs) and empty_size_check(node.rhs))
+
+
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_macro_argument_reuse_matches_original(self):
+        definitions = '#define VALUE 7\n'
+        cases = [
+            ('#define BOTH(x) x, #x\nBOTH(1 + VALUE)', b'1 + 7\0'),
+            ('#define BOTH(x) x, #x\nBOTH(VALUE)', b'VALUE\0'),
+            ('#define BOTH(x) x, #x\nBOTH(VALUE + VALUE)', b'VALUE + 7\0'),
+            ('#define BEFORE(x) #x, x\nBEFORE(1 + VALUE)', b'1 + VALUE\0'),
+            ('#define TWICE(x) x, x, #x\nTWICE(1 + __COUNTER__)', b'1 +0\0'),
+            ('#define TWICE(x) x, x, #x\nTWICE(__COUNTER__)', b'__COUNTER__\0'),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                tokens = tokenize(definitions + source + '\n')
+                self.assertEqual([tok.str for tok in tokens if tok.kind == 'STR'], [expected])
+        source = '#define TWICE(x) x, x, #x\nTWICE(1 + __COUNTER__)\n'
+        self.assertEqual([tok.value for tok in tokenize(source) if tok.kind == 'NUM'], [1, 0, 1, 0])
+        source = '#define TWICE(x) x, x, #x\nTWICE(__COUNTER__)\n'
+        self.assertEqual([tok.value for tok in tokenize(source) if tok.kind == 'NUM'], [0, 1])
+
+    def test_empty_size_checks_keep_debug_locations(self):
+        source = ('int main(void) {\n  int value;\n  int *pointer;\n'
+                  '  int **nested;\n  return 42;\n}\n')
+        result = compile_program(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        locations = [line.strip() for line in result.stdout.splitlines()
+                     if line.strip().startswith('.loc ')]
+        self.assertEqual(locations, ['.loc 1 2'] * 4 + ['.loc 1 3'] * 5
+                         + ['.loc 1 4'] * 7 + ['.loc 1 5'] * 3)
+        self.assert_program_returns(source, 42)
+
     def test_aggregate_expression_members(self):
         for aggregate in ['struct', 'union']:
             self.assert_program_returns('int main(void){'+aggregate+' T{int a;} x={1},y={42};'
@@ -3221,7 +3260,7 @@ int main(void){return 42;}
             ("int main(void){int a[2]={a[1]+42};return a[0];}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        expression = parse_body("int a[3]={42};").body.body[0].body[0].lhs
+        expression = parse_body("int a[3]={42};").body.body[0].body[-1].lhs
         self.assertEqual((expression.kind, expression.lhs.kind), ("COMMA", "MEMZERO"))
         self.assertEqual(expression.lhs.var.ty.size, 12)
         assembly = compile_program("int main(void){int a[3]={42};return a[2];}").stdout
@@ -3238,7 +3277,7 @@ int main(void){return 42;}
             ("int main(void){int x=42;int *a[1]={&x};return *a[0];}", 42),
         ]:
             self.assert_program_returns(source, expected)
-        node = grammar_tree(parse_body("int a[2]={3,4};").body.body[0].body[0].lhs)
+        node = grammar_tree(parse_body("int a[2]={3,4};").body.body[0].body[-1].lhs)
         self.assertEqual((node.kind, node.lhs.kind, node.lhs.lhs.kind), ("COMMA", "COMMA", "NULL_EXPR"))
         self.assertEqual((node.lhs.rhs.kind, node.rhs.kind), ("ASSIGN", "ASSIGN"))
         assembly = compile_program("int main(void){int a[2]={3,4};return a[1];}").stdout
@@ -3569,7 +3608,7 @@ int main(void){return 42;}
             self.assert_program_returns(source, expected)
         node = parse_body("for(int i=0;i<1;i=i+1);").body.body[0]
         self.assertEqual(node.init.kind, "BLOCK")
-        self.assertEqual(grammar_tree(node.init.body[0].lhs).kind, "ASSIGN")
+        self.assertEqual(grammar_tree(node.init.body[-1].lhs).kind, "ASSIGN")
         result = compile_program("int main(void){for(int i=0;i<1;i=i+1);return i;}")
         self.assertIn("undefined variable", result.stderr)
         self.assertEqual(result.returncode, 1)
@@ -4701,10 +4740,10 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         program = parse_body("int foo=3; int bar=5; return foo+bar;")
         self.assertEqual([var.name for var in declared_locals(program)], ["bar", "foo"])
         bar, foo = declared_locals(program)
-        self.assertIs(grammar_tree(program.body.body[0].body[0].lhs).lhs.var, foo)
+        self.assertIs(grammar_tree(program.body.body[0].body[-1].lhs).lhs.var, foo)
         expression = grammar_tree(program.body.body[2].lhs)
         self.assertIs(expression.lhs.var, foo)
-        self.assertIs(grammar_tree(program.body.body[1].body[0].lhs).lhs.var, bar)
+        self.assertIs(grammar_tree(program.body.body[1].body[-1].lhs).lhs.var, bar)
         self.assertIs(expression.rhs.var, bar)
         CodeGenerator().generate([program])
         self.assertEqual((bar.offset, foo.offset, program.stack_size), (-4, -8, 16))
@@ -5204,7 +5243,7 @@ int add6(int a,int b,int c,int d,int e,int f) {return a+b+c+d+e+f;}
         self.assertEqual(q.ty.base.base.kind, "INT")
         self.assertEqual([var.ty.name.text for var in [q,p,x]], ["q","p","x"])
         self.assertIsNone(ty_int.name)
-        declaration = program.body.body[0]
+        declaration = grammar_tree(program.body.body[0])
         self.assertEqual(declaration.kind, "BLOCK")
         self.assertEqual(len(declaration.body), 3)
         for statement in declaration.body:

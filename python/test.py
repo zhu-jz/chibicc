@@ -87,6 +87,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_cpython_workflow(self):
+        import thirdparty
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lines = ['line '+str(i)+'\n' for i in range(1, 2021)]
+            (root/'configure.ac').write_text(''.join(lines))
+            thirdparty.patch_cpython(root)
+            self.assertEqual((root/'configure.ac').read_text(), ''.join(lines[:1995]+lines[2011:]))
+            thirdparty.patch_cpython(root)
+            self.assertEqual((root/'configure.ac').read_text(), ''.join(lines[:1995]+lines[2011:]))
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name('thirdparty.py')), 'cpython', '--dry-run', '--jobs', '2'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('c75330605d4795850ec74fdc4d69aa5d92f76c00', result.stdout)
+        self.assertLess(result.stdout.index('autoreconf'), result.stdout.index('./configure'))
+        self.assertIn('make -j2 test', result.stdout)
+
     def test_completed_atomic_header(self):
         source = '''#include <stdatomic.h>
 #ifdef __STDC_NO_ATOMICS__

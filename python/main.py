@@ -1,6 +1,6 @@
-"""Lesson 310: Complete the atomic header.
+"""Lesson 311: Add the pinned CPython workflow.
 
-Based on chibicc commit 0a5d08c8f8a72e39828e7b1910c55174e6c8dd5e.
+Based on chibicc commit 2ed3fdafa3d2f60bd1bcdb2bc5df6c1e58c357f7.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

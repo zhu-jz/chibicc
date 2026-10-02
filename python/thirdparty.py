@@ -14,11 +14,23 @@ from build import build
 
 
 PROJECTS = {
+    "cpython": ("https://github.com/python/cpython.git", "c75330605d4795850ec74fdc4d69aa5d92f76c00"),
     "git": ("https://github.com/git/git.git", "54e85e7af1ac9e9a92888060d6811ae767fea1bc"),
     "libpng": ("https://github.com/rui314/libpng.git", "dbe3e0c43e549a1602286144d94b0666549b18e6"),
     "sqlite": ("https://github.com/sqlite/sqlite.git", "86f477edaa17767b39c7bae5b67cac8580f7a8c1"),
     "tinycc": ("https://github.com/TinyCC/tinycc.git", "df67d8617b7d1d03a480a28f9f901848ffbfb7ec"),
 }
+
+
+def patch_cpython(directory):
+    marker = directory / ".chibicc-configure-patched"
+    if marker.exists():
+        return
+    path = directory / "configure.ac"
+    lines = path.read_text().splitlines(keepends=True)
+    del lines[1995:2011]
+    path.write_text("".join(lines))
+    marker.touch()
 
 
 def patch_libtool(directory):
@@ -67,6 +79,18 @@ def run_project(project, work_directory, compiler, jobs=1, dry_run=False):
         run(make + ["CC=cc", "test"])
         return
     environment = dict(os.environ, CC=shlex.quote(str(compiler)))
+    if project == "cpython":
+        print("configure environment: CC=" + environment["CC"], flush=True)
+        if dry_run:
+            print("patch configure.ac: remove lines 1996 through 2011", flush=True)
+        else:
+            patch_cpython(checkout)
+        run(["autoreconf"])
+        run(["./configure"], environment=environment)
+        run(make + ["clean"])
+        run(make)
+        run(make + ["test"])
+        return
     if project == "sqlite":
         environment["CFLAGS"] = "-D_GNU_SOURCE"
     print("configure environment: CC=" + environment["CC"] +

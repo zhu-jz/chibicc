@@ -87,6 +87,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_position_independent_code(self):
+        for flag in ('-fpic', '-fPIC'):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source, assembly, library = root/'get.c', root/'get.s', root/'get.so'
+                source.write_text('extern int answer;_Thread_local int local=40;int get(void){return answer+local;}')
+                result = subprocess.run([sys.executable, str(COMPILER), flag, '-S', '-o', str(assembly), str(source)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                text = assembly.read_text()
+                self.assertIn('answer@GOTPCREL(%rip)', text)
+                self.assertIn('local@tlsgd(%rip)', text)
+                self.assertIn('call __tls_get_addr@PLT', text)
+                subprocess.run(['gcc', '-shared', '-o', str(library), str(assembly)], check=True, capture_output=True)
+                main, executable = root/'main.c', root/'main'
+                main.write_text('int answer=2;int get(void);int main(void){return get();}')
+                subprocess.run(['gcc', '-o', str(executable), str(main), str(library)], check=True, capture_output=True)
+                self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_dependencies_excluding_include_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

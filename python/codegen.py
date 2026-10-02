@@ -123,8 +123,9 @@ def has_flonum(ty, lo, hi, offset=0):
 
 
 class CodeGenerator:
-    def __init__(self, fcommon=True):
+    def __init__(self, fcommon=True, fpic=False):
         self.fcommon = fcommon
+        self.fpic = fpic
         self.assembly = []
         self.depth = 0
         self.label_count = 0
@@ -144,6 +145,12 @@ class CodeGenerator:
                 self.assembly.append(f"  mov {node.var.offset}(%rbp), %rax")
             elif node.var.is_local:
                 self.assembly.append(f"  lea {node.var.offset}(%rbp), %rax")
+            elif self.fpic:
+                if node.var.is_tls:
+                    self.assembly.extend((f"  data16 lea {node.var.name}@tlsgd(%rip), %rdi",
+                                          "  .value 0x6666", "  rex64", "  call __tls_get_addr@PLT"))
+                else:
+                    self.assembly.append(f"  mov {node.var.name}@GOTPCREL(%rip), %rax")
             elif node.var.is_tls:
                 self.assembly.extend(("  mov %fs:0, %rax",
                                       f"  add ${node.var.name}@tpoff, %rax"))
@@ -888,5 +895,5 @@ class CodeGenerator:
         return "\n".join(self.assembly)
 
 
-def codegen(program, files=(), fcommon=True):
-    return CodeGenerator(fcommon).generate(program, files)
+def codegen(program, files=(), fcommon=True, fpic=False):
+    return CodeGenerator(fcommon, fpic).generate(program, files)

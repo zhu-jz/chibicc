@@ -1,6 +1,6 @@
-"""Lesson 295: Exclude include-path headers from dependencies with -MMD.
+"""Lesson 296: Generate position-independent code with -fPIC.
 
-Based on chibicc commit c3edffbbb06be9d586ee4f1cf678049b7d81369d.
+Based on chibicc commit 86785fceb169bc754efe3f29a9b63137f5c9a106.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -71,6 +71,7 @@ def parse_args(arguments):
     opt_MP = False
     opt_MT = None
     opt_fcommon = True
+    opt_fpic = False
     opt_x = None
     ld_extra_args = []
     position = 0
@@ -86,6 +87,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument in ("-fpic", "-fPIC"):
+            opt_fpic = True
+            position += 1
+            continue
         if argument == "-MMD":
             opt_MD = opt_MMD = True
             position += 1
@@ -217,7 +222,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic
 
 
 def parse_opt_x(language):
@@ -282,7 +287,7 @@ def print_dependencies(filename, files, output_path, phony=False, target=None, e
     write_output(output_path, text)
 
 
-def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False, opt_MF=None, opt_MP=False, opt_MT=None, opt_MD=False, opt_MMD=False, std_include_paths=()):
+def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros=None, fcommon=True, forced_includes=(), opt_M=False, opt_MF=None, opt_MP=False, opt_MT=None, opt_MD=False, opt_MMD=False, std_include_paths=(), fpic=False):
     files = []
     try:
         tokens = []
@@ -310,7 +315,7 @@ def cc1(filename, output_path, opt_E=False, opt_o=None, include_paths=(), macros
             return 0
         program = parse(tokens)
         # Finish all code generation in memory before opening the destination.
-        assembly = codegen(program, files, fcommon)
+        assembly = codegen(program, files, fcommon, fpic)
         write_output(output_path, assembly)
     except CompileError as error:
         if error.position is None:
@@ -382,12 +387,12 @@ def run_linker(inputs, output, trace, extra_args=()):
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic) = parse_args(sys.argv[1:])
         if opt_cc1:
             std_include_paths = add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
                 raise CompileError(None, "-cc1 requires -cc1-input")
-            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, std_include_paths)
+            return cc1(base_file, cc1_output, opt_E, opt_o, include_paths, macros, opt_fcommon, forced_includes, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, std_include_paths, opt_fpic)
         if len(inputs) > 1 and opt_o is not None and (opt_c or opt_S or opt_E):
             raise CompileError(None, "cannot specify '-o' with '-c,' '-S' or '-E' with multiple files")
         linker_inputs = []

@@ -1,29 +1,28 @@
-# Lesson 295: Exclude include-path headers from dependencies with -MMD
+# Lesson 296: Generate position-independent code with -fPIC
 
-Original chibicc commit: [`c3edffbbb06be9d586ee4f1cf678049b7d81369d`](https://github.com/rui314/chibicc/commit/c3edffbbb06be9d586ee4f1cf678049b7d81369d).
+Original chibicc commit: [`86785fceb169bc754efe3f29a9b63137f5c9a106`](https://github.com/rui314/chibicc/commit/86785fceb169bc754efe3f29a9b63137f5c9a106).
 Earlier explanations are available in Git history.
 
--MMD enables dependency generation during compilation, like -MD, and filters files
-whose paths begin with a recorded include-directory prefix followed by '/'. The
-same filter applies to -MP dummy rules. The driver records its include-path list
-after adding the default directories.
+-fpic and -fPIC enable position-independent addresses for functions and globals.
+The compiler loads their addresses through GOTPCREL entries. Thread-local addresses
+use the general-dynamic TLS sequence, calling __tls_get_addr through the PLT.
+Local variables and allocated VLAs still use their normal frame-relative storage.
 
 ```sh
-printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
-printf '#include "lesson-answer.h"\n#include <stddef.h>\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
-python3 python/main.py -S -MMD -MF /tmp/lesson.d -o /tmp/lesson.s /tmp/lesson.c
-cat /tmp/lesson.d
+printf 'int answer=42;int main(void){return answer;}\n' > /tmp/lesson.c
+python3 python/main.py -fPIC -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The rule lists the source and its local quoted header, but omits the bundled
-stddef.h. Assembly still returns 42. Tests compare -MD and -MMD and check both
-prerequisites and dummy rules. This original copies the entire include list,
-including user -I directories, so their headers are also omitted; that historical
-behavior remains. Python returns a tuple of recorded paths instead of filling a
-C global array, and uses string-prefix checks without resolving filesystem paths.
+Assembly loads answer's address with mov answer@GOTPCREL(%rip),%rax, then reads
+its value. GOT entries let the loader choose addresses without rewriting this
+instruction's text. Tests assemble genuine shared libraries containing a global
+reference and TLS, link them with a GCC-built caller, and run them for both flags.
+Python passes a boolean into the code generator instead of using C's global
+opt_fpic. The TLS prefixes and linker relocation spelling follow the original.
+This step adds PIC generation; a compiler-driver -shared option is not added yet.
 
 ## Tests and attribution
 

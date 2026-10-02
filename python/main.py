@@ -1,6 +1,6 @@
-"""Lesson 299: Honor pragma once.
+"""Lesson 300: Continue include searches with include_next.
 
-Based on chibicc commit a6c662207d38813b3dd490d81d8afe14ac99272b.
+Based on chibicc commit f10bcebaa5df6bcb8e08e622ac44b0098e3133ae.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

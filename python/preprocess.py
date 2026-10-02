@@ -369,19 +369,32 @@ def expand_macro(tokens, position, files, macros, conditions, include_paths):
 
 
 include_search_cache = {}
+include_next_index = 0
 
 
 def search_include_paths(filename, include_paths):
+    global include_next_index
     if filename.startswith("/"):
         return filename
     key = (filename, tuple(include_paths))
     if key in include_search_cache:
         return include_search_cache[key]
-    for directory in include_paths:
+    for index, directory in enumerate(include_paths):
         path = directory + "/" + filename
         if os.path.exists(path):
             include_search_cache[key] = path
+            include_next_index = index + 1
             return path
+    return None
+
+
+def search_include_next(filename, include_paths):
+    global include_next_index
+    while include_next_index < len(include_paths):
+        path = include_paths[include_next_index] + "/" + filename
+        if os.path.exists(path):
+            return path
+        include_next_index += 1
     return None
 
 
@@ -451,13 +464,16 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
         token = tokens[position]
         if is_hash(token):
             position += 1
-            if tokens[position].text == "include":
+            if tokens[position].text in ("include", "include_next"):
+                is_next = tokens[position].text == "include_next"
                 filename = tokens[position + 1]
                 name, is_dquote, rest = read_include_filename(tokens, position + 1, files, macros, conditions, include_paths)
                 including_file = token.file.name if token.file else "-"
                 directory = os.path.dirname(including_file) or "."
                 path = name
-                if not name.startswith("/"):
+                if is_next:
+                    path = search_include_next(name, include_paths) or name
+                elif not name.startswith("/"):
                     if is_dquote and os.path.exists(directory + "/" + name):
                         path = directory + "/" + name
                     else:

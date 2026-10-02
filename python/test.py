@@ -87,6 +87,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_include_next(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = [root/name for name in ('first', 'second', 'third')]
+            for path in paths:
+                path.mkdir()
+            (paths[0]/'file1.h').write_text('#include_next "file1.h"\n')
+            (paths[1]/'file1.h').write_text('#include_next <file2.h>\n')
+            (paths[2]/'file2.h').write_text('#define ANSWER 42\n')
+            source = root/'main.c'
+            source.write_text('#include <file1.h>\nint main(void){return ANSWER;}')
+            result = subprocess.run(compiler_command(*['-I'+str(path) for path in paths], str(source)), capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('  mov $42, %rax', result.stdout)
+
     def test_pragma_once(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

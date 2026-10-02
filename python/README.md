@@ -1,28 +1,30 @@
-# Lesson 299: Honor pragma once
+# Lesson 300: Continue include searches with include_next
 
-Original chibicc commit: [`a6c662207d38813b3dd490d81d8afe14ac99272b`](https://github.com/rui314/chibicc/commit/a6c662207d38813b3dd490d81d8afe14ac99272b).
+Original chibicc commit: [`f10bcebaa5df6bcb8e08e622ac44b0098e3133ae`](https://github.com/rui314/chibicc/commit/f10bcebaa5df6bcb8e08e622ac44b0098e3133ae).
 Earlier explanations are available in Git history.
 
-#pragma once now marks the current physical file as already included. A later
-include of the same path skips it before guard detection or opening the file.
-The marker takes effect while preprocessing, so a file can safely include itself
-after its pragma. Other pragmas retain the existing ignored behavior.
+GNU #include_next searches later include directories rather than starting from the
+first one. A successful ordinary path search records the index after its matched
+directory. include_next uses that shared cursor and ignores quote-versus-angle
+local-directory handling, allowing a wrapper header to reach another header.
 
 ```sh
-printf '#pragma once\nint answer=42;\n' > /tmp/lesson-answer.h
-printf '#include "lesson-answer.h"\n#include "lesson-answer.h"\nint main(void){return answer;}\n' > /tmp/lesson.c
-python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
+mkdir -p /tmp/lesson-next1 /tmp/lesson-next2
+printf '#include_next <answer.h>\n' > /tmp/lesson-next1/answer.h
+printf '#define ANSWER 42\n' > /tmp/lesson-next2/answer.h
+printf '#include <answer.h>\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
+python3 python/main.py -I/tmp/lesson-next1 -I/tmp/lesson-next2 -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly defines answer once, reads it and returns 42. Tests count reads of a
-self-including header, repeat separate compilations, update the old ignored-once
-expectation and run the original pragma-once.c fixture. Python stores the once
-flag on its File records, scoped to the current file list, rather than a C global
-path map. Both compare physical path spellings; neither canonicalizes aliases.
-The existing extra-token handling of skip_line is preserved.
+The first header reaches the second one, which defines ANSWER; assembly returns
+its expanded value 42. Tests follow the original three-directory wrapper chain.
+The cursor is shared, not a per-header origin. Cache hits do not update it, and a
+successful include_next search does not advance past its matched directory; these
+historical details are preserved. Python uses a module integer instead of a C
+static integer. A failed search falls back to the supplied filename as before.
 
 ## Tests and attribution
 

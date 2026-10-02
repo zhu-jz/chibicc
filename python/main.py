@@ -1,6 +1,6 @@
-"""Lesson 303: Search library directories with -L.
+"""Lesson 304: Forward comma-separated linker options with -Wl,.
 
-Based on chibicc commit c8df7874c607f14eac3774680b55ab22c3aaf370.
+Based on chibicc commit d1bc9a4eb0e205b10a583c347a9fe7d4bed7b813.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -146,7 +146,7 @@ def parse_args(arguments):
             ld_extra_args.append(argument)
             position += 1
             continue
-        if argument.startswith("-l"):
+        if argument.startswith("-l") or argument.startswith("-Wl,"):
             input_paths.append(argument)
             position += 1
             continue
@@ -429,6 +429,9 @@ def main():
         linker_inputs = []
         with tempfile.TemporaryDirectory(prefix="chibicc-") as directory:
             for index, filename in enumerate(inputs):
+                if filename.startswith("-Wl,"):
+                    linker_inputs.extend(part for part in filename[4:].split(",") if part)
+                    continue
                 if filename.startswith("-l"):
                     linker_inputs.append(filename)
                     continue

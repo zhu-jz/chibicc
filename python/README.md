@@ -1,29 +1,29 @@
-# Lesson 303: Search library directories with -L
+# Lesson 304: Forward comma-separated linker options with -Wl,
 
-Original chibicc commit: [`c8df7874c607f14eac3774680b55ab22c3aaf370`](https://github.com/rui314/chibicc/commit/c8df7874c607f14eac3774680b55ab22c3aaf370).
+Original chibicc commit: [`d1bc9a4eb0e205b10a583c347a9fe7d4bed7b813`](https://github.com/rui314/chibicc/commit/d1bc9a4eb0e205b10a583c347a9fe7d4bed7b813).
 Earlier explanations are available in Git history.
 
-The driver accepts both -LDIR and -L DIR and passes them to ld as a directory-search
-argument. Existing -lname inputs can then resolve libraries outside the built-in
-search directories. These options affect linking; header searches still use -I.
+Arguments starting with -Wl, are now kept as linker inputs rather than discarded
+with compatibility warning flags. The driver splits their comma-separated parts
+and passes those parts to ld at that position in the input order. Empty parts are
+skipped, matching C's strtok behavior.
 
 ```sh
-printf 'int answer(void){return 42;}\n' > /tmp/lesson-library.c
-python3 python/main.py -c -o /tmp/lesson-library.o /tmp/lesson-library.c
-ar rcs /tmp/liblessonanswer.a /tmp/lesson-library.o
-printf 'int answer(void);int main(void){return answer();}\n' > /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -L/tmp -o /tmp/lesson /tmp/lesson.s -llessonanswer
+gcc -Wl,--gc-sections -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -L /tmp -o /tmp/lesson /tmp/lesson.c -llessonanswer
+python3 python/main.py -Wl,--gc-sections -o /tmp/lesson /tmp/lesson.c
 ```
 
-The caller's assembly calls answer; ld searches /tmp for liblessonanswer.a and
-extracts its definition. Tests build a real archive from Python-compiled code,
-link and run it through the Python driver with both option forms. Python keeps
--L and its directory as separate subprocess arguments. It reports a missing
-separate -L argument instead of C's unchecked argv access in this commit.
+The option changes the linker command, while main's assembly still returns 42.
+Tests build duplicate function definitions, verify that ordinary linking fails,
+then forward -z,muldefs,--gc-sections and run the resulting executable. They also
+check empty comma fields and traced ordering. Python splits strings into argument
+lists instead of duplicating and mutating a C buffer; no shell interprets the parts.
+The original driver fixture invokes native cc for its -Wl check, so our direct
+Python-driver test verifies the new path explicitly.
 
 ## Tests and attribution
 

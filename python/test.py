@@ -87,6 +87,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_forwarded_linker_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            objects = []
+            for name, body in [('one', 'int answer(void){return 42;}'), ('two', 'int answer(void){return 1;}'), ('main', 'int answer(void);int main(void){return answer();}')]:
+                source, obj = root/(name+'.c'), root/(name+'.o')
+                source.write_text(body)
+                result = subprocess.run([sys.executable, str(COMPILER), '-c', '-o', str(obj), str(source)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                objects.append(str(obj))
+            executable = root/'main'
+            result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), *objects], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            result = subprocess.run([sys.executable, str(COMPILER), '-###', '-o', str(executable), *objects, '-Wl,,-z,,muldefs,--gc-sections,'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('-z muldefs --gc-sections', result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_library_search_paths(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1,6 +1,6 @@
-"""Lesson 314: Structure alignment attributes.
+"""Lesson 315: Document the compiler and its design.
 
-Based on chibicc commit b35d148a8d8f7d9237173c70f18cd42d20f299ff.
+Based on chibicc commit 982041fb1c78147951e73050a6c87059f92ea4e6.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

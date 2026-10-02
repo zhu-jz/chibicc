@@ -1,22 +1,45 @@
-# Lesson 314: Structure alignment attributes
+# Lesson 315: Document the compiler and its design
 
-Original chibicc commit: [`b35d148a8d8f7d9237173c70f18cd42d20f299ff`](https://github.com/rui314/chibicc/commit/b35d148a8d8f7d9237173c70f18cd42d20f299ff).
+Original chibicc commit: [`982041fb1c78147951e73050a6c87059f92ea4e6`](https://github.com/rui314/chibicc/commit/982041fb1c78147951e73050a6c87059f92ea4e6).
 Earlier explanations are available in Git history.
 
-Attribute parsing now accepts comma-separated `packed` and `aligned(N)` items,
-repeated attribute groups, and constant expressions for `N`. Both positions
-around a structure definition are supported. `aligned(8)` raises its alignment
-and final size rounding; combining it with `packed` still keeps member offsets
-consecutive. For `char a; int b;`, that combination gives offset 1 for `b`,
-alignment 8, and total size 8.
+This original commit changes only documentation. It describes chibicc's
+incremental teaching approach, compiler stages, supported features, and preference
+for readable code. The Python lesson updates this README; compiler behavior is
+unchanged. Previous lesson explanations remain available in Git history.
+
+The port follows the same stages:
+
+1. `tokenizer.py` reads source, normalizes it and creates tokens with locations.
+2. `preprocess.py` handles includes, conditional directives and macro expansion.
+3. `parse.py` builds syntax trees; `type.py` annotates them, and `constexpr.py`
+   evaluates C constant expressions using explicit C arithmetic rules.
+4. `codegen.py` assigns storage and emits x86-64 Linux assembly. `main.py` drives
+   compilation, invokes the assembler/linker and handles command-line options.
+
+Lists and dataclasses keep the implementation direct. Each grammar production
+has an ordinary parser function, and assembly generation remains explicit.
+There is no optimizer. This project targets x86-64 Linux/WSL; it does not promise
+portability to Windows executables or other instruction sets.
+
+The accumulated lessons cover arithmetic/control flow, functions, structures and
+unions, bitfields, designated initialization, floating point including x87 long
+double, macros, Unicode identifiers/strings, VLAs, alloca, variadic calls, thread
+local storage, atomics, PIC, and linker/dependency options. The driver can build
+executables, objects, static links, and shared libraries. Complex arithmetic,
+K&R definitions and GCC extended assembly are not implemented.
+
+Historical limitations are intentionally retained: atomic fetch macros return
+updated values, fence/order macros have limited semantics, packed-member atomics
+keep the earlier lowering, include-next uses a shared search cursor, and some
+long-double initializer/ABI cases remain unsupported. This is an educational
+history port, not a claim of complete C11 conformance.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
-struct __attribute__((packed, aligned(8))) Pair { char a; int b; };
-int main(void) {
-  struct Pair value = { 1, 41 };
-  return value.a + value.b;
-}
+struct Pair { int first, second; };
+int sum(struct Pair value) { return value.first + value.second; }
+int main(void) { return sum((struct Pair){20, 22}); }
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -24,14 +47,16 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Code generation uses the computed size/alignment for storage and the unchanged
-member offsets for loads. Unknown attribute names now report `unknown attribute`.
-The original does not validate that alignment is a positive power of two; this
-lesson retains that limitation. Python stores the evaluated alignment with C's
-signed-int conversion, rather than letting an unbounded Python integer leak
-into layout. Tests cover grouped/repeated attributes, both positions, packed
-member offsets, aligned sizes, constant expressions, empty lists, and the
-expanded original attribute fixture.
+Inspect `/tmp/lesson.s` to see the structure argument passed through the System V
+register convention, integer additions, and the return accumulator. The program
+returns a status; `echo $?` displays it. Linux exposes its low eight bits.
+
+`make -C python test-all` runs the source implementation and the packaged Python
+archive. The archive packages Python modules; it is not C self-hosting. The
+optional `thirdparty.py` workflows pin Git, libpng, SQLite, TinyCC and CPython.
+Their full external suites have not been run for this port; upstream's success
+claims apply to its C implementation. For a command preview use, for example,
+`python3 python/thirdparty.py git --dry-run`.
 
 ## Tests and attribution
 

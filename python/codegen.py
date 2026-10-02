@@ -184,6 +184,9 @@ class CodeGenerator:
         if node.kind == "FUNCALL" and node.ret_buffer is not None:
             self.gen_expr(node)
             return
+        if node.kind in ("ASSIGN", "COND") and node.ty.kind in ("STRUCT", "UNION"):
+            self.gen_expr(node)
+            return
         raise CompileError(node.tok, "not an lvalue")
 
     def load(self, ty):

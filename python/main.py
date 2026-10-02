@@ -1,6 +1,6 @@
-"""Lesson 315: Document the compiler and its design.
+"""Lesson 316: Member access on assignment and conditional results.
 
-Based on chibicc commit 982041fb1c78147951e73050a6c87059f92ea4e6.
+Based on chibicc commit 90d1f7f199cc55b13c7fdb5839d1409806633fdb.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

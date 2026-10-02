@@ -87,6 +87,25 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aggregate_expression_members(self):
+        for aggregate in ['struct', 'union']:
+            self.assert_program_returns('int main(void){'+aggregate+' T{int a;} x={1},y={42};'
+                                        'int r=(x=y).a;return r==42&&x.a==42?42:1;}', 42)
+            for condition in [0, 1]:
+                self.assert_program_returns('int main(void){'+aggregate+' T{int a;} x={1},y={42};'
+                                            'return ('+str(condition)+'?y:x).a;}', 42 if condition else 1)
+        self.assert_program_returns('struct Inner{int answer;};struct Outer{char c;struct Inner inner;};'
+                                    'int main(void){struct Outer x={0,{1}},y={0,{42}};'
+                                    'int n=0;int result=((n++,1)?(x=y):x).inner.answer;'
+                                    'return n==1&&x.inner.answer==42?result:1;}', 42)
+        self.assert_program_returns('struct T{int a;};'
+                                    'struct T chosen(int *n){*n+=1;return (struct T){42};}'
+                                    'int main(void){int n=0;struct T x={1};'
+                                    'int a=(1?chosen(&n):chosen(&n)).a;return n==1?a:1;}', 42)
+        result = compile_program('int main(void){int x=1,y=2;return &(x=y)!=0;}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('not an lvalue', result.stderr)
+
     def test_aligned_structure_attributes(self):
         for attributes in ['__attribute__((aligned(8),packed))',
                            '__attribute__((packed,aligned(8)))',

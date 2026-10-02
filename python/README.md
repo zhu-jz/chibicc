@@ -1,15 +1,15 @@
-# Lesson 298: Skip headers whose include guard is already defined
+# Lesson 299: Honor pragma once
 
-Original chibicc commit: [`d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3`](https://github.com/rui314/chibicc/commit/d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3).
+Original chibicc commit: [`a6c662207d38813b3dd490d81d8afe14ac99272b`](https://github.com/rui314/chibicc/commit/a6c662207d38813b3dd490d81d8afe14ac99272b).
 Earlier explanations are available in Git history.
 
-The preprocessor detects a common guard pattern: a file starts with #ifndef NAME
-and #define NAME, and ends with #endif. It remembers the guard name for that path.
-On later includes, a currently defined guard lets it skip opening and tokenizing
-the file. Undefining the guard makes a later include read the header again.
+#pragma once now marks the current physical file as already included. A later
+include of the same path skips it before guard detection or opening the file.
+The marker takes effect while preprocessing, so a file can safely include itself
+after its pragma. Other pragmas retain the existing ignored behavior.
 
 ```sh
-printf '#ifndef LESSON_H\n#define LESSON_H\nint answer=42;\n#endif\n' > /tmp/lesson-answer.h
+printf '#pragma once\nint answer=42;\n' > /tmp/lesson-answer.h
 printf '#include "lesson-answer.h"\n#include "lesson-answer.h"\nint main(void){return answer;}\n' > /tmp/lesson.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -17,12 +17,12 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Assembly defines answer once and returns its value. Tests count header reads,
-check input-file recording, and confirm rereading after #undef. Original C programs
-remain in the regression suite. Python stores path-to-guard names in a dictionary.
-The detector preserves this commit's syntactic scan, including its ineffective
-nested-group check; it does not analyze every conditional shape or canonicalize
-paths. Headers with content after their final #endif are not recognized.
+Assembly defines answer once, reads it and returns 42. Tests count reads of a
+self-including header, repeat separate compilations, update the old ignored-once
+expectation and run the original pragma-once.c fixture. Python stores the once
+flag on its File records, scoped to the current file list, rather than a C global
+path map. Both compare physical path spellings; neither canonicalizes aliases.
+The existing extra-token handling of skip_line is preserved.
 
 ## Tests and attribution
 

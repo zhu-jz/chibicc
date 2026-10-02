@@ -1,6 +1,6 @@
-"""Lesson 298: Skip headers whose include guard is already defined.
+"""Lesson 299: Honor pragma once.
 
-Based on chibicc commit d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3.
+Based on chibicc commit a6c662207d38813b3dd490d81d8afe14ac99272b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

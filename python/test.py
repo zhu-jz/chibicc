@@ -87,6 +87,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_pragma_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header, source = root/'once.h', root/'main.c'
+            header.write_text('#pragma once\n#include "once.h"\nint answer=42;\n')
+            source.write_text('#include "once.h"\n#include "once.h"\nint main(void){return answer;}')
+            files = []
+            tokens = tokenize_file(str(source), files)
+            with patch('preprocess.tokenize_file', wraps=tokenize_file) as opened:
+                preprocess(tokens, files)
+                self.assertEqual(opened.call_count, 1)
+            self.assertEqual(len(files), 2)
+            for _ in range(2):
+                result = subprocess.run(compiler_command(str(source)), capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_include_guard_optimization(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -715,7 +731,7 @@ class ExpressionCompilerTests(unittest.TestCase):
             source = Path(directory) / 'repeat.c'
             source.write_text('#include "repeat.h"\n#include "repeat.h"\n')
             tokens = preprocess(tokenize_file(source, []))
-            self.assertEqual([t.value for t in tokens if t.kind == 'NUM'], [42, 42])
+            self.assertEqual([t.value for t in tokens if t.kind == 'NUM'], [42])
 
     def test_gnu_variadic_comma(self):
         for call, expected in [('M(1)', ['1']), ('M(1,)', ['1']), ('M(1,2,3)', ['1', ',', '2', ',', '3'])]:

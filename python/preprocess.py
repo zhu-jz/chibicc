@@ -425,6 +425,8 @@ def detect_include_guard(tokens):
 
 
 def include_file(path, filename, files, macros):
+    if any(file.name == path and file.pragma_once for file in files):
+        return []
     guard = include_guard_cache.get(path)
     if guard is not None and guard in macros:
         return []
@@ -525,6 +527,11 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
                 position = read_line_marker(tokens, position, files, macros, include_paths)
                 continue
             if tokens[position].text == "pragma":
+                if tokens[position + 1].text == "once":
+                    if tokens[position].file is not None:
+                        tokens[position].file.pragma_once = True
+                    position = skip_line(tokens, position + 2)
+                    continue
                 _, position = copy_line(tokens, position + 1)
                 continue
             if tokens[position].at_bol:

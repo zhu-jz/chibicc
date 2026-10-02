@@ -25,6 +25,7 @@ class File:
     contents: str
     display_name: Optional[str] = None
     line_delta: int = 0
+    pragma_once: bool = False
 
     def __post_init__(self):
         if self.display_name is None:

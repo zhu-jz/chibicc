@@ -1,28 +1,34 @@
-# Lesson 308: Atomic exchange
+# Lesson 309: Atomic types and compound updates
 
-Original chibicc commit: [`80ea9d427c5041415b014a0a97193f1f7e0a871b`](https://github.com/rui314/chibicc/commit/80ea9d427c5041415b014a0a97193f1f7e0a871b).
+Original chibicc commit: [`d69a11dd25a77c2b9390e54c9f9e8967456cb642`](https://github.com/rui314/chibicc/commit/d69a11dd25a77c2b9390e54c9f9e8967456cb642).
 Earlier explanations are available in Git history.
 
-`atomic_exchange(&value, replacement)` atomically replaces a value and returns
-its old contents. An `EXCH` node holds the pointer and value. Its result type is
-the pointed-to type; assembly evaluates the pointer first and the value second,
-once each. Memory-form `xchg` supplies atomicity without a separate `lock` prefix.
-The accumulator register width follows the object's size.
+`_Atomic int`, `int _Atomic`, and `_Atomic(int)` mark a copied type as atomic.
+Copying preserves the ordinary shared `int` type. Atomic `++`, `--`, and `op=`
+reuse the earlier compound-assignment parser but build a statement expression:
 
-The `_explicit` macro discards its order argument, just as the original header
-does here. No memory-order enum exists yet. This historical implementation adds
-no extra sign extension after narrow exchanges; high accumulator bits follow
-the emitted instruction. Python gives a located pointer diagnostic where the
-original error path accidentally dereferences an unset `cas_addr` field, and
-reports unsupported widths instead of an internal assertion.
+```c
+/* Conceptual expansion of A += B */
+T *address = &A;
+U value = B;
+T old = *address, replacement;
+do {
+  replacement = old + value;
+} while (!__builtin_compare_and_swap(address, &old, replacement));
+/* expression result: replacement */
+```
+
+A failed `lock cmpxchg` refreshes `old`, so the next iteration recomputes from
+the value another thread installed. Address and right-hand value are evaluated
+once, before retrying. Existing postfix lowering subtracts the increment from
+the successful result to recover the old value.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
-#include <stdatomic.h>
 int main(void) {
-  int value = 7;
-  int old = atomic_exchange(&value, 42);
-  return old == 7 ? value : 1;
+  _Atomic(int) value = 7;
+  value += 35;
+  return value;
 }
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
@@ -31,9 +37,14 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Tests check returned and stored values for 1/2/4/8-byte objects, assembly widths,
-single evaluation of operands, ignored order arguments, and bad pointers.
-The original atomic test now also exercises both exchange outcomes.
+This commit covers compound updates. Plain atomic assignment still uses the
+existing store here. The original member/bitfield lowering runs before the
+atomic branch, so atomic structure members are not changed into retry loops by
+this step. These historical limits remain visible. Python uses lists for the
+new statement sequence and explicit temporary objects instead of C linked nodes.
+Tests cover qualifier forms, operators, prefix/postfix values, side effects,
+type isolation, assembly, and the updated original four-thread test, whose
+expected combined counter is six million.
 
 ## Tests and attribution
 

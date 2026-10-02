@@ -87,6 +87,29 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_atomic_compound_assignments(self):
+        for declaration in ['_Atomic int', '_Atomic(int)', 'int _Atomic']:
+            self.assert_program_returns('int main(void){'+declaration+' x=7;'
+                                        'int old=x++;if(old!=7||x!=8)return 1;'
+                                        'if(++x!=9)return 2;if(x--!=9)return 3;'
+                                        'if(--x!=7)return 4;return x+=35;}', 42)
+        for operation, operand, expected in [('*=', 6, 42), ('/=', 2, 3),
+                ('%=', 4, 3), ('&=', 3, 3), ('|=', 8, 15), ('^=', 3, 4),
+                ('<<=', 2, 28), ('>>=', 1, 3), ('-=', 2, 5)]:
+            self.assert_program_returns('int main(void){_Atomic int x=7;return x'
+                                        +operation+str(operand)+';}', expected)
+        self.assert_program_returns('int main(void){_Atomic int x=7;int n=0;'
+                                    '_Atomic int *p=&x;*(p+(n++,0))+=(n++,35);'
+                                    'return n==2?x:1;}', 42)
+        function = parse_body('_Atomic(int) x;int y;x+=1;')
+        variables = {var.name: var for var in declared_locals(function) if var.name}
+        self.assertTrue(variables['x'].ty.is_atomic)
+        self.assertFalse(variables['y'].ty.is_atomic)
+        self.assertFalse(ty_int.is_atomic)
+        result = compile_program('int main(void){_Atomic int x=7;return x+=35;}')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('lock cmpxchg %edx, (%rdi)', result.stdout)
+
     def test_atomic_exchange(self):
         for ty, register in [("char", "%al"), ("short", "%ax"),
                              ("int", "%eax"), ("long", "%rax")]:

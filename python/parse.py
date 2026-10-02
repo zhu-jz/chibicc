@@ -24,7 +24,7 @@ TYPE_KEYWORDS = frozenset({
     'struct', 'union', 'typedef', 'enum', 'static', 'extern',
     '_Alignas', 'signed', 'unsigned', 'const', 'volatile', 'auto',
     'register', 'restrict', '__restrict', '__restrict__', '_Noreturn', 'float',
-    'double', 'typeof', 'inline', '_Thread_local', '__thread',
+    'double', 'typeof', 'inline', '_Thread_local', '__thread', '_Atomic',
 })
 
 
@@ -179,6 +179,36 @@ class Parser:
             assignment = Node("ASSIGN", target, Node(binary.kind, value, binary.rhs, tok=token), tok=token)
             return Node("COMMA", save, assignment, tok=token)
         token = binary.tok
+        if binary.lhs.ty.is_atomic:
+            address = self.new_lvar("", pointer_to(binary.lhs.ty))
+            value = self.new_lvar("", binary.rhs.ty)
+            old = self.new_lvar("", binary.lhs.ty)
+            new = self.new_lvar("", binary.lhs.ty)
+
+            def reference(var):
+                return Node("VAR", var=var, tok=token)
+
+            def statement(expression):
+                return Node("EXPR_STMT", lhs=expression, tok=token)
+
+            save_address = Node("ASSIGN", reference(address),
+                                Node("ADDR", lhs=binary.lhs, tok=token), tok=token)
+            save_value = Node("ASSIGN", reference(value), binary.rhs, tok=token)
+            load_old = Node("ASSIGN", reference(old),
+                            Node("DEREF", lhs=reference(address), tok=token), tok=token)
+            operation = Node(binary.kind, reference(old), reference(value), tok=token)
+            update = Node("ASSIGN", reference(new), operation, tok=token)
+            cas = Node("CAS", tok=token, cas_addr=reference(address),
+                       cas_old=Node("ADDR", lhs=reference(old), tok=token),
+                       cas_new=reference(new))
+            loop = Node("DO", tok=token,
+                        then=Node("BLOCK", body=[statement(update)], tok=token),
+                        cond=Node("NOT", lhs=cas, tok=token),
+                        brk_label=self.new_unique_name(),
+                        cont_label=self.new_unique_name())
+            return Node("STMT_EXPR", tok=token,
+                        body=[statement(save_address), statement(save_value),
+                              statement(load_old), loop, statement(reference(new))])
         temporary = self.new_lvar("", pointer_to(binary.lhs.ty))
         save_address = Node("ASSIGN", Node("VAR", var=temporary, tok=token),
                             Node("ADDR", lhs=binary.lhs, tok=token), tok=token)
@@ -853,9 +883,19 @@ class Parser:
         specifiers = []
         has_signed = False
         has_unsigned = False
+        is_atomic = False
         unsigned_types = {"CHAR": ty_uchar, "SHORT": ty_ushort, "INT": ty_uint, "LONG": ty_ulong}
         while self.is_typename(position):
             token = self.tokens[position]
+            if token.text == "_Atomic":
+                position += 1
+                if self.tokens[position].text == "(":
+                    ty, position = self.typename(position + 1)
+                    if self.tokens[position].text != ")":
+                        raise CompileError(self.tokens[position], "expected ')'")
+                    position += 1
+                is_atomic = True
+                continue
             if token.text in ("const", "volatile", "auto", "register", "restrict",
                               "__restrict", "__restrict__", "_Noreturn"):
                 position += 1
@@ -932,6 +972,9 @@ class Parser:
             if has_unsigned:
                 ty = unsigned_types[ty.kind]
             position += 1
+        if is_atomic:
+            ty = copy_type(ty)
+            ty.is_atomic = True
         return ty, position
 
     # struct-union-decl = identifier? "{" struct-members "}" | identifier

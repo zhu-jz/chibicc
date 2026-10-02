@@ -1,6 +1,6 @@
-"""Lesson 308: Atomic exchange.
+"""Lesson 309: Atomic types and compound updates.
 
-Based on chibicc commit 80ea9d427c5041415b014a0a97193f1f7e0a871b.
+Based on chibicc commit d69a11dd25a77c2b9390e54c9f9e8967456cb642.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

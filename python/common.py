@@ -95,6 +95,7 @@ class Type:
     is_flexible: bool = False
     is_variadic: bool = False
     is_unsigned: bool = False
+    is_atomic: bool = False
     origin: Optional["Type"] = field(default=None, compare=False, repr=False)
 
 
@@ -202,6 +203,8 @@ class Node:
     cas_addr: Optional["Node"] = None
     cas_old: Optional["Node"] = None
     cas_new: Optional["Node"] = None
+    atomic_addr: Optional[Obj] = None
+    atomic_expr: Optional["Node"] = None
 
 
 @dataclass

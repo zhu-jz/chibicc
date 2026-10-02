@@ -23,7 +23,7 @@ KEYWORDS = frozenset({
     '_Alignof', '_Alignas', 'do', 'signed', 'unsigned', 'const',
     'volatile', 'auto', 'register', 'restrict', '__restrict', '__restrict__',
     '_Noreturn', 'float', 'double', 'typeof', 'asm', 'inline',
-    '_Thread_local', '__thread',
+    '_Thread_local', '__thread', '_Atomic',
 })
 
 

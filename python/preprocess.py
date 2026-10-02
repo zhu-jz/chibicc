@@ -629,7 +629,6 @@ def init_macros(base_file="-"):
         '__SIZEOF_SIZE_T__': '8',
         '__SIZE_TYPE__': 'unsigned long',
         '__STDC_HOSTED__': '1',
-        '__STDC_NO_ATOMICS__': '1',
         '__STDC_NO_COMPLEX__': '1',
         '__STDC_UTF_16__': '1',
         '__STDC_UTF_32__': '1',

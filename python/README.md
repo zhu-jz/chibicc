@@ -1,34 +1,29 @@
-# Lesson 309: Atomic types and compound updates
+# Lesson 310: Complete the atomic header
 
-Original chibicc commit: [`d69a11dd25a77c2b9390e54c9f9e8967456cb642`](https://github.com/rui314/chibicc/commit/d69a11dd25a77c2b9390e54c9f9e8967456cb642).
+Original chibicc commit: [`0a5d08c8f8a72e39828e7b1910c55174e6c8dd5e`](https://github.com/rui314/chibicc/commit/0a5d08c8f8a72e39828e7b1910c55174e6c8dd5e).
 Earlier explanations are available in Git history.
 
-`_Atomic int`, `int _Atomic`, and `_Atomic(int)` mark a copied type as atomic.
-Copying preserves the ordinary shared `int` type. Atomic `++`, `--`, and `op=`
-reuse the earlier compound-assignment parser but build a statement expression:
+This original commit expands `stdatomic.h` with atomic typedefs, the memory-order
+enum, flag operations, load/store and fetch macros, lock-free constants, and
+initialization helpers. It also removes `__STDC_NO_ATOMICS__` from predefined
+macros. The header is copied intact; its expansions use the compiler features
+from the preceding lessons.
 
-```c
-/* Conceptual expansion of A += B */
-T *address = &A;
-U value = B;
-T old = *address, replacement;
-do {
-  replacement = old + value;
-} while (!__builtin_compare_and_swap(address, &old, replacement));
-/* expression result: replacement */
-```
-
-A failed `lock cmpxchg` refreshes `old`, so the next iteration recomputes from
-the value another thread installed. Address and right-hand value are evaluated
-once, before retrying. Existing postfix lowering subtracts the increment from
-the successful result to recover the old value.
+The enum runs from relaxed (0) to sequentially consistent (5). At this point
+order arguments are ignored, fence macros expand to nothing, and lock-free
+queries/constants are 1. Fetch macros expand to compound assignments and return
+the **new** value, unlike the standard C old-value contract. `ATOMIC_FLAG_INIT`
+is a function-like macro taking one argument. These are original limitations,
+not Python changes; this lesson deliberately preserves them.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
+#include <stdatomic.h>
 int main(void) {
-  _Atomic(int) value = 7;
-  value += 35;
-  return value;
+  atomic_int value;
+  atomic_init(&value, 7);
+  atomic_fetch_add(&value, 35);
+  return atomic_load(&value);
 }
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
@@ -37,14 +32,10 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-This commit covers compound updates. Plain atomic assignment still uses the
-existing store here. The original member/bitfield lowering runs before the
-atomic branch, so atomic structure members are not changed into retry loops by
-this step. These historical limits remain visible. Python uses lists for the
-new statement sequence and explicit temporary objects instead of C linked nodes.
-Tests cover qualifier forms, operators, prefix/postfix values, side effects,
-type isolation, assembly, and the updated original four-thread test, whose
-expected combined counter is six million.
+The fetch expansion reaches the `lock cmpxchg` retry loop; the final load reads
+the value into the accumulator before returning. Tests exercise header macros,
+flags, typedef sizes, enum values, ignored arguments, and the removed predefined
+macro. Python has no additional semantic difference for this header-only step.
 
 ## Tests and attribution
 

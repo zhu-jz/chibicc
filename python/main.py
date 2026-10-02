@@ -1,6 +1,6 @@
-"""Lesson 309: Atomic types and compound updates.
+"""Lesson 310: Complete the atomic header.
 
-Based on chibicc commit d69a11dd25a77c2b9390e54c9f9e8967456cb642.
+Based on chibicc commit 0a5d08c8f8a72e39828e7b1910c55174e6c8dd5e.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -87,6 +87,31 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_completed_atomic_header(self):
+        source = '''#include <stdatomic.h>
+#ifdef __STDC_NO_ATOMICS__
+#error atomics should now be advertised
+#endif
+int main(void){
+  atomic_int x; atomic_init(&x,7);
+  if(atomic_fetch_add(&x,35)!=42)return 1;
+  if(atomic_fetch_sub_explicit(&x,2,memory_order_relaxed)!=40)return 2;
+  if(atomic_fetch_or(&x,3)!=43)return 3;
+  if(atomic_fetch_xor_explicit(&x,1,memory_order_seq_cst)!=42)return 4;
+  if(atomic_fetch_and(&x,63)!=42)return 5;
+  atomic_flag flag=ATOMIC_FLAG_INIT(0);
+  if(atomic_flag_test_and_set(&flag)!=0)return 6;
+  if(atomic_flag_test_and_set_explicit(&flag,memory_order_acquire)!=1)return 7;
+  atomic_flag_clear_explicit(&flag,memory_order_release);
+  if(atomic_load(&flag)!=0)return 8;
+  atomic_store_explicit(&x,42,memory_order_release);
+  atomic_thread_fence(not_evaluated);atomic_signal_fence(not_evaluated);
+  if(!atomic_is_lock_free(not_evaluated)||ATOMIC_INT_LOCK_FREE!=1)return 9;
+  if(memory_order_seq_cst!=5||sizeof(atomic_uintmax_t)!=8)return 10;
+  return kill_dependency(atomic_load_explicit(&x,memory_order_acquire));
+}'''
+        self.assert_program_returns(source, 42)
+
     def test_atomic_compound_assignments(self):
         for declaration in ['_Atomic int', '_Atomic(int)', 'int _Atomic']:
             self.assert_program_returns('int main(void){'+declaration+' x=7;'

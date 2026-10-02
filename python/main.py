@@ -1,6 +1,6 @@
-"""Lesson 304: Forward comma-separated linker options with -Wl,.
+"""Lesson 305: Pass individual linker arguments with -Xlinker.
 
-Based on chibicc commit d1bc9a4eb0e205b10a583c347a9fe7d4bed7b813.
+Based on chibicc commit 469f159bb1adebb92ca2c9a7841466a98e6ad956.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -78,7 +78,7 @@ def parse_args(arguments):
     ld_extra_args = []
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-L", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-L", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-Xlinker", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -89,6 +89,10 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-Xlinker":
+            ld_extra_args.append(arguments[position + 1])
+            position += 2
+            continue
         if argument.startswith("-L"):
             directory = argument[2:]
             if argument == "-L":

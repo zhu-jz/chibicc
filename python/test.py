@@ -87,6 +87,19 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_single_linker_arguments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, executable, report = root/'main.c', root/'main', root/'link report,map.txt'
+            source.write_text('int main(void){return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-Xlinker', '-Map', '-Xlinker', str(report), '-Xlinker', '--gc-sections', '-o', str(executable), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('main', report.read_text())
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+        result = subprocess.run([sys.executable, str(COMPILER), '-Xlinker'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('chibicc (Python):', result.stderr)
+
     def test_forwarded_linker_options(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -977,20 +977,44 @@ class Parser:
             ty.is_atomic = True
         return ty, position
 
-    def attribute(self, position, ty):
-        if self.tokens[position].text != "__attribute__":
-            return position
-        for expected in ("(", "(", "packed", ")", ")"):
+    def attribute_list(self, position, ty):
+        while self.tokens[position].text == "__attribute__":
+            for expected in ("(", "("):
+                position += 1
+                if self.tokens[position].text != expected:
+                    raise CompileError(self.tokens[position], "expected '" + expected + "'")
             position += 1
-            if self.tokens[position].text != expected:
-                raise CompileError(self.tokens[position], "expected '" + expected + "'")
-        ty.is_packed = True
-        return position + 1
+            first = True
+            while self.tokens[position].text != ")":
+                if not first:
+                    if self.tokens[position].text != ",":
+                        raise CompileError(self.tokens[position], "expected ','")
+                    position += 1
+                first = False
+                token = self.tokens[position]
+                if token.text == "packed":
+                    ty.is_packed = True
+                    position += 1
+                elif token.text == "aligned":
+                    if self.tokens[position + 1].text != "(":
+                        raise CompileError(self.tokens[position + 1], "expected '('")
+                    ty.align, position = self.const_expr(position + 2)
+                    ty.align = to_int32(ty.align)
+                    if self.tokens[position].text != ")":
+                        raise CompileError(self.tokens[position], "expected ')'")
+                    position += 1
+                else:
+                    raise CompileError(token, "unknown attribute")
+            position += 1
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            position += 1
+        return position
 
     # struct-union-decl = attribute? identifier? "{" struct-members "}" attribute?
     def struct_union_decl(self, position):
         aggregate = struct_type()
-        position = self.attribute(position, aggregate)
+        position = self.attribute_list(position, aggregate)
         tag = None
         if self.tokens[position].kind == "IDENT":
             tag = self.tokens[position]
@@ -1028,7 +1052,7 @@ class Parser:
                 members.append(member)
             position += 1
         ty = aggregate
-        position = self.attribute(position + 1, ty)
+        position = self.attribute_list(position + 1, ty)
         if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
             members[-1].ty = array_of(members[-1].ty.base, 0)
             ty.is_flexible = True

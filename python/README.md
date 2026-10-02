@@ -1,17 +1,18 @@
-# Lesson 313: Packed structure layout
+# Lesson 314: Structure alignment attributes
 
-Original chibicc commit: [`44bea4c85a48d440bc0f704abe64eac80e9165dc`](https://github.com/rui314/chibicc/commit/44bea4c85a48d440bc0f704abe64eac80e9165dc).
+Original chibicc commit: [`b35d148a8d8f7d9237173c70f18cd42d20f299ff`](https://github.com/rui314/chibicc/commit/b35d148a8d8f7d9237173c70f18cd42d20f299ff).
 Earlier explanations are available in Git history.
 
-`__attribute__((packed))` is accepted immediately after `struct` or after the
-closing brace of its definition. The type records `is_packed`; ordinary members
-are laid out consecutively without aligning each offset, and the structure's
-alignment remains 1. A `char` followed by an `int` therefore occupies five bytes,
-with the `int` at byte offset 1. x86-64 can load and store this unaligned integer.
+Attribute parsing now accepts comma-separated `packed` and `aligned(N)` items,
+repeated attribute groups, and constant expressions for `N`. Both positions
+around a structure definition are supported. `aligned(8)` raises its alignment
+and final size rounding; combining it with `packed` still keeps member offsets
+consecutive. For `char a; int b;`, that combination gives offset 1 for `b`,
+alignment 8, and total size 8.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
-struct __attribute__((packed)) Pair { char a; int b; };
+struct __attribute__((packed, aligned(8))) Pair { char a; int b; };
 int main(void) {
   struct Pair value = { 1, 41 };
   return value.a + value.b;
@@ -23,15 +24,14 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-Assembly adds the member's one-byte offset to its base address before loading
-the integer. Unpacked structures retain normal padding. This commit recognizes
-only the exact `packed` spelling, and it retains previous bitfield rules and
-union layout. An attribute on a reference to an existing tag does not alter
-that type. Python updates an existing type object to preserve forward pointers,
-matching the original C overwrite behavior.
-Tests cover both attribute positions, sizes, offsets, alignment, initialization,
-forward tags, ordinary layout and unsupported attributes; the unchanged original
-`attribute.c` fixture is also compiled and run.
+Code generation uses the computed size/alignment for storage and the unchanged
+member offsets for loads. Unknown attribute names now report `unknown attribute`.
+The original does not validate that alignment is a positive power of two; this
+lesson retains that limitation. Python stores the evaluated alignment with C's
+signed-int conversion, rather than letting an unbounded Python integer leak
+into layout. Tests cover grouped/repeated attributes, both positions, packed
+member offsets, aligned sizes, constant expressions, empty lists, and the
+expanded original attribute fixture.
 
 ## Tests and attribution
 

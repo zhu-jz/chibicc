@@ -87,6 +87,22 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_aligned_structure_attributes(self):
+        for attributes in ['__attribute__((aligned(8),packed))',
+                           '__attribute__((packed,aligned(8)))',
+                           '__attribute__((aligned(8))) __attribute__((packed))']:
+            for declaration in ['struct '+attributes+' S{char a;int b;}',
+                                'struct S{char a;int b;} '+attributes]:
+                source = declaration+';int main(void){struct S x={1,41};'
+                source += 'if(sizeof(x)!=8||_Alignof(x)!=8)return 1;'
+                source += 'if((char*)&x.b-(char*)&x!=1)return 2;return x.a+x.b;}'
+                self.assert_program_returns(source, 42)
+        self.assert_program_returns('struct __attribute__((aligned(8+8))) S{int x;};'
+                                    'int main(void){struct S x={42};'
+                                    'return sizeof(x)==16&&_Alignof(x)==16?x.x:1;}', 42)
+        self.assert_program_returns('struct __attribute__(()) S{int x;};'
+                                    'int main(void){struct S x={42};return x.x;}', 42)
+
     def test_packed_structures(self):
         for declaration in ['struct __attribute__((packed)) S {char a;int b;}',
                             'struct S {char a;int b;} __attribute__((packed))']:
@@ -102,7 +118,7 @@ class ExpressionCompilerTests(unittest.TestCase):
                                     'return sizeof(x)==8&&_Alignof(x)==4?42:1;}', 42)
         result = compile_program('struct __attribute__((unknown)) S{int x;};')
         self.assertEqual(result.returncode, 1)
-        self.assertIn("expected 'packed'", result.stderr)
+        self.assertIn("unknown attribute", result.stderr)
 
     def test_function_redeclarations(self):
         source = ('int answer(void);int answer(void);'

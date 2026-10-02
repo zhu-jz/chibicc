@@ -1,6 +1,6 @@
-"""Lesson 313: Packed structure layout.
+"""Lesson 314: Structure alignment attributes.
 
-Based on chibicc commit 44bea4c85a48d440bc0f704abe64eac80e9165dc.
+Based on chibicc commit b35d148a8d8f7d9237173c70f18cd42d20f299ff.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

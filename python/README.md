@@ -1,26 +1,21 @@
-# Lesson 312: Reuse function declarations and diagnose redefinitions
+# Lesson 313: Packed structure layout
 
-Original chibicc commit: [`395308c77b94fc16b146c01cc1316b9a07635686`](https://github.com/rui314/chibicc/commit/395308c77b94fc16b146c01cc1316b9a07635686).
+Original chibicc commit: [`44bea4c85a48d440bc0f704abe64eac80e9165dc`](https://github.com/rui314/chibicc/commit/44bea4c85a48d440bc0f704abe64eac80e9165dc).
 Earlier explanations are available in Git history.
 
-Function declarations now reuse an existing global function object. A prototype,
-a later definition, and a subsequent prototype all refer to one object, so a
-prototype after a definition no longer hides the emitted function. A second
-body is rejected with `redefinition of name`; an explicitly static declaration
-after a non-static function declaration also receives a diagnostic.
-
-The first declaration supplies the stored type and linkage. This commit does
-not add general signature-compatibility checks. The existing `find_func` filters
-out non-function objects, so the new different-kind error branch remains
-unreachable for a previous variable, just as in the original helper.
-Python reports errors with `CompileError` rather than C's formatted error call.
+`__attribute__((packed))` is accepted immediately after `struct` or after the
+closing brace of its definition. The type records `is_packed`; ordinary members
+are laid out consecutively without aligning each offset, and the structure's
+alignment remains 1. A `char` followed by an `int` therefore occupies five bytes,
+with the `int` at byte offset 1. x86-64 can load and store this unaligned integer.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
-int answer(void);
-int answer(void) { return 42; }
-int answer(void);
-int main(void) { return answer(); }
+struct __attribute__((packed)) Pair { char a; int b; };
+int main(void) {
+  struct Pair value = { 1, 41 };
+  return value.a + value.b;
+}
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
@@ -28,9 +23,15 @@ gcc -o /tmp/lesson /tmp/lesson.s
 echo $?  # 42
 ```
 
-The output contains one `answer:` body. `main` calls its address, receives 42 in
-the accumulator, and returns it. Tests check object reuse, exactly one assembly
-body, a prototype following a body, retained static linkage, and both diagnostics.
+Assembly adds the member's one-byte offset to its base address before loading
+the integer. Unpacked structures retain normal padding. This commit recognizes
+only the exact `packed` spelling, and it retains previous bitfield rules and
+union layout. An attribute on a reference to an existing tag does not alter
+that type. Python updates an existing type object to preserve forward pointers,
+matching the original C overwrite behavior.
+Tests cover both attribute positions, sizes, offsets, alignment, initialization,
+forward tags, ordinary layout and unsupported attributes; the unchanged original
+`attribute.c` fixture is also compiled and run.
 
 ## Tests and attribution
 

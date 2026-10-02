@@ -977,8 +977,20 @@ class Parser:
             ty.is_atomic = True
         return ty, position
 
-    # struct-union-decl = identifier? "{" struct-members "}" | identifier
+    def attribute(self, position, ty):
+        if self.tokens[position].text != "__attribute__":
+            return position
+        for expected in ("(", "(", "packed", ")", ")"):
+            position += 1
+            if self.tokens[position].text != expected:
+                raise CompileError(self.tokens[position], "expected '" + expected + "'")
+        ty.is_packed = True
+        return position + 1
+
+    # struct-union-decl = attribute? identifier? "{" struct-members "}" attribute?
     def struct_union_decl(self, position):
+        aggregate = struct_type()
+        position = self.attribute(position, aggregate)
         tag = None
         if self.tokens[position].kind == "IDENT":
             tag = self.tokens[position]
@@ -986,7 +998,7 @@ class Parser:
         if tag is not None and self.tokens[position].text != "{":
             ty = self.find_tag(tag.text)
             if ty is None:
-                ty = struct_type()
+                ty = aggregate
                 ty.size = -1
                 self.scopes[-1].tags[tag.text] = ty
             return ty, position
@@ -1015,7 +1027,8 @@ class Parser:
                     member.bit_width, position = self.const_expr(position + 1)
                 members.append(member)
             position += 1
-        ty = struct_type()
+        ty = aggregate
+        position = self.attribute(position + 1, ty)
         if members and members[-1].ty.kind == "ARRAY" and members[-1].ty.array_len < 0:
             members[-1].ty = array_of(members[-1].ty.base, 0)
             ty.is_flexible = True
@@ -1025,9 +1038,9 @@ class Parser:
             if previous is not None:
                 # Preserve references held by earlier pointers and typedefs.
                 previous.__dict__.update(ty.__dict__)
-                return previous, position + 1
+                return previous, position
             self.scopes[-1].tags[tag.text] = ty
-        return ty, position + 1
+        return ty, position
 
     def struct_decl(self, position):
         ty, position = self.struct_union_decl(position)
@@ -1046,10 +1059,12 @@ class Parser:
                 member.bit_offset = bits % (size * 8)
                 bits += member.bit_width
             else:
-                bits = align_to(bits, member.align * 8)
+                if not ty.is_packed:
+                    bits = align_to(bits, member.align * 8)
                 member.offset = bits // 8
                 bits += member.ty.size * 8
-            ty.align = max(ty.align, member.align)
+            if not ty.is_packed:
+                ty.align = max(ty.align, member.align)
         ty.size = align_to(bits, ty.align * 8) // 8
         return ty, position
 

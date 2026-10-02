@@ -87,6 +87,23 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_packed_structures(self):
+        for declaration in ['struct __attribute__((packed)) S {char a;int b;}',
+                            'struct S {char a;int b;} __attribute__((packed))']:
+            source = declaration+';int main(void){struct S x={1,41};'
+            source += 'if(sizeof(x)!=5||_Alignof(struct S)!=1)return 1;'
+            source += 'if((char*)&x.b-(char*)&x!=1)return 2;return x.a+x.b;}'
+            self.assert_program_returns(source, 42)
+        self.assert_program_returns('struct S;typedef struct S S;'
+                                    'struct __attribute__((packed)) S{char a;int b[2];};'
+                                    'int main(void){S x={1,{20,21}};return '
+                                    'sizeof(S)==9?x.a+x.b[0]+x.b[1]:1;}', 42)
+        self.assert_program_returns('int main(void){struct {char a;int b;} x;'
+                                    'return sizeof(x)==8&&_Alignof(x)==4?42:1;}', 42)
+        result = compile_program('struct __attribute__((unknown)) S{int x;};')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("expected 'packed'", result.stderr)
+
     def test_function_redeclarations(self):
         source = ('int answer(void);int answer(void);'
                   'int answer(void){return 42;}int answer(void);'

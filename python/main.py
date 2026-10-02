@@ -1,6 +1,6 @@
-"""Lesson 312: Reuse function declarations and diagnose redefinitions.
+"""Lesson 313: Packed structure layout.
 
-Based on chibicc commit 395308c77b94fc16b146c01cc1316b9a07635686.
+Based on chibicc commit 44bea4c85a48d440bc0f704abe64eac80e9165dc.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

@@ -93,6 +93,7 @@ class Type:
     members: list["Member"] = field(default_factory=list)
     align: int = 0
     is_flexible: bool = False
+    is_packed: bool = False
     is_variadic: bool = False
     is_unsigned: bool = False
     is_atomic: bool = False

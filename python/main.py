@@ -1,6 +1,6 @@
-"""Lesson 307: Atomic compare-and-swap.
+"""Lesson 308: Atomic exchange.
 
-Based on chibicc commit ca27455b92be2ffbfe58c7ffda623cf6ec112632.
+Based on chibicc commit 80ea9d427c5041415b014a0a97193f1f7e0a871b.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

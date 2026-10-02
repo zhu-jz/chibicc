@@ -528,6 +528,16 @@ class Parser:
     # primary = "(" expr ")" | "sizeof" unary | identifier func-args? | number
     def primary(self, position):
         token = self.tokens[position]
+        if token.text == "__builtin_atomic_exchange":
+            if self.tokens[position + 1].text != "(":
+                raise CompileError(self.tokens[position + 1], "expected '('")
+            address, position = self.assign(position + 2)
+            if self.tokens[position].text != ",":
+                raise CompileError(self.tokens[position], "expected ','")
+            value, position = self.assign(position + 1)
+            if self.tokens[position].text != ")":
+                raise CompileError(self.tokens[position], "expected ')'")
+            return Node("EXCH", address, value, tok=token), position + 1
         if token.text == "__builtin_compare_and_swap":
             if self.tokens[position + 1].text != "(":
                 raise CompileError(self.tokens[position + 1], "expected '('")

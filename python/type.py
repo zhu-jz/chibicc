@@ -169,6 +169,10 @@ def add_type(node):
         for operand in (node.cas_addr, node.cas_old):
             if operand.ty.kind != "PTR":
                 raise CompileError(operand.tok, "pointer expected")
+    elif node.kind == "EXCH":
+        if node.lhs.ty.kind != "PTR":
+            raise CompileError(node.lhs.tok, "pointer expected")
+        node.ty = node.lhs.ty.base
     elif node.kind == "COND":
         if node.then.ty.kind == "VOID" or node.els.ty.kind == "VOID":
             node.ty = ty_void

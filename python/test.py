@@ -87,6 +87,26 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_atomic_exchange(self):
+        for ty, register in [("char", "%al"), ("short", "%ax"),
+                             ("int", "%eax"), ("long", "%rax")]:
+            source = ('#include <stdatomic.h>\nint main(void){'+ty+' x=7;'
+                      'if(atomic_exchange(&x,42)!=7)return 1;'
+                      'if(x!=42)return 2;'
+                      'if(atomic_exchange_explicit(&x,99,not_evaluated)!=42)return 3;'
+                      'return x==99?42:4;}')
+            self.assert_program_returns(source, 42)
+            result = compile_program(source)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('xchg '+register+', (%rdi)', result.stdout)
+        self.assert_program_returns('int main(void){int x=7,n=0;'
+                                    'int old=__builtin_atomic_exchange('
+                                    '(n=n*10+1,&x),(n=n*10+2,42));'
+                                    'return old==7&&x==42&&n==12?42:1;}', 42)
+        result = compile_program('int main(void){return __builtin_atomic_exchange(1,2);}')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('pointer expected', result.stderr)
+
     def test_atomic_compare_exchange(self):
         for ty, register in [("char", "%dl"), ("short", "%dx"),
                              ("int", "%edx"), ("long", "%rdx")]:

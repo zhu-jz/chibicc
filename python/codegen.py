@@ -431,6 +431,16 @@ class CodeGenerator:
                                   f"  mov {reg_ax(size)}, (%r8)", "1:",
                                   "  movzbl %cl, %eax"))
             return
+        if node.kind == "EXCH":
+            size = node.lhs.ty.base.size
+            if size not in (1, 2, 4, 8):
+                raise CompileError(node.tok, "unsupported atomic operand size")
+            self.gen_expr(node.lhs)
+            self.push()
+            self.gen_expr(node.rhs)
+            self.pop("%rdi")
+            self.assembly.append(f"  xchg {reg_ax(size)}, (%rdi)")
+            return
         if node.kind == "MEMZERO":
             self.assembly.extend((f"  mov ${node.var.ty.size}, %rcx",
                                   f"  lea {node.var.offset}(%rbp), %rdi",

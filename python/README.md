@@ -1,40 +1,39 @@
-# Lesson 307: Atomic compare-and-swap
+# Lesson 308: Atomic exchange
 
-Original chibicc commit: [`ca27455b92be2ffbfe58c7ffda623cf6ec112632`](https://github.com/rui314/chibicc/commit/ca27455b92be2ffbfe58c7ffda623cf6ec112632).
+Original chibicc commit: [`80ea9d427c5041415b014a0a97193f1f7e0a871b`](https://github.com/rui314/chibicc/commit/80ea9d427c5041415b014a0a97193f1f7e0a871b).
 Earlier explanations are available in Git history.
 
-The new builtin takes an object pointer, an expected-value pointer, and a
-replacement value. Success stores the replacement and returns `_Bool` true.
-Failure leaves the object alone, writes its observed value into `*expected`,
-and returns false. Both header macros use this same instruction in this lesson.
+`atomic_exchange(&value, replacement)` atomically replaces a value and returns
+its old contents. An `EXCH` node holds the pointer and value. Its result type is
+the pointed-to type; assembly evaluates the pointer first and the value second,
+once each. Memory-form `xchg` supplies atomicity without a separate `lock` prefix.
+The accumulator register width follows the object's size.
 
-The parser stores three operands in a `CAS` node. Type checking requires the
-first two to be pointers. Assembly evaluates address, replacement, then expected
-pointer, once each. `lock cmpxchg` compares memory with the accumulator and
-atomically replaces it with `%dl`, `%dx`, `%edx`, or `%rdx` for 1/2/4/8 bytes.
-`sete` captures success; the failure path copies the accumulator back through
-`expected`. This step does not yet introduce the `_Atomic` type qualifier.
-Python reports unsupported operand sizes instead of C's internal assertion.
+The `_explicit` macro discards its order argument, just as the original header
+does here. No memory-order enum exists yet. This historical implementation adds
+no extra sign extension after narrow exchanges; high accumulator bits follow
+the emitted instruction. Python gives a located pointer diagnostic where the
+original error path accidentally dereferences an unset `cas_addr` field, and
+reports unsupported widths instead of an internal assertion.
 
 ```sh
 cat >/tmp/lesson.c <<'C'
 #include <stdatomic.h>
 int main(void) {
-  int value = 7, expected = 7;
-  atomic_compare_exchange_strong(&value, &expected, 42);
-  return value;
+  int value = 7;
+  int old = atomic_exchange(&value, 42);
+  return old == 7 ? value : 1;
 }
 C
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
-echo $?  # 42; main returns the value, it does not print it
+echo $?  # 42
 ```
 
-Tests cover success, failure and expected-value updates at every supported
-width, boolean size, operand evaluation, pointer diagnostics, and assembly.
-The unchanged original pthread test increments a shared counter three million
-times using a compare-and-swap retry loop.
+Tests check returned and stored values for 1/2/4/8-byte objects, assembly widths,
+single evaluation of operands, ignored order arguments, and bad pointers.
+The original atomic test now also exercises both exchange outcomes.
 
 ## Tests and attribution
 

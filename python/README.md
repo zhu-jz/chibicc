@@ -1,29 +1,29 @@
-# Lesson 302: Link shared libraries with -shared
+# Lesson 303: Search library directories with -L
 
-Original chibicc commit: [`4e5de36a36452ef9fe29ac55f7812f2bb9005d95`](https://github.com/rui314/chibicc/commit/4e5de36a36452ef9fe29ac55f7812f2bb9005d95).
+Original chibicc commit: [`c8df7874c607f14eac3774680b55ab22c3aaf370`](https://github.com/rui314/chibicc/commit/c8df7874c607f14eac3774680b55ab22c3aaf370).
 Earlier explanations are available in Git history.
 
--shared asks ld to produce a shared library. The driver omits crt1.o, which normally
-supplies the executable entry point, and selects crtbeginS.o/crtendS.o around the
-inputs. -fPIC remains a separate option: -shared chooses the link form rather than
-automatically changing generated addresses.
+The driver accepts both -LDIR and -L DIR and passes them to ld as a directory-search
+argument. Existing -lname inputs can then resolve libraries outside the built-in
+search directories. These options affect linking; header searches still use -I.
 
 ```sh
 printf 'int answer(void){return 42;}\n' > /tmp/lesson-library.c
+python3 python/main.py -c -o /tmp/lesson-library.o /tmp/lesson-library.c
+ar rcs /tmp/liblessonanswer.a /tmp/lesson-library.o
 printf 'int answer(void);int main(void){return answer();}\n' > /tmp/lesson.c
-python3 python/main.py -fPIC -shared -o /tmp/lesson-library.so /tmp/lesson-library.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -o /tmp/lesson /tmp/lesson.s /tmp/lesson-library.so
+gcc -L/tmp -o /tmp/lesson /tmp/lesson.s -llessonanswer
 /tmp/lesson
 echo $?  # 42
+python3 python/main.py -L /tmp -o /tmp/lesson /tmp/lesson.c -llessonanswer
 ```
 
-The caller's assembly obtains answer's address and calls it. The shared library
-supplies its function returning 42. Tests build the library and executable using
-the Python driver, run them, check shared startup objects and inspect ELF segments.
-Python passes a shared-link boolean instead of using C's global option. The original
-still supplies a dynamic-loader argument when not static; ld produces a shared
-object without an INTERP segment despite that argument.
+The caller's assembly calls answer; ld searches /tmp for liblessonanswer.a and
+extracts its definition. Tests build a real archive from Python-compiled code,
+link and run it through the Python driver with both option forms. Python keeps
+-L and its directory as separate subprocess arguments. It reports a missing
+separate -L argument instead of C's unchecked argv access in this commit.
 
 ## Tests and attribution
 

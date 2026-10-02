@@ -1,6 +1,6 @@
-"""Lesson 302: Link shared libraries with -shared.
+"""Lesson 303: Search library directories with -L.
 
-Based on chibicc commit 4e5de36a36452ef9fe29ac55f7812f2bb9005d95.
+Based on chibicc commit c8df7874c607f14eac3774680b55ab22c3aaf370.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -78,7 +78,7 @@ def parse_args(arguments):
     ld_extra_args = []
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-L", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -89,6 +89,14 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument.startswith("-L"):
+            directory = argument[2:]
+            if argument == "-L":
+                position += 1
+                directory = arguments[position]
+            ld_extra_args.extend(("-L", directory))
+            position += 1
+            continue
         if argument == "-shared":
             opt_shared = True
             ld_extra_args.append(argument)

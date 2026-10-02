@@ -87,6 +87,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_library_search_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            helper, obj, library = root/'answer.c', root/'answer.o', root/'libanswer.a'
+            helper.write_text('int answer(void){return 42;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-c', '-o', str(obj), str(helper)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            subprocess.run(['ar', 'rcs', str(library), str(obj)], check=True)
+            source, executable = root/'main.c', root/'main'
+            source.write_text('int answer(void);int main(void){return answer();}')
+            for options in (['-L'+directory], ['-L', directory]):
+                result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(source), *options, '-lanswer'], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+
     def test_shared_linking(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

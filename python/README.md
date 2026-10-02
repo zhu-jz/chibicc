@@ -1,28 +1,29 @@
-# Lesson 301: Link static executables with -static
+# Lesson 302: Link shared libraries with -shared
 
-Original chibicc commit: [`1e9b6dd1108690f22c84af8db606fea9fb7ec2db`](https://github.com/rui314/chibicc/commit/1e9b6dd1108690f22c84af8db606fea9fb7ec2db).
+Original chibicc commit: [`4e5de36a36452ef9fe29ac55f7812f2bb9005d95`](https://github.com/rui314/chibicc/commit/4e5de36a36452ef9fe29ac55f7812f2bb9005d95).
 Earlier explanations are available in Git history.
 
--static selects a statically linked executable. The driver forwards -static to ld,
-omits the dynamic-loader argument and groups libgcc, libgcc_eh and libc so their
-archive members can resolve mutual references. Ordinary dynamic links retain
-their loader and shared support-library arguments.
+-shared asks ld to produce a shared library. The driver omits crt1.o, which normally
+supplies the executable entry point, and selects crtbeginS.o/crtendS.o around the
+inputs. -fPIC remains a separate option: -shared chooses the link form rather than
+automatically changing generated addresses.
 
 ```sh
-printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+printf 'int answer(void){return 42;}\n' > /tmp/lesson-library.c
+printf 'int answer(void);int main(void){return answer();}\n' > /tmp/lesson.c
+python3 python/main.py -fPIC -shared -o /tmp/lesson-library.so /tmp/lesson-library.c
 python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
-gcc -static -o /tmp/lesson /tmp/lesson.s
+gcc -o /tmp/lesson /tmp/lesson.s /tmp/lesson-library.so
 /tmp/lesson
 echo $?  # 42
-python3 python/main.py -static -o /tmp/lesson /tmp/lesson.c
 ```
 
-Assembly is unchanged: main returns 42 in rax. Static linking copies needed runtime
-code from archives into the executable instead of recording a dynamic interpreter.
-Tests use the Python driver to build and run a static puts call, inspect the linker
-trace and confirm that readelf reports no INTERP segment; dynamic-link tests remain.
-Python builds explicit argument lists rather than C StringArray globals. As in
-the original, startup object selection still uses crtbegin.o in this step.
+The caller's assembly obtains answer's address and calls it. The shared library
+supplies its function returning 42. Tests build the library and executable using
+the Python driver, run them, check shared startup objects and inspect ELF segments.
+Python passes a shared-link boolean instead of using C's global option. The original
+still supplies a dynamic-loader argument when not static; ld produces a shared
+object without an INTERP segment despite that argument.
 
 ## Tests and attribution
 

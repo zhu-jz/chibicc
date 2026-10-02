@@ -1,6 +1,6 @@
-"""Lesson 301: Link static executables with -static.
+"""Lesson 302: Link shared libraries with -shared.
 
-Based on chibicc commit 1e9b6dd1108690f22c84af8db606fea9fb7ec2db.
+Based on chibicc commit 4e5de36a36452ef9fe29ac55f7812f2bb9005d95.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -73,6 +73,7 @@ def parse_args(arguments):
     opt_fcommon = True
     opt_fpic = False
     opt_static = False
+    opt_shared = False
     opt_x = None
     ld_extra_args = []
     position = 0
@@ -88,6 +89,11 @@ def parse_args(arguments):
     position = 0
     while position < len(arguments):
         argument = arguments[position]
+        if argument == "-shared":
+            opt_shared = True
+            ld_extra_args.append(argument)
+            position += 1
+            continue
         if argument == "-static":
             opt_static = True
             ld_extra_args.append(argument)
@@ -228,7 +234,7 @@ def parse_args(arguments):
         raise CompileError(None, "no input files")
     if opt_E:
         opt_x = "C"
-    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic, opt_static
+    return input_paths, output_path, opt_cc1, opt_trace, opt_S, opt_c, opt_E, base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic, opt_static, opt_shared
 
 
 def parse_opt_x(language):
@@ -377,14 +383,18 @@ def find_gcc_library_path():
     raise CompileError(None, "gcc library path is not found")
 
 
-def run_linker(inputs, output, trace, extra_args=(), static=False):
+def run_linker(inputs, output, trace, extra_args=(), static=False, shared=False):
     library = find_library_path()
     gcc_library = find_gcc_library_path()
-    command = ["ld", "-o", output, "-m", "elf_x86_64", f"{library}/crt1.o", f"{library}/crti.o",
-               f"{gcc_library}/crtbegin.o", f"-L{gcc_library}", "-L/usr/lib/x86_64-linux-gnu",
+    command = ["ld", "-o", output, "-m", "elf_x86_64"]
+    if shared:
+        command.extend((f"{library}/crti.o", f"{gcc_library}/crtbeginS.o"))
+    else:
+        command.extend((f"{library}/crt1.o", f"{library}/crti.o", f"{gcc_library}/crtbegin.o"))
+    command.extend([f"-L{gcc_library}", "-L/usr/lib/x86_64-linux-gnu",
                "-L/usr/lib64", "-L/lib64", "-L/usr/lib/x86_64-linux-gnu",
                "-L/usr/lib/x86_64-pc-linux-gnu", "-L/usr/lib/x86_64-redhat-linux",
-               "-L/usr/lib", "-L/lib"]
+               "-L/usr/lib", "-L/lib"])
     if not static:
         command.extend(("-dynamic-linker", "/lib64/ld-linux-x86-64.so.2"))
     command.extend(extra_args)
@@ -393,14 +403,14 @@ def run_linker(inputs, output, trace, extra_args=(), static=False):
         command.extend(("--start-group", "-lgcc", "-lgcc_eh", "-lc", "--end-group"))
     else:
         command.extend(("-lc", "-lgcc", "--as-needed", "-lgcc_s", "--no-as-needed"))
-    command.extend((f"{gcc_library}/crtend.o", f"{library}/crtn.o"))
+    command.extend((f"{gcc_library}/crtendS.o" if shared else f"{gcc_library}/crtend.o", f"{library}/crtn.o"))
     return run_subprocess(command, trace)
 
 
 def main():
     try:
         (inputs, opt_o, opt_cc1, opt_trace, opt_S, opt_c, opt_E,
-         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic, opt_static) = parse_args(sys.argv[1:])
+         base_file, cc1_output, include_paths, macros, opt_fcommon, forced_includes, opt_x, ld_extra_args, opt_M, opt_MF, opt_MP, opt_MT, opt_MD, opt_MMD, opt_fpic, opt_static, opt_shared) = parse_args(sys.argv[1:])
         if opt_cc1:
             std_include_paths = add_default_include_paths(sys.argv[0], include_paths)
             if base_file is None:
@@ -440,7 +450,7 @@ def main():
                 if status:
                     return status
             if linker_inputs:
-                return run_linker(linker_inputs, opt_o if opt_o is not None else "a.out", opt_trace, ld_extra_args, opt_static)
+                return run_linker(linker_inputs, opt_o if opt_o is not None else "a.out", opt_trace, ld_extra_args, opt_static, opt_shared)
         return 0
     except CompileError as error:
         print(error, file=sys.stderr)

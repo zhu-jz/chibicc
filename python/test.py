@@ -87,6 +87,24 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_shared_linking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, library = root/'answer.c', root/'answer.so'
+            source.write_text('int answer=42;int get(void){return answer;}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-fPIC', '-shared', '-###', '-o', str(library), str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('crtbeginS.o', result.stderr)
+            self.assertIn('crtendS.o', result.stderr)
+            self.assertNotIn('/crt1.o', result.stderr)
+            main, executable = root/'main.c', root/'main'
+            main.write_text('int get(void);int main(void){return get();}')
+            result = subprocess.run([sys.executable, str(COMPILER), '-o', str(executable), str(main), str(library)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(subprocess.run([str(executable)], timeout=5).returncode, 42)
+            headers = subprocess.run(['readelf', '-l', str(library)], check=True, capture_output=True, text=True).stdout
+            self.assertNotIn('INTERP', headers)
+
     def test_static_linking(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

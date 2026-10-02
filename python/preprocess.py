@@ -405,6 +405,41 @@ def read_include_filename(tokens, position, files, macros, conditions, include_p
     raise CompileError(token, "expected a filename")
 
 
+include_guard_cache = {}
+
+
+def detect_include_guard(tokens):
+    if len(tokens) < 7 or not is_hash(tokens[0]) or tokens[1].text != "ifndef":
+        return None
+    name = tokens[2]
+    if name.kind != "IDENT":
+        return None
+    if not is_hash(tokens[3]) or tokens[4].text != "define" or tokens[5].text != name.text:
+        return None
+    # The original scans directives without successfully skipping nested groups.
+    for position in range(3, len(tokens) - 2):
+        if (is_hash(tokens[position]) and tokens[position + 1].text == "endif"
+                and tokens[position + 2].kind == "EOF"):
+            return name.text
+    return None
+
+
+def include_file(path, filename, files, macros):
+    guard = include_guard_cache.get(path)
+    if guard is not None and guard in macros:
+        return []
+    try:
+        included = tokenize_file(path, files)
+    except CompileError as error:
+        if error.position is None:
+            raise CompileError(filename, str(error)) from None
+        raise
+    guard = detect_include_guard(included)
+    if guard is not None:
+        include_guard_cache[path] = guard
+    return included
+
+
 def preprocess2(tokens, files, macros, conditions, include_paths):
     result = []
     position = 0
@@ -425,12 +460,7 @@ def preprocess2(tokens, files, macros, conditions, include_paths):
                         path = directory + "/" + name
                     else:
                         path = search_include_paths(name, include_paths) or name
-                try:
-                    included = tokenize_file(path, files)
-                except CompileError as error:
-                    if error.position is None:
-                        raise CompileError(filename, str(error)) from None
-                    raise
+                included = include_file(path, filename, files, macros)
                 tokens[position - 1:rest] = [replace(tok) for tok in included[:-1]]
                 position -= 1
                 continue

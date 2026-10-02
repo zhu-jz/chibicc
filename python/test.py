@@ -87,6 +87,27 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_include_guard_optimization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            header, source = root/'guard.h', root/'main.c'
+            header.write_text('#ifndef GUARD_H\n#define GUARD_H\nint answer=42;\n#endif\n')
+            source.write_text('#include "guard.h"\n#include "guard.h"\nint main(void){return answer;}')
+            files = []
+            tokens = tokenize_file(str(source), files)
+            with patch('preprocess.tokenize_file', wraps=tokenize_file) as opened:
+                preprocess(tokens, files)
+                self.assertEqual(opened.call_count, 1)
+            self.assertEqual(len(files), 2)
+            header.write_text('#ifndef GUARD_H\n#define GUARD_H\n42\n#endif\n')
+            source.write_text('#include "guard.h"\n#undef GUARD_H\n#include "guard.h"\n')
+            files = []
+            tokens = tokenize_file(str(source), files)
+            with patch('preprocess.tokenize_file', wraps=tokenize_file) as opened:
+                preprocess(tokens, files)
+                self.assertEqual(opened.call_count, 2)
+            self.assertEqual([token.value for token in tokens[:-1]], [42, 42])
+
     def test_include_search_cache(self):
         from preprocess import search_include_paths
         with tempfile.TemporaryDirectory() as directory:

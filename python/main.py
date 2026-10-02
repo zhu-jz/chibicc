@@ -1,6 +1,6 @@
-"""Lesson 297: Cache successful include-file searches.
+"""Lesson 298: Skip headers whose include guard is already defined.
 
-Based on chibicc commit c0f0614e6b7647fd4703abf4c455024c2ade8cd7.
+Based on chibicc commit d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 

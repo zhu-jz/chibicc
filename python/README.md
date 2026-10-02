@@ -1,29 +1,28 @@
-# Lesson 297: Cache successful include-file searches
+# Lesson 298: Skip headers whose include guard is already defined
 
-Original chibicc commit: [`c0f0614e6b7647fd4703abf4c455024c2ade8cd7`](https://github.com/rui314/chibicc/commit/c0f0614e6b7647fd4703abf4c455024c2ade8cd7).
+Original chibicc commit: [`d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3`](https://github.com/rui314/chibicc/commit/d48d9e5ae35b5eb1a9dcb0c07c1dba9e65bd83f3).
 Earlier explanations are available in Git history.
 
-Include-path searches now remember successful filename resolutions. Repeating a
-search can return the saved path without testing each directory again. Absolute
-paths still bypass the search, and missing files are not cached, so a later search
-can find a newly created file.
+The preprocessor detects a common guard pattern: a file starts with #ifndef NAME
+and #define NAME, and ends with #endif. It remembers the guard name for that path.
+On later includes, a currently defined guard lets it skip opening and tokenizing
+the file. Undefining the guard makes a later include read the header again.
 
 ```sh
-printf '#define ANSWER 42\n' > /tmp/lesson-answer.h
-printf '#include <lesson-answer.h>\n#include <lesson-answer.h>\nint main(void){return ANSWER;}\n' > /tmp/lesson.c
-python3 python/main.py -I/tmp -S -o /tmp/lesson.s /tmp/lesson.c
+printf '#ifndef LESSON_H\n#define LESSON_H\nint answer=42;\n#endif\n' > /tmp/lesson-answer.h
+printf '#include "lesson-answer.h"\n#include "lesson-answer.h"\nint main(void){return answer;}\n' > /tmp/lesson.c
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-The second include reuses the successful search; it still reads and preprocesses
-the header again. This is path-search caching, not an include guard. Assembly
-still returns 42. Tests count filesystem probes, verify cache hits, and confirm
-that misses are retried. Python keys the cache by filename plus the include-path
-tuple, so separate in-process compilations with different search lists remain
-independent; C's process-local cache keys only by filename. Positive results remain
-cached if the file later disappears, following the original caching behavior.
+Assembly defines answer once and returns its value. Tests count header reads,
+check input-file recording, and confirm rereading after #undef. Original C programs
+remain in the regression suite. Python stores path-to-guard names in a dictionary.
+The detector preserves this commit's syntactic scan, including its ineffective
+nested-group check; it does not analyze every conditional shape or canonicalize
+paths. Headers with content after their final #endif are not recognized.
 
 ## Tests and attribution
 

@@ -1,28 +1,28 @@
-# Lesson 293: Write dependencies during compilation with -MD
+# Lesson 294: Quote Make dependency targets with -MQ
 
-Original chibicc commit: [`fb5cfe5d17fd0c0cbc0d17789c065b9bb86ba3c4`](https://github.com/rui314/chibicc/commit/fb5cfe5d17fd0c0cbc0d17789c065b9bb86ba3c4).
+Original chibicc commit: [`7aa72e41e6b2703b3f357507252008ebe25dc08d`](https://github.com/rui314/chibicc/commit/7aa72e41e6b2703b3f357507252008ebe25dc08d).
 Earlier explanations are available in Git history.
 
--MD writes a dependency rule after preprocessing, then continues parsing and
-compiling. -M still stops after dependency output. -MF takes precedence when
-choosing a dependency file; otherwise -MD replaces the output name or source name
-with a .d suffix. Existing -MT and -MP options also apply to the generated rule.
+-MQ selects a dependency target like -MT, but quotes characters significant to Make.
+Dollar signs become $$, # becomes \#, and spaces/tabs gain a backslash. Backslashes
+immediately before whitespace are duplicated so Make preserves them. Repeated -MQ
+and -MT arguments share the target list. Default targets and -MP dummy targets are
+also quoted; prerequisite paths are still printed literally in this original step.
 
 ```sh
-printf '#include <stddef.h>\nint main(void){return 42;}\n' > /tmp/lesson.c
-python3 python/main.py -S -MD -MF /tmp/lesson.d -o /tmp/lesson.s /tmp/lesson.c
+printf 'int main(void){return 42;}\n' > /tmp/lesson.c
+python3 python/main.py -M -MQ 'build file$#.o' -MF /tmp/lesson.d /tmp/lesson.c
 cat /tmp/lesson.d
+python3 python/main.py -S -o /tmp/lesson.s /tmp/lesson.c
 gcc -o /tmp/lesson /tmp/lesson.s
 /tmp/lesson
 echo $?  # 42
 ```
 
-Assembly still defines main and returns 42 in rax. The extra .d file lists its
-source and included header for Make. Tests compile two files with -c -MD, check
-their real ELF objects and separate dependency files, and combine -S with -MF.
-As in C, the default .d name uses only the basename and is written in the current
-working directory. Python uses explicit option arguments rather than C globals.
-Dependencies are written before parsing, so a later syntax error can leave a .d file.
+The rule starts with build\ file$$\#.o:. The assembly is unaffected and returns 42.
+Tests check quoting, preceding backslashes, mixed target options and a real Make
+parse of the quoted target. Python builds a string list instead of C's allocated
+buffer. It also checks for a missing -MQ argument instead of C's unchecked access.
 
 ## Tests and attribution
 

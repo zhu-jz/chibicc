@@ -87,6 +87,21 @@ def grammar_tree(node):
 
 
 class ExpressionCompilerTests(unittest.TestCase):
+    def test_quoted_dependency_targets(self):
+        from main import quote_makefile
+        self.assertEqual(quote_makefile('cash$ #\t'), 'cash$$\\ \\#\\\t')
+        self.assertEqual(quote_makefile('a\\ b'), 'a' + '\\'*3 + ' b')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, deps = root/'main.c', root/'deps.mk'
+            source.write_text('int main(void){return 42;}')
+            target = 'build file$#.o'
+            result = subprocess.run([sys.executable, str(COMPILER), '-M', '-MF', str(deps), '-MQ', target, '-MT', 'literal.o', str(source)], cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(deps.read_text().startswith('build\\ file$$\\#.o literal.o:'))
+            result = subprocess.run(['make', '-f', str(deps), '-n', target], cwd=directory, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_dependencies_during_compilation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

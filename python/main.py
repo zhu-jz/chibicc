@@ -1,6 +1,6 @@
-"""Lesson 293: Write dependencies during compilation with -MD.
+"""Lesson 294: Quote Make dependency targets with -MQ.
 
-Based on chibicc commit fb5cfe5d17fd0c0cbc0d17789c065b9bb86ba3c4.
+Based on chibicc commit 7aa72e41e6b2703b3f357507252008ebe25dc08d.
 Original copyright (c) 2019 Rui Ueyama. See LICENSE.
 """
 
@@ -32,6 +32,24 @@ def add_default_include_paths(argv0, include_paths):
     ])
 
 
+def quote_makefile(text):
+    result = []
+    for index, char in enumerate(text):
+        if char == "$":
+            result.append("$$")
+        elif char == "#":
+            result.append("\\#")
+        elif char in " \t":
+            previous = index - 1
+            while previous >= 0 and text[previous] == "\\":
+                result.append("\\")
+                previous -= 1
+            result.append("\\" + char)
+        else:
+            result.append(char)
+    return "".join(result)
+
+
 def parse_args(arguments):
     input_paths = []
     include_paths = []
@@ -55,7 +73,7 @@ def parse_args(arguments):
     ld_extra_args = []
     position = 0
     while position < len(arguments):
-        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-MF", "-MT", "-cc1-input", "-cc1-output"):
+        if arguments[position] in ("-o", "-I", "-D", "-U", "-idirafter", "-include", "-x", "-MF", "-MT", "-MQ", "-cc1-input", "-cc1-output"):
             position += 1
             if position == len(arguments):
                 usage(1)
@@ -70,8 +88,10 @@ def parse_args(arguments):
             opt_MD = True
             position += 1
             continue
-        if argument == "-MT":
+        if argument in ("-MT", "-MQ"):
             target = arguments[position + 1]
+            if argument == "-MQ":
+                target = quote_makefile(target)
             opt_MT = target if opt_MT is None else opt_MT + " " + target
             position += 2
             continue
@@ -242,13 +262,13 @@ def print_tokens(tokens, output_path):
 
 
 def print_dependencies(filename, files, output_path, phony=False, target=None):
-    text = (target if target is not None else replace_extension(filename, ".o")) + ":"
+    text = (target if target is not None else quote_makefile(replace_extension(filename, ".o"))) + ":"
     for file in files:
         text += " \\\n  " + file.name
     text += "\n\n"
     if phony:
         for file in files[1:]:
-            text += file.name + ":\n\n"
+            text += quote_makefile(file.name) + ":\n\n"
     write_output(output_path, text)
 
 
